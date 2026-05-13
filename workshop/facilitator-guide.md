@@ -56,5 +56,5 @@ Workshop nodes ship with KDE Plasma 6 as the desktop. Reasoning:
 See `docs/archive/` for the original workshop notes. Key takeaways:
 
 - Lab wifi is not reliable for P2P DHT traffic. Dedicated router is mandatory.
-- HolOS image installation was faster but removed all operator control. Participants felt they were watching, not building.
+- HolOS image installation was faster but didn't give participants the authoring experience — they flashed a pre-built Buildroot image rather than configuring their own stack. Participants felt they were watching, not building.
 - 4 hours was the right duration. Longer risks losing the room after the Grafana moment.

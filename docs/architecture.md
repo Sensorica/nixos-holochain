@@ -5,11 +5,11 @@
 The Holochain ecosystem has two deployment stories today:
 
 1. **Dev environments via Holonix** — Nix-based, well documented, mature.
-2. **Production edgenodes via HolOS** — NixOS-based but firmware-locked, opaque to the operator.
+2. **Production edgenodes via HolOS** — a Buildroot-based appliance image you flash and run, not configure.
 
-`nixos-holochain` fills the gap: a flake-based repo with reusable NixOS modules so that operators can deploy production node fleets with a single `nixos-rebuild`, without accepting a black box.
+`nixos-holochain` fills the gap: a flake-based repo with reusable NixOS modules so that operators can deploy production node fleets with a single `nixos-rebuild`, without flashing a pre-built appliance image.
 
-The architectural bet is simple. NixOS already won the substrate question inside HolOS. Exposing that substrate, rather than hiding it, lets the community compose Holochain with the rest of their infrastructure.
+The architectural bet is simple. HolOS gives you a minimal Buildroot image to flash. This project takes the opposite approach: declarative NixOS configuration you own, so the community can compose Holochain with the rest of their infrastructure rather than around it.
 
 ## Module hierarchy
 

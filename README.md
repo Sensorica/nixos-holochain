@@ -4,7 +4,7 @@
 
 **Status:** Pre-alpha. Workshop substrate under construction.
 **License:** AGPL-3.0 (aligned with Holochain ecosystem; to be revisited when OVN License direction is clarified)
-**Origin:** Successor to the archived [Sensorica/holoports-workshop](https://github.com/Sensorica/holoports-workshop), pivoting from HolOS-locked deployment to vanilla NixOS authorship.
+**Origin:** Successor to the archived [Sensorica/holoports-workshop](https://github.com/Sensorica/holoports-workshop), pivoting from HolOS appliance-image deployment to vanilla NixOS authorship.
 
 ---
 
@@ -13,9 +13,9 @@
 The Holochain ecosystem has two real deployment stories today:
 
 1. **Dev environments via Holonix** — Nix-based, well documented, mature.
-2. **Production edgenodes via HolOS** — NixOS-based but firmware-locked, opaque to the operator.
+2. **Production edgenodes via HolOS** — a Buildroot-based appliance image you flash and run, not configure.
 
-There is no canonical, declarative, *author it yourself* way to stand up a Holochain edgenode on commodity hardware. You either accept HolOS as a black box or you cobble together systemd units, conductor configs, and lair keystore management by hand.
+There is no canonical, declarative, *author it yourself* way to stand up a Holochain edgenode on commodity hardware. You either flash the HolOS pre-built image (without authoring the configuration) or you cobble together systemd units, conductor configs, and lair keystore management by hand.
 
 `nixos-holochain` fills that gap. A flake-based repo with reusable NixOS modules so that:
 
