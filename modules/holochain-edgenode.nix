@@ -31,6 +31,12 @@ in
       description = "Holochain conductor package.";
     };
 
+    hcPackage = lib.mkOption {
+      type        = lib.types.package;
+      default     = inputs.holonix.packages.${pkgs.system}.hc;
+      description = "Holochain CLI package used by the hApp installer. Validate the package name against the pinned holonix commit — it may differ across holonix versions.";
+    };
+
     user = lib.mkOption {
       type = lib.types.str;
       default = "holochain";
@@ -143,20 +149,51 @@ in
 
     systemd.services.holochain-happ-installer = lib.mkIf (cfg.happs != {}) {
       description = "Install configured hApps into the Holochain conductor";
-      after = [ "holochain-conductor.service" ];
+      after    = [ "holochain-conductor.service" ];
       wantedBy = [ "multi-user.target" ];
+
+      path = [ cfg.hcPackage pkgs.netcat-gnu pkgs.coreutils ];
+
       serviceConfig = {
-        Type = "oneshot";
-        User = cfg.user;
+        Type            = "oneshot";
+        User            = cfg.user;
         RemainAfterExit = true;
+        ExecStartPre    = toString (pkgs.writeShellScript "wait-for-conductor" ''
+          timeout=60
+          elapsed=0
+          until nc -z 127.0.0.1 ${toString cfg.adminPort}; do
+            sleep 1
+            elapsed=$((elapsed + 1))
+            if [ "$elapsed" -ge "$timeout" ]; then
+              echo "Conductor did not open port ${toString cfg.adminPort} within ''${timeout}s" >&2
+              exit 1
+            fi
+          done
+        '');
       };
-      script = lib.concatStringsSep "\n" (lib.mapAttrsToList (name: happCfg: ''
-        ${cfg.package}/bin/hc app install \
-          --app-id ${name} \
-          --path ${happCfg.src} \
-          ${lib.optionalString (happCfg.networkSeed != null) "--network-seed ${happCfg.networkSeed}"} \
-          --admin-port ${toString cfg.adminPort} || true
-      '') cfg.happs);
+
+      # If hc CLI lacks these subcommands for the pinned holonix version, see §4.5 of
+      # .local/nixos-holochain-architecture-design-2026-05-13.md for the Node.js fallback.
+      script =
+        lib.concatStringsSep "\n" (lib.mapAttrsToList (name: happCfg: ''
+          hc app install \
+            --admin-ws-url ws://127.0.0.1:${toString cfg.adminPort} \
+            --app-id ${lib.escapeShellArg name} \
+            --path ${happCfg.src} \
+            ${lib.optionalString (happCfg.networkSeed != null)
+              "--network-seed ${lib.escapeShellArg happCfg.networkSeed}"} \
+            || echo "WARNING: install of ${name} failed (may already be installed)"
+          hc app enable \
+            --admin-ws-url ws://127.0.0.1:${toString cfg.adminPort} \
+            --app-id ${lib.escapeShellArg name} \
+            || true
+        '') cfg.happs)
+        + ''
+          hc app attach-interface \
+            --admin-ws-url ws://127.0.0.1:${toString cfg.adminPort} \
+            --port ${toString cfg.appPort} \
+            || true
+        '';
     };
 
     networking.firewall = lib.mkIf cfg.openFirewall {

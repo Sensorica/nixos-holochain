@@ -69,6 +69,46 @@
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [ nixos-rebuild colmena nil nixd alejandra ];
         };
+
+        checks = {
+          vmTest = pkgs.nixosTest {
+            name = "holochain-edgenode-smoke";
+            nodes.machine = {
+              imports = [ self.nixosModules.holochain-edgenode ];
+              _module.args.inputs = inputs;
+              services.holochain-edgenode.enable = true;
+            };
+            testScript = ''
+              machine.wait_for_unit("holochain-conductor.service")
+              machine.wait_for_open_port(4444)
+              output = machine.succeed("systemctl is-active holochain-conductor.service")
+              assert output.strip() == "active", f"Expected active, got: {output}"
+              machine.log("Conductor is up and accepting connections on :4444")
+            '';
+          };
+        } // pkgs.lib.optionalAttrs (builtins.pathExists ./happs/windtunnel.happ) {
+          vmTestWithHapp = pkgs.nixosTest {
+            name = "holochain-edgenode-happ-installer";
+            nodes.machine = {
+              imports = [ self.nixosModules.holochain-edgenode ];
+              _module.args.inputs = inputs;
+              services.holochain-edgenode = {
+                enable  = true;
+                appPort = 8888;
+                happs.windtunnel = {
+                  src         = ./happs/windtunnel.happ;
+                  networkSeed = "ci-test-seed";
+                };
+              };
+            };
+            testScript = ''
+              machine.wait_for_unit("holochain-conductor.service")
+              machine.wait_for_unit("holochain-happ-installer.service")
+              machine.wait_for_open_port(8888)
+              machine.succeed("systemctl is-active holochain-happ-installer.service")
+            '';
+          };
+        };
       };
     };
 }

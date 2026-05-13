@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    name: nix flake check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            accept-flake-config = true
+
+      # Enable KVM so NixOS VM tests can run
+      - name: Enable KVM group permissions
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -la /dev/kvm
+
+      # Optional: uncomment and add CACHIX_AUTH_TOKEN secret to avoid rebuilding
+      # Holochain from source on every CI run (first build takes 20–60 min without cache).
+      # - name: Cachix binary cache
+      #   uses: cachix/cachix-action@v15
+      #   with:
+      #     name: nixos-holochain
+      #     authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: nix flake check
+        run: nix flake check --all-systems --show-trace
+
+  eval:
+    name: flake eval (no build)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Evaluate all nixosConfigurations
+        run: |
+          for host in edgenode-01 edgenode-02 edgenode-03 edgenode-04 edgenode-05; do
+            echo "Evaluating $host..."
+            nix eval ".#nixosConfigurations.$host.config.system.build.toplevel" \
+              --apply builtins.toString
+          done
+
+      - name: Check flake schema
+        run: nix flake show --json | jq .

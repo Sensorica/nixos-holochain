@@ -2,3 +2,8 @@ result
 result-*
 .direnv/
 *.happ
+
+.local
+*.local.*
+
+/Plans

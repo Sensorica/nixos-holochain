@@ -2,7 +2,7 @@
 
 > A declarative substrate for running Holochain edgenodes, hApps, and developer environments. Built at Sensorica, intended for the Holochain community.
 
-**Status:** Pre-alpha. Workshop substrate under construction.
+**Status:** Phase 1 in progress. Module skeleton implemented: conductor service, hApp installer, NixOS VM test, and GitHub Actions CI are all wired up. Pending physical-machine validation and `windtunnel.happ` acquisition before P1 closes.
 **License:** AGPL-3.0 (aligned with Holochain ecosystem; to be revisited when OVN License direction is clarified)
 **Origin:** Successor to the archived [Sensorica/holoports-workshop](https://github.com/Sensorica/holoports-workshop), pivoting from HolOS appliance-image deployment to vanilla NixOS authorship.
 
@@ -97,6 +97,8 @@ Key options for `services.holochain-edgenode`:
 | Option | Default | Description |
 |--------|---------|-------------|
 | `enable` | `false` | Enable the edgenode |
+| `package` | holonix `holochain` | Holochain conductor binary |
+| `hcPackage` | holonix `hc` | Holochain CLI used by the hApp installer |
 | `dataDir` | `/var/lib/holochain` | Persistent state directory |
 | `adminPort` | `4444` | Admin WebSocket port |
 | `appPort` | `8888` | App WebSocket port |
@@ -129,9 +131,11 @@ See [`workshop/facilitator-guide.md`](workshop/facilitator-guide.md) and [`works
 
 **Phase 1: Module skeleton**
 - [x] Repo initialized with flake skeleton
-- [ ] `holochain-edgenode` module deploys a working conductor on one machine
-- [ ] First hApp (Wind Tunnel) installs at boot
-- [ ] CI on every push runs `nix flake check` and a NixOS VM test
+- [x] `holochain-edgenode` module skeleton: conductor service, lair in-proc, hApp installer with port-readiness poll
+- [x] CI on every push: GitHub Actions runs `nix flake check` + config evaluation for all 5 nodes
+- [x] NixOS VM test wired up (`checks.vmTest`; `vmTestWithHapp` auto-activates once `windtunnel.happ` is present)
+- [ ] Validated on a physical machine or VM (pending `hc` CLI subcommand check + `windtunnel.happ`)
+- [ ] First hApp (Wind Tunnel) installs at boot end-to-end
 
 **Phase 2: Workshop ready**
 - [ ] Fleet of 5 nodes deployable via `colmena apply`
