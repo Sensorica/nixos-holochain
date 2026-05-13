@@ -25,11 +25,26 @@
     nix-tree
   ];
 
-  # Pre-clone the repo during ISO build so participants have it on the desktop
-  # Replace with actual repo URL before building
-  # system.activationScripts.cloneRepo = ''
-  #   git clone https://github.com/Sensorica/nixos-holochain /home/nixos/nixos-holochain
-  # '';
+  # Clone the workshop repo on first boot (after network is up).
+  # Idempotent: skips if the directory already exists.
+  systemd.services.clone-nixos-holochain = {
+    description = "Clone nixos-holochain workshop repo for participants";
+    after    = [ "network-online.target" ];
+    wants    = [ "network-online.target" ];
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type            = "oneshot";
+      User            = "nixos";
+      RemainAfterExit = true;
+      ExecStart       = pkgs.writeShellScript "clone-repo" ''
+        if [ ! -d /home/nixos/nixos-holochain ]; then
+          ${pkgs.git}/bin/git clone \
+            https://github.com/Sensorica/nixos-holochain \
+            /home/nixos/nixos-holochain
+        fi
+      '';
+    };
+  };
 
   services.openssh.enable = true;
   users.users.nixos.openssh.authorizedKeys.keys = [];

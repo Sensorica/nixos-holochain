@@ -18,6 +18,21 @@ nano hosts/edgenode-01/configuration.nix
 sudo nixos-rebuild switch --flake .#edgenode-01
 ```
 
+## Colmena prerequisites
+
+Before running `colmena apply`, each host config must have:
+
+1. A real `hardware-configuration.nix` — generated on the target machine:
+   ```bash
+   sudo nixos-generate-config --show-hardware-config > hosts/edgenode-XX/hardware-configuration.nix
+   ```
+2. The facilitator SSH public key committed to `secrets/sensorica.pub`:
+   ```bash
+   cp ~/.ssh/id_ed25519.pub secrets/sensorica.pub
+   ```
+
+Host configs already reference `../../secrets/sensorica.pub` via `authorizedKeys.keyFiles`.
+
 ## Fleet (Colmena)
 
 ```bash

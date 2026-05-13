@@ -10,8 +10,7 @@
   users.users.sensorica = {
     isNormalUser = true;
     extraGroups = [ "wheel" ];
-    # Replace with actual authorized key before deployment
-    openssh.authorizedKeys.keys = [ "ssh-ed25519 AAAA..." ];
+    openssh.authorizedKeys.keyFiles = [ ../../secrets/sensorica.pub ];
   };
 
   services.desktopManager.plasma6.enable = true;
@@ -20,8 +19,9 @@
   environment.systemPackages = with pkgs; [ git kate konsole firefox ];
 
   services.holochain-edgenode = {
-    enable = true;
+    enable      = true;
     openFirewall = true;
+    metricsExporter.enable = true;
     happs = {
       windtunnel = {
         src = ../../happs/windtunnel.happ;

@@ -7,3 +7,6 @@ result-*
 *.local.*
 
 /Plans
+
+# SSH keys — never commit
+/secrets/

@@ -114,10 +114,20 @@ in
       '';
     };
 
+    metricsExporter = {
+      enable = lib.mkEnableOption "Prometheus node_exporter for fleet observability";
+
+      port = lib.mkOption {
+        type        = lib.types.port;
+        default     = 9100;
+        description = "Port to expose node metrics on.";
+      };
+    };
+
     openFirewall = lib.mkOption {
       type = lib.types.bool;
       default = false;
-      description = "Open firewall ports for admin and app interfaces.";
+      description = "Open firewall ports for admin, app, and metrics interfaces.";
     };
   };
 
@@ -196,8 +206,15 @@ in
         '';
     };
 
+    services.prometheus.exporters.node = lib.mkIf cfg.metricsExporter.enable {
+      enable            = true;
+      port              = cfg.metricsExporter.port;
+      enabledCollectors = [ "systemd" ];
+    };
+
     networking.firewall = lib.mkIf cfg.openFirewall {
-      allowedTCPPorts = [ cfg.adminPort cfg.appPort ];
+      allowedTCPPorts = [ cfg.adminPort cfg.appPort ]
+        ++ lib.optional cfg.metricsExporter.enable cfg.metricsExporter.port;
     };
   };
 }

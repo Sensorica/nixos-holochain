@@ -15,11 +15,12 @@
       flake = {
         # Reusable modules for downstream consumers
         nixosModules = {
-          holochain-edgenode = ./modules/holochain-edgenode.nix;
+          holochain-edgenode   = ./modules/holochain-edgenode.nix;
           holochain-windtunnel = ./modules/holochain-windtunnel.nix;
           holochain-http-gateway = ./modules/holochain-http-gateway.nix;
-          pai = ./modules/pai.nix;
-          default = ./modules;
+          holochain-grafana    = ./modules/holochain-grafana.nix;
+          pai                  = ./modules/pai.nix;
+          default              = ./modules;
         };
 
         # Concrete fleet of 5 workshop nodes
@@ -71,6 +72,33 @@
         };
 
         checks = {
+          vmTestGrafana = pkgs.nixosTest {
+            name = "holochain-grafana-smoke";
+            nodes.machine = {
+              imports = [
+                self.nixosModules.holochain-edgenode
+                self.nixosModules.holochain-grafana
+              ];
+              _module.args.inputs = inputs;
+              services.holochain-edgenode = {
+                enable = true;
+                metricsExporter.enable = true;
+              };
+              services.holochain-grafana = {
+                enable        = true;
+                scrapeTargets = [ "127.0.0.1:9100" ];
+                openFirewall  = true;
+              };
+            };
+            testScript = ''
+              machine.wait_for_unit("grafana.service")
+              machine.wait_for_unit("prometheus.service")
+              machine.wait_for_open_port(3000)
+              machine.wait_for_open_port(9090)
+              machine.succeed("curl -sf http://localhost:3000/api/health")
+            '';
+          };
+
           vmTest = pkgs.nixosTest {
             name = "holochain-edgenode-smoke";
             nodes.machine = {

@@ -138,10 +138,17 @@ See [`workshop/facilitator-guide.md`](workshop/facilitator-guide.md) and [`works
 - [ ] First hApp (Wind Tunnel) installs at boot end-to-end
 
 **Phase 2: Workshop ready**
-- [ ] Fleet of 5 nodes deployable via `colmena apply`
-- [ ] Workshop ISO boots into working dev environment
-- [ ] Grafana module for observability
-- [ ] Facilitator guide finalized and preflight sent
+- [x] `holochain-grafana` module: Prometheus + Grafana stack, composable with edgenode module
+- [x] `metricsExporter` option added to edgenode module — all 5 nodes expose node_exporter metrics
+- [x] edgenode-01 configured as monitor node (Grafana dashboard at `:3000`)
+- [x] Workshop ISO: on-boot repo clone service (network-triggered, idempotent)
+- [x] Colmena prerequisites documented in `docs/deployment.md`
+- [x] `module-options.md` updated with full option reference for both modules
+- [ ] Fleet of 5 nodes tested end-to-end via `colmena apply` (pending hardware + SSH keys)
+- [ ] Workshop ISO boot-tested on target hardware
+- [ ] Grafana dashboard screenshot in docs (pending physical deployment)
+- [ ] Facilitator guide reviewed with Tibi / Sensorica team
+- [ ] Preflight checklist sent to participants
 
 **Phase 3: Community release**
 - [ ] hAppenings Community Substack announcement
