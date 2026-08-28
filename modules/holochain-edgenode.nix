@@ -168,6 +168,46 @@
       fi
     '';
   };
+
+  # ---- conductor metrics ----------------------------------------------------
+  #
+  # node_exporter's textfile collector reads every *.prom in one directory on
+  # each scrape, so exporting a conductor-level series is a matter of writing
+  # that file on a timer. The alternative, a long-lived exporter process holding
+  # an admin websocket open, would be one more thing to supervise for no gain.
+
+  textfileDir = cfg.metricsExporter.textfileDirectory;
+  conductorMetricsFile = "${textfileDir}/holochain-conductor.prom";
+
+  conductorMetricsScript = pkgs.writeShellApplication {
+    name = "holochain-conductor-metrics";
+    runtimeInputs = [cfg.hcPackage pkgs.coreutils pkgs.jq];
+    text = ''
+      out=${lib.escapeShellArg conductorMetricsFile}
+      tmp="$out.tmp"
+
+      # A conductor that is starting, restarting or wedged must not delete the
+      # series: it reports holochain_conductor_up 0 and leaves every other
+      # gauge at its zero value, which is what makes a dead node visible on the
+      # dashboard rather than absent from it. 15 s is generous for a call over
+      # a loopback websocket; anything slower is a conductor that is not well.
+      if stats=$(timeout 15 ${callPrefix} dump-network-stats 2>/dev/null) \
+        && printf '%s' "$stats" | jq -e . > /dev/null 2>&1; then
+        up=1
+      else
+        up=0
+        stats='{}'
+      fi
+
+      printf '%s' "$stats" \
+        | jq -r --argjson up "$up" --argjson now "$(date +%s)" \
+            -f ${./conductor-metrics.jq} > "$tmp"
+
+      # The collector may read the directory at any moment, so the file is
+      # swapped in whole rather than truncated and rewritten in place.
+      mv -f "$tmp" "$out"
+    '';
+  };
 in {
   options.services.holochain-edgenode = {
     enable = lib.mkEnableOption "Holochain edgenode (conductor + lair + hApp installer)";
@@ -344,6 +384,46 @@ in {
         default = 9100;
         description = "Port to expose node metrics on.";
       };
+
+      textfileDirectory = lib.mkOption {
+        type = lib.types.path;
+        default = "/var/lib/prometheus-node-exporter-text-files";
+        description = ''
+          Directory node_exporter's textfile collector reads. Every `*.prom`
+          file in it is appended to `/metrics` verbatim, which is how metrics
+          that no exporter produces on its own reach Prometheus.
+
+          The directory is created 0755 and owned by `user`, so the conductor
+          metrics timer can write into it while node_exporter, which runs as
+          its own user, can read it.
+        '';
+      };
+    };
+
+    conductorMetrics = {
+      enable = lib.mkEnableOption ''
+        a timer that exports the conductor's own network stats as
+        `holochain_*` series through node_exporter's textfile collector.
+
+        This is the fleet dashboard's Holochain data source. It calls
+        `dump-network-stats` on the admin interface, which answers with
+        Kitsune2's `TransportStats` on both the 0.6 and 0.7 lines, and derives
+        connection, byte and message gauges from it. Requires
+        `metricsExporter.enable`
+      '';
+
+      interval = lib.mkOption {
+        type = lib.types.str;
+        default = "30s";
+        example = "1min";
+        description = ''
+          How often the timer writes the textfile, as a systemd time span. The
+          floor is what the dashboard's resolution is worth: Prometheus scrapes
+          node_exporter on its own schedule and simply re-reads whatever the
+          file last said, so a value far above the scrape interval shows as a
+          staircase rather than a curve.
+        '';
+      };
     };
 
     openFirewall = lib.mkOption {
@@ -436,10 +516,59 @@ in {
       };
     };
 
+    assertions = [
+      {
+        assertion = cfg.conductorMetrics.enable -> cfg.metricsExporter.enable;
+        message = ''
+          services.holochain-edgenode.conductorMetrics.enable needs
+          services.holochain-edgenode.metricsExporter.enable: the conductor
+          gauges are published through node_exporter's textfile collector, so
+          without the exporter the timer would write a file nothing reads.
+        '';
+      }
+    ];
+
     services.prometheus.exporters.node = lib.mkIf cfg.metricsExporter.enable {
       enable = true;
       port = cfg.metricsExporter.port;
-      enabledCollectors = ["systemd"];
+      enabledCollectors = ["systemd" "textfile"];
+      extraFlags = ["--collector.textfile.directory=${textfileDir}"];
+    };
+
+    systemd.tmpfiles.rules = lib.mkIf cfg.metricsExporter.enable [
+      "d ${textfileDir} 0755 ${cfg.user} ${cfg.user} - -"
+    ];
+
+    systemd.services.holochain-conductor-metrics = lib.mkIf cfg.conductorMetrics.enable {
+      description = "Export Holochain conductor network stats to the node_exporter textfile collector";
+      after = ["holochain-conductor.service"];
+
+      # Deliberately not `requires`: the point of the exporter is to keep
+      # reporting while the conductor is down, as holochain_conductor_up 0.
+
+      environment.HOME = cfg.dataDir;
+
+      serviceConfig = {
+        Type = "oneshot";
+        User = cfg.user;
+        Group = cfg.user;
+        StateDirectory = baseNameOf cfg.dataDir;
+        StateDirectoryMode = "0700";
+        WorkingDirectory = cfg.dataDir;
+        ExecStart = lib.getExe conductorMetricsScript;
+        TimeoutStartSec = "60s";
+      };
+    };
+
+    systemd.timers.holochain-conductor-metrics = lib.mkIf cfg.conductorMetrics.enable {
+      description = "Periodic export of Holochain conductor network stats";
+      wantedBy = ["timers.target"];
+      timerConfig = {
+        OnBootSec = cfg.conductorMetrics.interval;
+        OnUnitActiveSec = cfg.conductorMetrics.interval;
+        AccuracySec = "1s";
+        Unit = "holochain-conductor-metrics.service";
+      };
     };
 
     networking.firewall = lib.mkIf cfg.openFirewall {
