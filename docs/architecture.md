@@ -16,8 +16,11 @@ The architectural bet is simple. HolOS gives you a minimal Buildroot image to fl
 ```
 flake.nix
 └── modules/
-    ├── holochain-edgenode.nix     ← core: conductor + lair + hApp installer
-    ├── holochain-windtunnel.nix   ← optional: Wind Tunnel scenario runner
+    ├── holochain-edgenode.nix     ← core: conductor + lair + hApp installer + metrics
+    ├── conductor-metrics.jq       ← dump-network-stats → Prometheus text
+    ├── holochain-grafana.nix      ← optional: Prometheus + Grafana for a fleet
+    ├── dashboards/                ← provisioned Grafana dashboards
+    ├── holochain-windtunnel.nix   ← optional: donate the machine to the Foundation's Nomad cluster
     ├── holochain-http-gateway.nix ← optional: HTTP gateway in front of conductor
     ├── pai.nix                    ← optional: PAI per machine
     └── default.nix                ← aggregator
@@ -30,7 +33,9 @@ Modules are independent. Import only what you need.
 ```
 network-online.target
     └── holochain-conductor.service        (notify: active once the conductor is ready)
-            └── holochain-happ-installer.service (oneshot, runs every boot, idempotent)
+            ├── holochain-happ-installer.service (oneshot, runs every boot, idempotent)
+            └── holochain-conductor-metrics.timer
+                    └── holochain-conductor-metrics.service (oneshot, every 30s)
 ```
 
 ## Deployment model
@@ -179,6 +184,59 @@ holochain-happ-installer[1282]:     1: deadline has elapsed
 
 So the installer does not treat a call's exit status as the answer. It runs `install-app` and `enable-app` tolerantly and then polls `list-apps` for the outcome it wanted, failing the unit only if the app never appears or never reaches `enabled` within `installerTimeout`. This is what makes the service survive a first boot on modest hardware; it is also why the VM tests give their node four cores rather than the test driver's default of one.
 
+
+## Observability
+
+The workshop's high point is a dashboard showing the fleet's Holochain traffic. Three pieces make it, and only the first is Holochain-specific.
+
+### 1. Conductor metrics
+
+There is no Prometheus endpoint on a Holochain conductor. There is an admin call, `dump-network-stats`, that answers with the Kitsune2 transport's own numbers, and node_exporter has a textfile collector that serves any `*.prom` file in a directory. So the module bridges the two with a timer rather than with a daemon: a long-lived exporter holding an admin websocket open would be one more thing to supervise, restart and version, for exactly the same series.
+
+`holochain-conductor-metrics.timer` fires every `conductorMetrics.interval` (default 30s). Its oneshot service runs
+
+```
+hc client call --port 4444 dump-network-stats        # 0.7
+hc sandbox call --running 4444 dump-network-stats     # 0.6
+```
+
+pipes the reply through `modules/conductor-metrics.jq`, and moves the result into `metricsExporter.textfileDirectory` atomically, because the collector may read the directory at any moment.
+
+The reply is Kitsune2's `TransportStats` (`kitsune2` `crates/api/src/transport.rs`), wrapped by Holochain with `blocked_message_counts`. It is byte-identical on both lines. Verified against the pinned binaries, on a bare conductor with no app installed and no peers:
+
+```
+$ hc client call --port 4471 dump-network-stats            # holochain 0.7.0
+{"transport_stats":{"backend":"iroh","peer_urls":["https://use1-1.relay.n0.iroh-canary.iroh.link.:443/57b3f7ba59f9e69714ce3033240108fbffba2f31d1d584df540eb4f8a788a164"],"connections":[]},"blocked_message_counts":{}}
+
+$ hc sandbox call --running 4461 dump-network-stats        # holochain 0.6.3
+{"transport_stats":{"backend":"iroh","peer_urls":["https://use1-1.relay.n0.iroh-canary.iroh.link.:443/eee66b1f1962c1132a11638571f477e9c90575f4378c636c81096502db1c9d9c"],"connections":[]},"blocked_message_counts":{}}
+```
+
+`dump-network-metrics`, the other candidate the issue named, answers `{}` on a conductor with no app installed, because it reports per-DNA gossip state and there is none. `dump-network-stats` always has something to say, which is why the gauges are derived from it.
+
+Each entry of `connections` carries `pub_key`, `send_message_count`, `send_bytes`, `recv_message_count`, `recv_bytes`, `opened_at_s` and `is_direct`. The series derived from them are listed in `docs/module-options.md`. Two properties are worth stating explicitly:
+
+- **A down conductor reports `holochain_conductor_up 0`, it does not disappear.** The script writes the file whether or not the call succeeded, so a dead node is visible on the dashboard rather than absent from it. This is the difference between a panel that says "one node is down" and a panel that quietly draws four lines instead of five.
+- **The byte and message counters describe live connections only.** They sum over the connections the conductor holds at that instant, so a peer that disconnects takes its totals with it and the counter can go down. `rate()` over them is throughput of current links, which is what the dashboard draws; they are not lifetime totals and should not be read as such.
+
+### 2. Prometheus and Grafana
+
+`holochain-grafana` runs both on the monitor node and provisions the pair that makes a dashboard work without a human: a Prometheus data source with the fixed uid `holochain-prometheus`, and every JSON file under `modules/dashboards/`. The shipped dashboard, "Holochain Fleet", draws CPU, memory and host network from node_exporter next to the conductor series, so a spike in one is legible against the other.
+
+`vmTestGrafana` runs the whole path in one VM: it waits for the conductor, asserts `holochain_conductor_up 1` appears on `/metrics`, asserts every Prometheus target reports `"health":"up"`, asserts Prometheus kept the series, and asserts Grafana's search API returns the provisioned dashboard and its data source.
+
+### 3. What the Wind Tunnel runner is, and is not
+
+It is not a data source. `holochain-windtunnel` runs `ghcr.io/holochain/wind-tunnel-runner`, whose entrypoint is
+
+```sh
+chronyd -q 'server pool.ntp.org iburst' 'makestep 1 -1'
+exec nomad agent -config=<baked nomad.json> -config=/etc/nomad.d
+```
+
+and whose baked config sets `client.servers = ["nomad-server-01.holochain.org"]`. Both were read out of the pulled image. Enabling the module joins the machine to the Holochain Foundation's Nomad cluster as a client, and the Foundation then schedules Wind Tunnel scenarios, each with its own conductor, onto it. Nothing in the image exposes a Prometheus endpoint: the image config declares no ports, and neither the README nor the repository mentions Prometheus or metrics. That is why `windtunnelTargets` was removed from the Grafana module rather than wired up.
+
+So the module exists as an honest opt-in — a way to donate a spare machine to the Foundation's test network, off by default, with the consequences written into its option description — and the fleet dashboard's traffic comes from our own conductors instead.
 
 ## Test bundles
 

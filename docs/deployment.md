@@ -90,6 +90,22 @@ extra-trusted-public-keys = holochain-ci.cachix.org-1:5IUSkZc0aoRS53rfkvH9Kid40N
 
 The first boot is not fast even so: the conductor takes a minute or more to open its admin port on a VM, and installing a hApp is slower still.
 
+## Seeing the dashboard before deploying a fleet
+
+`observability-vm` is the whole observability stack on one machine: an edgenode exporting its conductor's `holochain_*` series, plus Prometheus and Grafana scraping and drawing them. Grafana and Prometheus are forwarded to the host, so a real browser reaches them.
+
+```bash
+nixos-rebuild build-vm --flake .#observability-vm
+./result/bin/run-observability-vm-vm
+# or, on a non-NixOS host:
+nix build .#nixosConfigurations.observability-vm.config.system.build.vm
+./result/bin/run-observability-vm-vm
+```
+
+Then open <http://localhost:13000> (admin / workshop2026) and pick the **Holochain Fleet** dashboard; Prometheus itself is on <http://localhost:19090>. Give it a couple of minutes: the conductor needs a minute or more to come up, the metrics timer fires every 10 seconds in this VM, and the panels need a few points before they draw a line.
+
+The dashboard panels are provisioned, not saved by hand. Editing one in the browser will appear to work and will be discarded on the next rebuild; change `modules/dashboards/holochain-fleet.json` instead.
+
 ## First boot sequence
 
 1. NixOS boots.
@@ -112,6 +128,22 @@ journalctl -u holochain-conductor -f
 # Check hApp installer ran
 systemctl status holochain-happ-installer
 journalctl -u holochain-happ-installer
+
+# Conductor metrics (metricsExporter.enable + conductorMetrics.enable)
+systemctl list-timers holochain-conductor-metrics
+curl -s localhost:9100/metrics | grep '^holochain_'
+```
+
+`holochain_conductor_up 0` means the timer is running and the conductor is not answering; check `journalctl -u holochain-conductor`. No `holochain_` lines at all means the timer has not fired yet, or `conductorMetrics.enable` is off.
+
+On the monitor node:
+
+```bash
+# every configured scrape target should be "health":"up"
+curl -s localhost:9090/api/v1/targets | jq '.data.activeTargets[] | {scrapeUrl, health, lastError}'
+
+# the provisioned dashboard should be there
+curl -s -u admin:workshop2026 'localhost:3000/api/search?query=Holochain'
 ```
 
 ## Rolling back
