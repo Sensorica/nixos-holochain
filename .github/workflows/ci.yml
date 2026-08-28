@@ -46,6 +46,31 @@ jobs:
           nix eval --json --override-input nixos-holochain "$GITHUB_WORKSPACE" \
             .#colmena --apply 'h: builtins.attrNames (removeAttrs h ["meta"])'
 
+      # The templates are the adoption path, so they are checked the way a
+      # stranger uses them: initialised into an empty directory and evaluated
+      # there. They point at github:Sensorica/nixos-holochain, so the input is
+      # overridden to this checkout or the check would pass against main.
+      - name: Flake templates
+        run: |
+          for template in minimal fleet; do
+            tmp=$(mktemp -d)
+            echo "::group::template $template"
+            (
+              cd "$tmp"
+              nix flake init -t "path:$GITHUB_WORKSPACE#$template"
+              nix flake check --no-build \
+                --override-input nixos-holochain "path:$GITHUB_WORKSPACE"
+            )
+            echo "::endgroup::"
+          done
+
+      # docs/module-options.md is generated. Hand edits and forgotten
+      # regenerations both show up here rather than in a reader's face.
+      - name: Option reference is in sync
+        run: |
+          diff <(cat "$(nix build .#options-doc --print-out-paths)") docs/module-options.md
+          echo "options-doc in sync"
+
   check:
     name: nix flake check
     runs-on: ubuntu-latest
@@ -90,4 +115,5 @@ jobs:
             .#checks.x86_64-linux.vmTestWithHapp-0_6 \
             .#checks.x86_64-linux.vmTestGrafana \
             .#checks.x86_64-linux.vmTestConductorMetrics-0_6 \
+            .#checks.x86_64-linux.vmTestGateway \
             .#checks.x86_64-linux.vmTestWindtunnel
