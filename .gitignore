@@ -10,3 +10,6 @@ result-*
 
 # SSH keys — never commit
 /secrets/
+
+# Git worktrees used by the PM/Builder workflow
+.worktrees/
