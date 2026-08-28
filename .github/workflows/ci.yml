@@ -1,9 +1,11 @@
 name: CI
 
-# Eval jobs run on every push (ADR-011): stacked slice PRs target slice
-# branches, not main, so a branch filter would leave them unchecked.
+# Every PR runs the checks whatever its base branch, so the stacked slice
+# PRs (which target slice branches, not main) show them on the PR page
+# and `gh pr checks` works; pushes to main run them after each merge (ADR-011).
 on:
   push:
+    branches: [main]
   pull_request:
 
 concurrency:
@@ -14,8 +16,6 @@ jobs:
   eval:
     name: flake eval (no build)
     runs-on: ubuntu-latest
-    # Same-repo PRs are already covered by the push run of their head branch.
-    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
 
     steps:
       - name: Checkout
@@ -49,7 +49,6 @@ jobs:
   check:
     name: nix flake check
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
 
     steps:
       - name: Checkout
