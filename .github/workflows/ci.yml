@@ -71,17 +71,20 @@ jobs:
           sudo udevadm trigger --name-match=kvm
           ls -la /dev/kvm
 
-      # Optional: uncomment and add CACHIX_AUTH_TOKEN secret to avoid rebuilding
-      # Holochain from source on every CI run once the VM tests are built here.
-      # - name: Cachix binary cache
-      #   uses: cachix/cachix-action@v15
-      #   with:
-      #     name: nixos-holochain
-      #     authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-
       - name: nix flake check (root)
         run: nix flake check --no-build --all-systems --show-trace
 
       - name: nix flake check (example fleet against this checkout)
         working-directory: examples/sensorica-fleet
         run: nix flake check --no-build --show-trace --override-input nixos-holochain "$GITHUB_WORKSPACE"
+
+      # The flake's own nixConfig points at holochain-ci.cachix.org and this
+      # workflow sets accept-flake-config, so the conductor is substituted rather
+      # than built from source. Without both, this step takes hours.
+      - name: Build the VM tests
+        run: |
+          nix build -L \
+            .#checks.x86_64-linux.vmTest \
+            .#checks.x86_64-linux.vmTestWithHapp \
+            .#checks.x86_64-linux.vmTest-0_6 \
+            .#checks.x86_64-linux.vmTestWithHapp-0_6
