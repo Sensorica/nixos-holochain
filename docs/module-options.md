@@ -1,186 +1,1270 @@
-# Module Options Reference
+# Module options
 
-This document is the canonical option reference for all nixos-holochain modules.
+Generated from the module declarations by `nix build .#options-doc`; do not edit by hand. CI fails when this file differs from a fresh build, so regenerate it in the same commit as any option change:
 
----
-
-## holochain-edgenode
-
-Core module: Holochain conductor + in-process lair keystore + idempotent hApp installer.
-
-Supports the 0.6 and 0.7 lines from one option set. Everything version-dependent is derived from `package.version`, so setting `package` and `hcPackage` to the 0.6 toolchain is the whole of what switching lines requires.
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `enable` | bool | `false` | Enable the edgenode service |
-| `package` | package | holonix `main-0.7` `holochain` (0.7.0) | Conductor binary. Its version selects the config schema the module renders |
-| `hcPackage` | package | holonix `main-0.7` `hc` (0.7.0) | CLI used by the hApp installer. Keep it on the same line as `package` |
-| `user` | string | `"holochain"` | System user the conductor runs as |
-| `dataDir` | path | `/var/lib/holochain` | Persistent state: conductor DB, lair keystore, passphrase. Kept short on purpose (`SUN_LEN`) |
-| `passphraseFileName` | string | `"lair-passphrase"` | Passphrase file inside `dataDir`, generated 0600 on first boot |
-| `adminPort` | port | `4444` | Admin WebSocket port (bound to localhost) |
-| `appPort` | port | `8888` | App WebSocket port the installer attaches |
-| `allowedOrigins` | string | `"*"` | Allowed origins for the admin and app WebSockets |
-| `bootstrapUrl` | string\|null | `null` | Bootstrap server. `null` selects `https://dev-test-bootstrap2.holochain.org` below 0.7, the same URL with a trailing slash from 0.7 |
-| `signalUrl` | string\|null | `null` | WebRTC signal server, **0.6 line only**. `null` selects `wss://dev-test-bootstrap2.holochain.org`. Ignored with a warning from 0.7, where the key was removed from the schema |
-| `relayUrl` | string\|null | `null` | Iroh relay, required on both lines. `null` selects `https://use1-1.relay.n0.iroh-canary.iroh.link./` |
-| `installerTimeout` | int | `300` | Seconds the installer waits for the admin interface to answer |
-| `useSystemdNotify` | bool | `true` | Run the conductor as `Type = "notify"`; false falls back to `Type = "simple"` |
-| `happs` | attrs | `{}` | hApps to install and keep enabled (keyed by installed app id) |
-| `happs.<name>.src` | path | — | Path to the `.happ` bundle. Fetch by hash; never commit one |
-| `happs.<name>.installed` | bool | `true` | Whether to install and enable this hApp |
-| `happs.<name>.networkSeed` | string\|null | `null` | Network seed override for every DNA in the app |
-| `metricsExporter.enable` | bool | `false` | Enable Prometheus `node_exporter` for fleet observability, with the textfile collector on |
-| `metricsExporter.port` | port | `9100` | Port to expose node metrics on |
-| `metricsExporter.textfileDirectory` | path | `/var/lib/prometheus-node-exporter-text-files` | Directory the textfile collector reads; created 0755 owned by `user` |
-| `conductorMetrics.enable` | bool | `false` | Export the conductor's own network stats as `holochain_*` series. Requires `metricsExporter.enable` |
-| `conductorMetrics.interval` | string | `"30s"` | systemd time span between textfile writes |
-| `openFirewall` | bool | `false` | Open firewall for admin, app, and metrics ports |
-
-### Conductor metrics
-
-`conductorMetrics.enable` is the fleet dashboard's Holochain data source, and the only one: the Wind Tunnel runner is not a data source (see below). A systemd timer calls `dump-network-stats` on the admin interface every `interval`, turns the reply into Prometheus text with `jq`, and writes it into `metricsExporter.textfileDirectory`, from which node_exporter serves it on `/metrics`.
-
-The reply is Kitsune2's `TransportStats`, byte-identical on both lines. Verified against the pinned 0.7.0 and 0.6.3 binaries:
-
-```json
-{"transport_stats":{"backend":"iroh","peer_urls":["https://use1-1.relay.n0.iroh-canary.iroh.link.:443/57b3f7ba..."],"connections":[]},"blocked_message_counts":{}}
+```bash
+cp "$(nix build .#options-doc --print-out-paths)" docs/module-options.md
 ```
 
-| Series | Type | Meaning |
-|---|---|---|
-| `holochain_conductor_up` | gauge | 1 when the admin interface answered, 0 when it did not |
-| `holochain_conductor_peer_connections` | gauge | Transport connections currently held |
-| `holochain_conductor_direct_peer_connections` | gauge | Of those, the ones that upgraded off the relay |
-| `holochain_conductor_peer_urls` | gauge | Peer URLs this conductor can be reached at |
-| `holochain_conductor_network_sent_bytes_total` | counter | Bytes sent, summed over current connections |
-| `holochain_conductor_network_received_bytes_total` | counter | Bytes received, summed over current connections |
-| `holochain_conductor_network_sent_messages_total` | counter | Messages sent, summed over current connections |
-| `holochain_conductor_network_received_messages_total` | counter | Messages received, summed over current connections |
-| `holochain_conductor_blocked_messages_total` | counter | Messages refused, summed over every block reason |
-| `holochain_conductor_metrics_scrape_timestamp_seconds` | gauge | When the textfile was last written |
+The prose about how the modules fit together lives in [`architecture.md`](architecture.md).
 
-A down or restarting conductor reports `holochain_conductor_up 0` rather than dropping the series, so a dead node shows on the dashboard instead of vanishing from it. The byte and message counters cover the connections the conductor holds *right now*: a peer that disconnects takes its totals with it, so they can go down. Treat them as throughput of live links, which is what `rate()` over them means, and not as lifetime totals.
+## services\.holochain-edgenode\.enable
 
-The three URL options default to `null` rather than to a literal so that one default can serve both lines. `null` means "whatever the configured Holochain version uses for itself"; the resolved values are in the table above and in `docs/architecture.md`. None of them is a production endpoint.
 
-### Running the 0.6 line
 
-```nix
-services.holochain-edgenode = {
-  enable = true;
-  package = inputs.holonix-0_6.packages.${pkgs.system}.holochain;
-  hcPackage = inputs.holonix-0_6.packages.${pkgs.system}.hc;
-};
+Whether to enable Holochain edgenode (conductor + lair + hApp installer)\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+` false `
+
+
+
+*Example:*
+` true `
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
+## services\.holochain-edgenode\.package
+
+
+
+Holochain conductor package\. Its ` version ` selects the config schema the
+module renders: below 0\.7 the network section carries ` bootstrap_url `,
+` signal_url ` and ` relay_url `; from 0\.7 it carries ` bootstrap_url ` and
+` relay_url `, because ` signal_url ` was removed from the schema\.
+
+
+
+*Type:*
+package
+
+
+
+*Default:*
+` inputs.holonix.packages.${pkgs.system}.holochain `
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
+## services\.holochain-edgenode\.adminPort
+
+WebSocket port for the conductor admin interface (bound to localhost)\.
+
+
+
+*Type:*
+16 bit unsigned integer; between 0 and 65535 (both inclusive)
+
+
+
+*Default:*
+` 4444 `
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
+## services\.holochain-edgenode\.allowedOrigins
+
+
+
+Allowed origins for the admin and app WebSocket interfaces: ` * `, a single
+origin, or a comma-separated list\. With ` * ` no ` --origin ` header is needed
+on the admin call\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+` "*" `
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
+## services\.holochain-edgenode\.appPort
+
+
+
+WebSocket port the hApp installer attaches as the app interface\.
+
+
+
+*Type:*
+16 bit unsigned integer; between 0 and 65535 (both inclusive)
+
+
+
+*Default:*
+` 8888 `
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
+## services\.holochain-edgenode\.bootstrapUrl
+
+
+
+Kitsune2 bootstrap server used for WAN peer discovery\. ` null ` selects the
+default for the configured line: ` https://dev-test-bootstrap2.holochain.org `
+below 0\.7 (Holo-Host/edgenode’s 0\.6\.1 template) and the same URL with a
+trailing slash from 0\.7 (what ` holochain --create-config ` writes)\. No
+production bootstrap URL is documented for either line, so point this at
+your own infrastructure for a real deployment\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+` null `
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
+## services\.holochain-edgenode\.conductorMetrics\.enable
+
+
+
+Whether to enable a timer that exports the conductor’s own network stats as
+` holochain_* ` series through node_exporter’s textfile collector\.
+
+This is the fleet dashboard’s Holochain data source\. It calls
+` dump-network-stats ` on the admin interface, which answers with
+Kitsune2’s ` TransportStats ` on both the 0\.6 and 0\.7 lines, and derives
+connection, byte and message gauges from it\. Requires
+` metricsExporter.enable `
+\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+` false `
+
+
+
+*Example:*
+` true `
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
+## services\.holochain-edgenode\.conductorMetrics\.interval
+
+
+
+How often the timer writes the textfile, as a systemd time span\. The
+floor is what the dashboard’s resolution is worth: Prometheus scrapes
+node_exporter on its own schedule and simply re-reads whatever the
+file last said, so a value far above the scrape interval shows as a
+staircase rather than a curve\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+` "30s" `
+
+
+
+*Example:*
+` "1min" `
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
+## services\.holochain-edgenode\.dataDir
+
+
+
+Persistent state directory for the conductor database, the lair keystore
+and the generated passphrase\. Created as the unit’s ` StateDirectory ` with
+mode 0700\.
+
+Keep it short\. The keystore’s unix socket is ` ${dataDir}/ks/socket ` and
+unix socket paths are capped at 108 bytes (` SUN_LEN `); a deeper path makes
+the conductor exit at startup with ` path must be shorter than SUN_LEN `\.
+
+
+
+*Type:*
+absolute path
+
+
+
+*Default:*
+` "/var/lib/holochain" `
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
+## services\.holochain-edgenode\.happs
+
+
+
+hApps to install and keep enabled, keyed by installed app id\.
+
+
+
+*Type:*
+attribute set of (submodule)
+
+
+
+*Default:*
+` { } `
+
+
+
+*Example:*
+
+```
+{
+  dino-adventure = {
+    src = pkgs.fetchurl {
+      url = "https://github.com/holochain/dino-adventure/releases/download/v0.3.0/dino-adventure-v0.3.0.happ";
+      sha256 = "...";
+    };
+    networkSeed = "workshop-2026";
+  };
+}
+
 ```
 
-Or, against this flake's own outputs, `nixos-holochain.packages.${system}.holochain-0_6` and `hc-0_6`.
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
 
-### Services created
 
-| Unit | Type | Condition |
-|------|------|-----------|
-| `holochain-conductor.service` | notify (simple when `useSystemdNotify = false`) | always |
-| `holochain-happ-installer.service` | oneshot, `RemainAfterExit`, runs every boot | `happs != {}` |
-| `prometheus-node_exporter.service` | simple | `metricsExporter.enable` |
-| `holochain-conductor-metrics.service` | oneshot, driven by the timer | `conductorMetrics.enable` |
-| `holochain-conductor-metrics.timer` | `OnBootSec` / `OnUnitActiveSec` = `interval` | `conductorMetrics.enable` |
 
----
+## services\.holochain-edgenode\.happs\.\<name>\.installed
 
-## holochain-grafana
 
-Prometheus + Grafana observability stack. Enable on the designated monitor node;
-peer nodes expose metrics via `services.holochain-edgenode.metricsExporter.enable = true`
-and `services.holochain-edgenode.conductorMetrics.enable = true`.
 
-Access the dashboard at `http://<monitor-host>:3000` (default credentials: admin / workshop2026).
+Whether to install and enable this hApp\.
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `enable` | bool | `false` | Enable Prometheus + Grafana stack |
-| `grafanaPort` | port | `3000` | Grafana HTTP port |
-| `prometheusPort` | port | `9090` | Prometheus port |
-| `scrapeTargets` | list of string | `[]` | `node_exporter` targets across the fleet (`"host:port"`) |
-| `scrapeInterval` | string | `"15s"` | How often Prometheus scrapes. Below its own one-minute default, which draws a short window nearly flat |
-| `adminUser` | string | `"admin"` | Grafana administrator account |
-| `adminPassword` | string | `"workshop2026"` | Grafana administrator password. A lab convenience, not a secret: it ends up world-readable in the Nix store |
-| `dashboards` | path | `./dashboards` | Directory of dashboard JSON files to provision |
-| `openFirewall` | bool | `false` | Open firewall for Grafana, Prometheus, and node_exporter ports |
 
-`windtunnelTargets` was removed in slice 3. The Wind Tunnel runner image exposes no Prometheus endpoint: its config declares no ports, its entrypoint is a Nomad agent, and neither its README nor its repository mentions Prometheus or metrics. A scrape target option for it would have pointed at nothing.
 
-### Provisioning
+*Type:*
+boolean
 
-The module provisions both halves, so a fresh monitor node comes up with a working dashboard and nothing to click:
 
-- a Prometheus data source with uid `holochain-prometheus`, pointed at `127.0.0.1:<prometheusPort>`. The shipped dashboard refers to it by uid, so renaming it in the UI cannot break it.
-- every JSON file in `dashboards`, re-read every 30 seconds. `allowUiUpdates` is off: the files come from the Nix store, so edits made in the UI would be discarded by the next rebuild without saying so.
 
-`modules/dashboards/holochain-fleet.json` (uid `holochain-fleet`, title "Holochain Fleet") has six panels: conductors up, conductor peers, conductor network throughput, CPU busy, memory used, and host network throughput. The first three come from the edgenode module's `conductorMetrics`; the last three from node_exporter.
+*Default:*
+` true `
 
-A conductor with no hApp installed joins no DHT, so its connection and byte counts sit at zero while `holochain_conductor_up` and `holochain_conductor_peer_urls` are already non-zero. That is the correct reading of a bare node, not a broken panel.
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
 
-### Example: 5-node fleet
 
-```nix
-# edgenode-01 (monitor role)
-services.holochain-grafana = {
-  enable        = true;
-  openFirewall  = true;
-  scrapeTargets = [
-    "edgenode-01:9100" "edgenode-02:9100" "edgenode-03:9100"
-    "edgenode-04:9100" "edgenode-05:9100"
-  ];
-};
 
-# every node, monitor included
-services.holochain-edgenode = {
-  metricsExporter.enable = true;
-  conductorMetrics.enable = true;
-};
+## services\.holochain-edgenode\.happs\.\<name>\.networkSeed
+
+
+
+Network seed override for every DNA in this app\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+` null `
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
+## services\.holochain-edgenode\.happs\.\<name>\.src
+
+
+
+Path to the ` .happ ` bundle\. Fetch it by hash; never commit one (ADR-012)\.
+
+
+
+*Type:*
+absolute path
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
+## services\.holochain-edgenode\.hcPackage
+
+
+
+Holochain CLI package used by the hApp installer\. Keep it on the same
+line as ` package `: the admin subcommand is ` hc client call ` from 0\.7 and
+` hc sandbox call ` below it\.
+
+
+
+*Type:*
+package
+
+
+
+*Default:*
+` inputs.holonix.packages.${pkgs.system}.hc `
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
+## services\.holochain-edgenode\.installerTimeout
+
+
+
+Seconds the hApp installer waits for the admin interface to answer before
+failing\. The conductor needs about 80 seconds to open the port on an
+unaccelerated VM, so leave room\.
+
+
+
+*Type:*
+signed integer
+
+
+
+*Default:*
+` 300 `
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
+## services\.holochain-edgenode\.metricsExporter\.enable
+
+
+
+Whether to enable Prometheus node_exporter for fleet observability\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+` false `
+
+
+
+*Example:*
+` true `
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
+## services\.holochain-edgenode\.metricsExporter\.port
+
+
+
+Port to expose node metrics on\.
+
+
+
+*Type:*
+16 bit unsigned integer; between 0 and 65535 (both inclusive)
+
+
+
+*Default:*
+` 9100 `
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
+## services\.holochain-edgenode\.metricsExporter\.textfileDirectory
+
+
+
+Directory node_exporter’s textfile collector reads\. Every ` *.prom `
+file in it is appended to ` /metrics ` verbatim, which is how metrics
+that no exporter produces on its own reach Prometheus\.
+
+The directory is created 0755 and owned by ` user `, so the conductor
+metrics timer can write into it while node_exporter, which runs as
+its own user, can read it\.
+
+
+
+*Type:*
+absolute path
+
+
+
+*Default:*
+` "/var/lib/prometheus-node-exporter-text-files" `
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
+## services\.holochain-edgenode\.openFirewall
+
+
+
+Open firewall ports for the admin, app and metrics interfaces\. The
+conductor binds its websockets to localhost, so this only matters for
+the metrics exporter unless ` danger_bind_addr ` is configured by hand\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+` false `
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
+## services\.holochain-edgenode\.passphraseFileName
+
+
+
+Name of the lair passphrase file inside ` dataDir `\. Generated with mode
+0600 on first boot if absent and reused on every boot after that, which
+is what lets the keystore open again after a reboot with nobody present\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+` "lair-passphrase" `
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
+## services\.holochain-edgenode\.relayUrl
+
+
+
+Iroh relay used when a direct connection cannot be established\. Required
+by the conductor on both lines; ` null ` selects
+` https://use1-1.relay.n0.iroh-canary.iroh.link./ `, the default both
+0\.6\.3 and 0\.7\.0 write for themselves\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+` null `
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
+## services\.holochain-edgenode\.signalUrl
+
+
+
+WebRTC signal server\. Used only below 0\.7, where ` null ` selects
+` wss://dev-test-bootstrap2.holochain.org `\. ` network.signal_url ` was
+removed from the 0\.7 config schema, so from 0\.7 this option is ignored
+and setting it raises a warning; use ` relayUrl ` instead\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+` null `
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
+## services\.holochain-edgenode\.useSystemdNotify
+
+
+
+Run the conductor as ` Type = "notify" `, so the unit becomes active only
+once the conductor has signalled readiness rather than as soon as the
+process exists\. Set to false to fall back to ` Type = "simple" `\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+` true `
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
+## services\.holochain-edgenode\.user
+
+
+
+System user the conductor runs as\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+` "holochain" `
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
+## services\.holochain-grafana\.enable
+
+
+
+Whether to enable Prometheus + Grafana observability for Holochain fleet\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+` false `
+
+
+
+*Example:*
+` true `
+
+*Declared by:*
+ - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+
+
+
+## services\.holochain-grafana\.adminPassword
+
+
+
+Grafana administrator password\. The default is the workshop’s shared
+password, kept as a default so a fleet works out of the box on a lab
+network\.
+
+It ends up world-readable in the Nix store, so it is a lab convenience
+and not a secret\. On anything reachable from outside the lab, set this
+to a value of your own, or drop the option and point
+` services.grafana.settings.security.admin_password ` at a
+` $__file{/run/secrets/...} ` reference instead\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+` "workshop2026" `
+
+*Declared by:*
+ - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+
+
+
+## services\.holochain-grafana\.adminUser
+
+
+
+Grafana administrator account\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+` "admin" `
+
+*Declared by:*
+ - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+
+
+
+## services\.holochain-grafana\.dashboards
+
+
+
+Directory of Grafana dashboard JSON files to provision\. Everything in
+it is loaded at startup and re-read every 30 seconds\. The module ships
+` holochain-fleet.json ` (uid ` holochain-fleet `), which draws CPU, memory
+and host network from node_exporter and the conductor’s own
+` holochain_* ` series from the edgenode module’s metrics timer\.
+
+
+
+*Type:*
+absolute path
+
+
+
+*Default:*
+` ./dashboards `
+
+*Declared by:*
+ - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+
+
+
+## services\.holochain-grafana\.grafanaPort
+
+
+
+Port Grafana listens on\.
+
+
+
+*Type:*
+16 bit unsigned integer; between 0 and 65535 (both inclusive)
+
+
+
+*Default:*
+` 3000 `
+
+*Declared by:*
+ - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+
+
+
+## services\.holochain-grafana\.openFirewall
+
+
+
+Open firewall ports for Grafana, Prometheus, and node_exporter\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+` false `
+
+*Declared by:*
+ - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+
+
+
+## services\.holochain-grafana\.prometheusPort
+
+
+
+Port Prometheus listens on\.
+
+
+
+*Type:*
+16 bit unsigned integer; between 0 and 65535 (both inclusive)
+
+
+
+*Default:*
+` 9090 `
+
+*Declared by:*
+ - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+
+
+
+## services\.holochain-grafana\.scrapeInterval
+
+
+
+How often Prometheus scrapes its targets\. Prometheus itself defaults to
+one minute, which for a lab fleet of a handful of nodes draws a
+fifteen-minute window as about fifteen points, and makes ` rate() ` over
+a short range flat or empty\. The conductor metrics timer writes every
+30 s by default, so this is deliberately below it\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+` "15s" `
+
+*Declared by:*
+ - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+
+
+
+## services\.holochain-grafana\.scrapeTargets
+
+
+
+Prometheus node_exporter targets across the fleet (host:port)\.
+
+
+
+*Type:*
+list of string
+
+
+
+*Default:*
+` [ ] `
+
+
+
+*Example:*
+
+```
+[ "edgenode-01:9100" "edgenode-02:9100" "edgenode-03:9100"
+  "edgenode-04:9100" "edgenode-05:9100" ]
+
 ```
 
-### Services created
+*Declared by:*
+ - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
 
-| Unit | Type |
-|------|------|
-| `grafana.service` | simple |
-| `prometheus.service` | simple |
-| `prometheus-node_exporter.service` | simple |
 
----
 
-## holochain-windtunnel
+## services\.holochain-http-gateway\.enable
 
-Runs the Holochain Foundation's Wind Tunnel runner image as an OCI container.
 
-**This module is not a source of dashboard data, and enabling it donates the machine.** The image's entrypoint synchronises the clock and then execs `nomad agent`; the baked config sets `client.servers = ["nomad-server-01.holochain.org"]`. So the machine joins the Foundation's Nomad cluster as a client, and the Foundation schedules Wind Tunnel scenarios — each with its own conductor — onto it. The runner's README calls these machines "designed to be for internal use only" and warns that the image "requires extensive permissions on the host machine that are effectively root access" and "should only be run on a dedicated machine". `enable` therefore defaults to `false`, and the example fleet sets it to `false` in writing.
 
-The fleet's `holochain_*` series come from `services.holochain-edgenode.conductorMetrics`, which needs none of this.
+Whether to enable the Holochain HTTP gateway in front of the local conductor\.
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `enable` | bool | `false` | Donate this machine to the Foundation's Wind Tunnel test network |
-| `backend` | `"podman"` \| `"docker"` | `"podman"` | OCI backend. Podman needs no daemon; the README documents Docker and the image is indifferent |
-| `image` | string | `ghcr.io/holochain/wind-tunnel-runner@sha256:650c9180...330fa2` | Runner image, pinned by digest |
-| `hostname` | string | `"nomad-client-${networking.hostName}"` | Name the container reports to Nomad and Tailscale |
-| `autoStart` | bool | `true` | Start the container at boot |
-| `extraOptions` | list of string | `["--net=host" "--privileged" "--cgroupns=host"]` | Flags the README requires; removing any of them stops the runner working |
 
-The image publishes only the moving tags `latest`, `latest-amd64` and `latest-arm64`, so the default pins the multi-architecture index digest that `latest` resolved to on 2026-08-28. Re-pin with `skopeo inspect docker://ghcr.io/holochain/wind-tunnel-runner:latest`.
 
-### Services created
+*Type:*
+boolean
 
-| Unit | Type | Condition |
-|------|------|-----------|
-| `podman-wind-tunnel-runner.service` | simple, from `virtualisation.oci-containers` | `enable` |
 
-## holochain-http-gateway
 
-Placeholder — HTTP gateway in front of the conductor.
-Gateway binary not yet selected. See module file for current status.
+*Default:*
+` false `
 
-## pai
 
-Placeholder — PAI per-machine. See module file for current status.
+
+*Example:*
+` true `
+
+*Declared by:*
+ - [modules/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-http-gateway.nix)
+
+
+
+## services\.holochain-http-gateway\.package
+
+
+
+The ` hc-http-gw ` package to run\. The default is built from the tagged
+upstream source for the Holochain line the conductor runs, so it does
+not have to be set by hand when the conductor’s line changes\.
+
+
+
+*Type:*
+package
+
+
+
+*Default:*
+the ` hc-http-gw ` release matching ` services.holochain-edgenode.package.version `: 0\.4\.x for Holochain 0\.7, 0\.3\.x for 0\.6
+
+*Declared by:*
+ - [modules/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-http-gateway.nix)
+
+
+
+## services\.holochain-http-gateway\.address
+
+
+
+Address the gateway binds to, passed as ` --address ` (` HC_GW_ADDRESS `)\.
+The default keeps it on loopback; set it to ` 0.0.0.0 ` and turn on
+` services.holochain-http-gateway.openFirewall ` to serve a LAN\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+` "127.0.0.1" `
+
+*Declared by:*
+ - [modules/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-http-gateway.nix)
+
+
+
+## services\.holochain-http-gateway\.adminPort
+
+
+
+Admin websocket port of the conductor the gateway drives\. It becomes
+` HC_GW_ADMIN_WS_URL=ws://127.0.0.1:<adminPort> `, which the binary
+requires: without it the process exits immediately\.
+
+
+
+*Type:*
+16 bit unsigned integer; between 0 and 65535 (both inclusive)
+
+
+
+*Default:*
+` config.services.holochain-edgenode.adminPort `
+
+*Declared by:*
+ - [modules/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-http-gateway.nix)
+
+
+
+## services\.holochain-http-gateway\.allowedAppIds
+
+
+
+Installed app ids the gateway is allowed to reach, joined into
+` HC_GW_ALLOWED_APP_IDS `\. Empty, the default, exposes nothing: the
+gateway runs and refuses every zome-call path\. Each id listed here
+needs a matching entry in
+` services.holochain-http-gateway.allowedFns `\.
+
+
+
+*Type:*
+list of string
+
+
+
+*Default:*
+` [ ] `
+
+
+
+*Example:*
+
+```
+[
+  "dino-adventure"
+]
+```
+
+*Declared by:*
+ - [modules/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-http-gateway.nix)
+
+
+
+## services\.holochain-http-gateway\.allowedFns
+
+
+
+Per app id, the zome functions the gateway may call, written
+` zome_name/fn_name `\. Each entry becomes
+` HC_GW_ALLOWED_FNS_<app-id> `, a comma separated list\.
+
+The single-element list ` ["*"] ` allows every function in every zome of
+that app, which the binary accepts but which also exposes the app’s
+writes, since the gateway does nothing else to tell a read from a
+write\. Using it raises an evaluation warning\. ` * ` cannot be mixed with
+named functions; the binary would fail to parse the value\.
+
+
+
+*Type:*
+attribute set of list of string
+
+
+
+*Default:*
+` { } `
+
+
+
+*Example:*
+
+```
+{
+  dino-adventure = ["dino_adventure/get_all_dinos_local"];
+  my-app = ["*"];
+}
+
+```
+
+*Declared by:*
+ - [modules/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-http-gateway.nix)
+
+
+
+## services\.holochain-http-gateway\.maxAppConnections
+
+
+
+How many app websocket connections the gateway keeps open at once, one
+per allowed app, as ` HC_GW_MAX_APP_CONNECTIONS `\. Older connections are
+closed when the limit is reached\.
+
+
+
+*Type:*
+unsigned integer, meaning >=0
+
+
+
+*Default:*
+` 50 `
+
+*Declared by:*
+ - [modules/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-http-gateway.nix)
+
+
+
+## services\.holochain-http-gateway\.openFirewall
+
+
+
+Open ` services.holochain-http-gateway.port ` in the firewall\.
+Leave it off unless the gateway is meant to be reachable from other
+machines; the conductor’s admin interface is reachable through
+anything the gateway is allowed to call\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+` false `
+
+*Declared by:*
+ - [modules/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-http-gateway.nix)
+
+
+
+## services\.holochain-http-gateway\.payloadLimitBytes
+
+
+
+Largest accepted ` payload ` query parameter, in bytes, as
+` HC_GW_PAYLOAD_LIMIT_BYTES `\. Measured on the base64 text before it is
+decoded, so it is really a cap on the URL length the gateway will
+process\. Upstream’s own default is the same 10 KiB\.
+
+
+
+*Type:*
+unsigned integer, meaning >=0
+
+
+
+*Default:*
+` 10240 `
+
+*Declared by:*
+ - [modules/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-http-gateway.nix)
+
+
+
+## services\.holochain-http-gateway\.port
+
+
+
+Port the gateway listens on, passed as ` --port ` (` HC_GW_PORT `)\.
+
+
+
+*Type:*
+16 bit unsigned integer; between 0 and 65535 (both inclusive)
+
+
+
+*Default:*
+` 8090 `
+
+*Declared by:*
+ - [modules/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-http-gateway.nix)
+
+
+
+## services\.holochain-http-gateway\.zomeCallTimeoutMs
+
+
+
+Deadline for a single zome call, in milliseconds, as
+` HC_GW_ZOME_CALL_TIMEOUT_MS `\. A call that outruns it answers 500\.
+
+
+
+*Type:*
+unsigned integer, meaning >=0
+
+
+
+*Default:*
+` 10000 `
+
+*Declared by:*
+ - [modules/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-http-gateway.nix)
+
+
+
+## services\.holochain-windtunnel\.enable
+
+
+
+Donate this machine to the Holochain Foundation’s Wind Tunnel test
+network\.
+
+The container runs its own Holochain conductor and reports to the
+Foundation’s Nomad cluster at ` nomad-server-01.holochain.org `; the
+runner’s own README calls these machines “designed to be for internal
+use only” and warns that the image “requires extensive permissions on
+the host machine that are effectively root access” and “should only be
+run on a dedicated machine”\.
+
+Enabling this donates the machine\. It does not feed the fleet
+dashboard: the ` holochain_* ` series come from
+` services.holochain-edgenode.conductorMetrics `, and nothing in this
+module exposes a Prometheus endpoint\. Off by default, deliberately\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+` false `
+
+
+
+*Example:*
+` true `
+
+*Declared by:*
+ - [modules/holochain-windtunnel\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-windtunnel.nix)
+
+
+
+## services\.holochain-windtunnel\.autoStart
+
+
+
+Start the container at boot\. Set to false to keep the unit generated
+but idle, which is what the VM test does: the test sandbox has no
+network, so the image cannot be pulled there\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+` true `
+
+*Declared by:*
+ - [modules/holochain-windtunnel\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-windtunnel.nix)
+
+
+
+## services\.holochain-windtunnel\.backend
+
+
+
+OCI backend used to run the container\. Podman is the default: it needs
+no daemon and the NixOS module wires the unit to it directly\. The
+runner’s README documents Docker, and the image is indifferent to
+which one starts it\.
+
+
+
+*Type:*
+one of “podman”, “docker”
+
+
+
+*Default:*
+` "podman" `
+
+*Declared by:*
+ - [modules/holochain-windtunnel\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-windtunnel.nix)
+
+
+
+## services\.holochain-windtunnel\.extraOptions
+
+
+
+Flags passed to ` podman run ` / ` docker run `\. The default is the set the
+runner’s README requires: host networking, privileged, and the host
+cgroup namespace, so the Nomad agent inside can schedule and supervise
+its own workloads\. Removing any of them stops the runner from working;
+they are an option only so that a host with a conflicting device or
+network setup can adjust them knowingly\.
+
+
+
+*Type:*
+list of string
+
+
+
+*Default:*
+
+```
+[
+  "--net=host"
+  "--privileged"
+  "--cgroupns=host"
+]
+```
+
+*Declared by:*
+ - [modules/holochain-windtunnel\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-windtunnel.nix)
+
+
+
+## services\.holochain-windtunnel\.hostname
+
+
+
+Hostname the container reports to the Nomad cluster, passed as
+` --hostname `\. The runner’s README asks for a unique, recognisable
+` nomad-client-<user> ` style name, since it is how the machine is
+identified in the Nomad and Tailscale dashboards\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+` "nomad-client-${config.networking.hostName}" `
+
+*Declared by:*
+ - [modules/holochain-windtunnel\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-windtunnel.nix)
+
+
+
+## services\.holochain-windtunnel\.image
+
+
+
+Runner image, pinned by digest\.
+
+` ghcr.io/holochain/wind-tunnel-runner ` publishes only the moving tags
+` latest `, ` latest-amd64 ` and ` latest-arm64 `, so a tag pin would silently
+change what a fleet runs\. The default is the multi-architecture index
+digest that ` latest ` resolved to on 2026-08-28, which keeps ` amd64 ` and
+` arm64 ` hosts on the same pin\. Re-pin with
+
+skopeo inspect docker://ghcr\.io/holochain/wind-tunnel-runner:latest
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+` "ghcr.io/holochain/wind-tunnel-runner@sha256:650c91806275681bc1961e0e55e85fa7fbf31bebe0c8665fc0a6af71ac330fa2" `
+
+*Declared by:*
+ - [modules/holochain-windtunnel\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-windtunnel.nix)
+
+

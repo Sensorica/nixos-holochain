@@ -15,18 +15,36 @@ The architectural bet is simple. HolOS gives you a minimal Buildroot image to fl
 
 ```
 flake.nix
-└── modules/
-    ├── holochain-edgenode.nix     ← core: conductor + lair + hApp installer + metrics
-    ├── conductor-metrics.jq       ← dump-network-stats → Prometheus text
-    ├── holochain-grafana.nix      ← optional: Prometheus + Grafana for a fleet
-    ├── dashboards/                ← provisioned Grafana dashboards
-    ├── holochain-windtunnel.nix   ← optional: donate the machine to the Foundation's Nomad cluster
-    ├── holochain-http-gateway.nix ← optional: HTTP gateway in front of conductor
-    ├── pai.nix                    ← optional: PAI per machine
-    └── default.nix                ← aggregator
+├── modules/
+│   ├── holochain-edgenode.nix     ← core: conductor + lair + hApp installer + metrics
+│   ├── conductor-metrics.jq       ← dump-network-stats → Prometheus text
+│   ├── holochain-grafana.nix      ← optional: Prometheus + Grafana for a fleet
+│   ├── dashboards/                ← provisioned Grafana dashboards
+│   ├── holochain-windtunnel.nix   ← optional: donate the machine to the Foundation's Nomad cluster
+│   ├── holochain-http-gateway.nix ← optional: HTTP gateway in front of the conductor
+│   └── default.nix                ← aggregator
+├── packages/
+│   └── holochain-http-gateway.nix ← the hc-http-gw build, one release per Holochain line
+└── templates/
+    ├── minimal/                   ← nix flake init -t …#minimal: one edgenode
+    └── fleet/                     ← nix flake init -t …#fleet: five nodes, Grafana, ISO
 ```
 
 Modules are independent. Import only what you need.
+
+### Units each module creates
+
+| Unit | Type | Condition |
+|------|------|-----------|
+| `holochain-conductor.service` | notify (simple when `useSystemdNotify = false`) | `holochain-edgenode.enable` |
+| `holochain-happ-installer.service` | oneshot, `RemainAfterExit`, runs every boot | `happs != {}` |
+| `prometheus-node_exporter.service` | simple | `metricsExporter.enable`, or `holochain-grafana.enable` |
+| `holochain-conductor-metrics.service` | oneshot, driven by the timer | `conductorMetrics.enable` |
+| `holochain-conductor-metrics.timer` | `OnBootSec` / `OnUnitActiveSec` = `interval` | `conductorMetrics.enable` |
+| `grafana.service` | simple | `holochain-grafana.enable` |
+| `prometheus.service` | simple | `holochain-grafana.enable` |
+| `holochain-http-gateway.service` | simple, `DynamicUser`, restarts until the conductor answers | `holochain-http-gateway.enable` |
+| `podman-wind-tunnel-runner.service` | simple, from `virtualisation.oci-containers` | `holochain-windtunnel.enable` |
 
 ## Service dependency graph
 
@@ -60,7 +78,19 @@ A `nixos-rebuild switch` never touches the data dir. Rollbacks are safe.
 
 The module supports Holochain 0.6 and 0.7 from a single option set. Everything that differs is derived from one value, `lib.versionOlder cfg.package.version "0.7"`, and both lines are exercised by real VM tests (`vmTest` / `vmTestWithHapp` on 0.7.0, `vmTest-0_6` / `vmTestWithHapp-0_6` on 0.6.3) rather than asserted. The root flake carries both toolchains: `holonix` pinned to `main-0.7` and `holonix-0_6` pinned to `main-0.6`, with the 0.6 binaries also exposed as `packages.<system>.holochain-0_6` and `hc-0_6`.
 
-Two things differ, and nothing else does.
+Switching a node to the 0.6 line is two options:
+
+```nix
+services.holochain-edgenode = {
+  enable = true;
+  package = inputs.holonix-0_6.packages.${pkgs.system}.holochain;
+  hcPackage = inputs.holonix-0_6.packages.${pkgs.system}.hc;
+};
+```
+
+or, against this flake's own outputs, `nixos-holochain.packages.${system}.holochain-0_6` and `hc-0_6`. Everything else follows: the network section, the admin CLI prefix, and the HTTP gateway release.
+
+Three things differ, and nothing else does.
 
 ### 1. The network section
 
@@ -101,7 +131,11 @@ thread 'main' panicked at crates/hc/src/lib.rs:110:22:
 Failed to run external subcommand: Os { code: 2, kind: NotFound, message: "No such file or directory" }
 ```
 
-The 0.6 equivalent is `hc sandbox call --running <p>`. Below that prefix the two lines are identical — same subcommand names, same arguments, same JSON — so the installer only makes the prefix version-aware.
+The 0.6 equivalent is `hc sandbox call --running <p>`. Below that prefix the two lines are identical: same subcommand names, same arguments, same JSON, so the installer only makes the prefix version-aware.
+
+### 3. The HTTP gateway release
+
+The gateway is a separate program with its own release train, and it links the conductor's client libraries, so a build cannot straddle the two lines. Upstream publishes one gateway line per Holochain line, which `modules/holochain-http-gateway.nix` selects from the same `cfg.package.version` the network section is derived from. See "The HTTP gateway" below.
 
 ## The rest of the conductor config
 
@@ -214,7 +248,22 @@ $ hc sandbox call --running 4461 dump-network-stats        # holochain 0.6.3
 
 `dump-network-metrics`, the other candidate the issue named, answers `{}` on a conductor with no app installed, because it reports per-DNA gossip state and there is none. `dump-network-stats` always has something to say, which is why the gauges are derived from it.
 
-Each entry of `connections` carries `pub_key`, `send_message_count`, `send_bytes`, `recv_message_count`, `recv_bytes`, `opened_at_s` and `is_direct`. The series derived from them are listed in `docs/module-options.md`. Two properties are worth stating explicitly:
+Each entry of `connections` carries `pub_key`, `send_message_count`, `send_bytes`, `recv_message_count`, `recv_bytes`, `opened_at_s` and `is_direct`. These are the series derived from them:
+
+| Series | Type | Meaning |
+|---|---|---|
+| `holochain_conductor_up` | gauge | 1 when the admin interface answered, 0 when it did not |
+| `holochain_conductor_peer_connections` | gauge | Transport connections currently held |
+| `holochain_conductor_direct_peer_connections` | gauge | Of those, the ones that upgraded off the relay |
+| `holochain_conductor_peer_urls` | gauge | Peer URLs this conductor can be reached at |
+| `holochain_conductor_network_sent_bytes_total` | counter | Bytes sent, summed over current connections |
+| `holochain_conductor_network_received_bytes_total` | counter | Bytes received, summed over current connections |
+| `holochain_conductor_network_sent_messages_total` | counter | Messages sent, summed over current connections |
+| `holochain_conductor_network_received_messages_total` | counter | Messages received, summed over current connections |
+| `holochain_conductor_blocked_messages_total` | counter | Messages refused, summed over every block reason |
+| `holochain_conductor_metrics_scrape_timestamp_seconds` | gauge | When the textfile was last written |
+
+Two properties are worth stating explicitly:
 
 - **A down conductor reports `holochain_conductor_up 0`, it does not disappear.** The script writes the file whether or not the call succeeded, so a dead node is visible on the dashboard rather than absent from it. This is the difference between a panel that says "one node is down" and a panel that quietly draws four lines instead of five.
 - **The byte and message counters describe live connections only.** They sum over the connections the conductor holds at that instant, so a peer that disconnects takes its totals with it and the counter can go down. `rate()` over them is throughput of current links, which is what the dashboard draws; they are not lifetime totals and should not be read as such.
@@ -224,6 +273,28 @@ Each entry of `connections` carries `pub_key`, `send_message_count`, `send_bytes
 `holochain-grafana` runs both on the monitor node and provisions the pair that makes a dashboard work without a human: a Prometheus data source with the fixed uid `holochain-prometheus`, and every JSON file under `modules/dashboards/`. The shipped dashboard, "Holochain Fleet", draws CPU, memory and host network from node_exporter next to the conductor series, so a spike in one is legible against the other.
 
 `vmTestGrafana` runs the whole path in one VM: it waits for the conductor, asserts `holochain_conductor_up 1` appears on `/metrics`, asserts every Prometheus target reports `"health":"up"`, asserts Prometheus kept the series, and asserts Grafana's search API returns the provisioned dashboard and its data source.
+
+A fleet is the monitor node naming its peers and every node exporting:
+
+```nix
+# the monitor node
+services.holochain-grafana = {
+  enable = true;
+  openFirewall = true;
+  scrapeTargets = [
+    "edgenode-01:9100" "edgenode-02:9100" "edgenode-03:9100"
+    "edgenode-04:9100" "edgenode-05:9100"
+  ];
+};
+
+# every node, monitor included
+services.holochain-edgenode = {
+  metricsExporter.enable = true;
+  conductorMetrics.enable = true;
+};
+```
+
+A conductor with no hApp installed joins no DHT, so its connection and byte counts sit at zero while `holochain_conductor_up` and `holochain_conductor_peer_urls` are already non-zero. That is the correct reading of a bare node, not a broken panel.
 
 ### 3. What the Wind Tunnel runner is, and is not
 
@@ -236,7 +307,62 @@ exec nomad agent -config=<baked nomad.json> -config=/etc/nomad.d
 
 and whose baked config sets `client.servers = ["nomad-server-01.holochain.org"]`. Both were read out of the pulled image. Enabling the module joins the machine to the Holochain Foundation's Nomad cluster as a client, and the Foundation then schedules Wind Tunnel scenarios, each with its own conductor, onto it. Nothing in the image exposes a Prometheus endpoint: the image config declares no ports, and neither the README nor the repository mentions Prometheus or metrics. That is why `windtunnelTargets` was removed from the Grafana module rather than wired up.
 
-So the module exists as an honest opt-in — a way to donate a spare machine to the Foundation's test network, off by default, with the consequences written into its option description — and the fleet dashboard's traffic comes from our own conductors instead.
+So the module exists as an honest opt-in, a way to donate a spare machine to the Foundation's test network, off by default, with the consequences written into its option description, and the fleet dashboard's traffic comes from our own conductors instead.
+
+The image publishes only the moving tags `latest`, `latest-amd64` and `latest-arm64`, so the module's default pins the multi-architecture index digest that `latest` resolved to on 2026-08-28. Re-pin it with `skopeo inspect docker://ghcr.io/holochain/wind-tunnel-runner:latest`.
+
+## The HTTP gateway
+
+A browser cannot speak the conductor's app websocket protocol, so reading a hApp from a web page means something in front of the conductor that turns an HTTP request into a zome call. That something is `hc-http-gw`, the Holochain Foundation's own gateway, and `modules/holochain-http-gateway.nix` runs it.
+
+The route is one GET per zome function:
+
+```
+GET /{dna-hash}/{installed-app-id}/{zome}/{fn}?payload=<base64url of a JSON document>
+```
+
+The gateway decodes the payload, transcodes it to msgpack, dispatches the call over an app websocket it opens through the admin API, and transcodes the reply back to JSON. `200` carries the zome's answer, `403` means the app or the function is not on the allow list, `404` means no installed app matches the DNA hash and app id.
+
+### Not the bundled `hc http-gw`
+
+Holonix's `hc` ships an `http-gw` subcommand, and the first design (ADR-009) used it. It was replaced because the bundled build carries whatever gateway version that `hc` was cut with — 0.3.1 in the pinned holonix, on a `hc` from the 0.7 line — while upstream publishes one gateway release per Holochain line and the two are not compatible:
+
+| Holochain | Gateway | Pinned here |
+|---|---|---|
+| 0.6.x | 0.3.x | `v0.3.5` (holochain_client 0.8.3, holochain_types 0.6.3) |
+| 0.7.x | 0.4.x | `v0.4.0` (holochain_client 0.9.0, holochain_types 0.7.0) |
+
+`packages/holochain-http-gateway.nix` builds the tagged source with `rustPlatform.buildRustPackage` and picks the release from the Holochain line, exactly as the network section does. Both are exposed as `packages.<system>.holochain-http-gateway` and `holochain-http-gateway-0_6`, so an operator can check which binary a node would run without evaluating a system.
+
+The build uses the nixpkgs the matching holonix already pins rather than this flake's `nixos-25.05`: the crate's `rust-toolchain.toml` asks for a rustc newer than 25.05 carries, and holonix's is new enough. That adds no input to the lock.
+
+### Nothing is exposed by default
+
+`allowedAppIds` defaults to `[]`, which means the gateway starts, answers `/health`, and refuses every zome-call path. Exposing a function is two facts written down:
+
+```nix
+services.holochain-http-gateway = {
+  enable = true;
+  allowedAppIds = ["dino-adventure"];
+  allowedFns.dino-adventure = ["dino_adventure/get_all_dinos_local"];
+};
+```
+
+The gateway does nothing to tell a read from a write. `allowedFns.<app> = ["*"]` is accepted, because upstream accepts it, and raises an evaluation warning, because it publishes the app's write functions to anything that can reach the port.
+
+### The first call after boot is slow
+
+The conductor compiles a hApp's wasm on its first zome call, and on a cold node that took 54 to 61 s in the VM tests. `zomeCallTimeoutMs` defaults to 10000, so a reader who curls the gateway right after boot may see one 500 before the cell is warm; the second call answers in milliseconds. Wait for `holochain-happ-installer.service` to finish and call once before pointing a demo at it.
+
+### Two implementation details worth knowing
+
+The binary reads its configuration from the environment, and one of those variables carries the app id in its *name*: `HC_GW_ALLOWED_FNS_<app-id>`. systemd rejects an `Environment=` assignment whose name contains a dash, and app ids routinely contain dashes, so the module passes those through `env` in a small launch script and keeps the fixed-name variables in the unit's environment where `systemctl show` can print them.
+
+`hc-http-gw --help` does not work without `HC_GW_ADMIN_WS_URL` set: the program loads its configuration before clap prints anything, and exits with `HC_GW_ADMIN_WS_URL is not set`. The full variable list is in each option's description in [`module-options.md`](module-options.md).
+
+### The test
+
+`vmTestGateway` installs Dino Adventure v0.3.0 on a real conductor, allows exactly one function, and drives the gateway over HTTP. `get_all_dinos_local` is a pure read taking no payload; `get_all_dinos` is its sibling in the same zome, equally a read, and deliberately left off the allow list. The 200 proves the whole path from HTTP to the zome and back; the 403 on a function that exists proves the allow list is what refuses it, not a missing route.
 
 ## Test bundles
 
