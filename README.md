@@ -58,32 +58,34 @@ See [`docs/deployment.md`](docs/deployment.md) for the full deployment guide and
 
 ```
 nixos-holochain/
-├── flake.nix                          # Entry point: inputs, outputs, fleet configs
+├── flake.nix                          # Entry point: inputs, modules, dev shell, VM checks
 ├── modules/
 │   ├── holochain-edgenode.nix         # Core: conductor + lair + hApp installer
+│   ├── holochain-grafana.nix          # Prometheus + Grafana for a fleet
 │   ├── holochain-windtunnel.nix       # Wind Tunnel scenario runner (placeholder)
 │   ├── holochain-http-gateway.nix     # HTTP gateway in front of conductor (placeholder)
 │   ├── pai.nix                        # PAI per machine (placeholder)
 │   └── default.nix                    # Module aggregator
-├── hosts/
-│   ├── edgenode-01/configuration.nix  # Fleet member 1 (Sensorica lab)
-│   ├── edgenode-02 through 05/        # Fleet members 2-5
-│   └── workshop-iso/configuration.nix # Live ISO for participants
+├── examples/
+│   ├── sensorica-fleet/               # The Sensorica Lab fleet: its own flake, five hosts, ISO, colmena hive
+│   │   ├── flake.nix
+│   │   ├── hosts/edgenode-01..05/     # configuration.nix + hardware-configuration.nix per machine
+│   │   ├── hosts/workshop-iso/        # Live ISO for participants
+│   │   └── README.md
+│   ├── minimal/                       # Just a conductor, no extras
+│   ├── moss-group/                    # Edgenode hosting a Moss group
+│   └── developer-laptop/              # Full dev env (Holonix + IDE)
 ├── happs/                             # .happ bundles (not committed, see happs/README.md)
-├── lib/default.nix                    # Shared helper functions
+├── secrets/                           # Operator SSH key (gitignored) + committed .example
 ├── workshop/
 │   ├── facilitator-guide.md
 │   ├── participant-handout.md
 │   └── preflight-checklist.md
-├── docs/
-│   ├── architecture.md
-│   ├── module-options.md
-│   ├── deployment.md
-│   └── archive/                       # December 2025 HolOS workshop notes
-└── examples/
-    ├── minimal/                       # Just a conductor, no extras
-    ├── moss-group/                    # Edgenode hosting a Moss group
-    └── developer-laptop/              # Full dev env (Holonix + IDE)
+└── docs/
+    ├── architecture.md
+    ├── module-options.md
+    ├── deployment.md
+    └── archive/                       # December 2025 HolOS workshop notes
 ```
 
 ---

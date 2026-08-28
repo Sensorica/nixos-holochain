@@ -36,9 +36,11 @@ That is the whole practice. Everything else is understanding what lives in `conf
 
 ```
 nixos-holochain/
-├── flake.nix                          # Root: declares inputs and all system outputs
+├── flake.nix                          # Root: the reusable modules
 ├── modules/holochain-edgenode.nix     # The module you are using
-└── hosts/edgenode-0X/configuration.nix  # Your machine's config — edit this
+└── examples/sensorica-fleet/
+    ├── flake.nix                      # The fleet: five machines and the ISO
+    └── hosts/edgenode-0X/configuration.nix  # Your machine's config, edit this
 ```
 
 ---

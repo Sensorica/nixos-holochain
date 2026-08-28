@@ -12,7 +12,8 @@
 git clone https://github.com/Sensorica/nixos-holochain
 cd nixos-holochain
 
-# Edit the host config for your machine
+# The Sensorica fleet is the worked example; edit the host config for your machine
+cd examples/sensorica-fleet
 nano hosts/edgenode-01/configuration.nix
 
 sudo nixos-rebuild switch --flake .#edgenode-01
@@ -20,22 +21,24 @@ sudo nixos-rebuild switch --flake .#edgenode-01
 
 ## Colmena prerequisites
 
-Before running `colmena apply`, each host config must have:
+Before running `colmena apply` from `examples/sensorica-fleet`, each host must have:
 
-1. A real `hardware-configuration.nix` — generated on the target machine:
+1. A real `hardware-configuration.nix` replacing the committed placeholder, generated on the target machine:
    ```bash
-   sudo nixos-generate-config --show-hardware-config > hosts/edgenode-XX/hardware-configuration.nix
+   sudo nixos-generate-config --show-hardware-config > examples/sensorica-fleet/hosts/edgenode-XX/hardware-configuration.nix
    ```
-2. The facilitator SSH public key committed to `secrets/sensorica.pub`:
+2. The facilitator SSH public key in `secrets/sensorica.pub` at the repository root (gitignored, never committed):
    ```bash
    cp ~/.ssh/id_ed25519.pub secrets/sensorica.pub
    ```
 
-Host configs already reference `../../secrets/sensorica.pub` via `authorizedKeys.keyFiles`.
+The example flake passes that file to every host as `authorizedKeyFiles` when it exists; see `examples/sensorica-fleet/README.md`.
 
 ## Fleet (Colmena)
 
 ```bash
+cd examples/sensorica-fleet
+
 # Deploy to all nodes in parallel
 colmena apply --on @all
 
@@ -50,7 +53,7 @@ colmena apply --dry-run
 
 ```bash
 # Build the ISO
-nix build .#nixosConfigurations.workshop-iso.config.system.build.isoImage
+nix build ./examples/sensorica-fleet#nixosConfigurations.workshop-iso.config.system.build.isoImage
 
 # Flash to USB (replace /dev/sdX with your USB device)
 sudo dd if=result/iso/*.iso of=/dev/sdX bs=4M status=progress
