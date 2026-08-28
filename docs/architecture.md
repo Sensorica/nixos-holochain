@@ -166,6 +166,20 @@ The unit is a oneshot that runs on every boot, so each call has to tolerate alre
 
 Both guards read JSON, and both lines emit the same shapes. `list-apps` returns an array of app records whose identity key is `"installed_app_id":"<id>"` and whose state after enabling is `"status":{"type":"enabled"}`; the bare app id also appears inside the embedded manifest, so anything counting installations has to match the key, not the id. `list-app-ws` returns `[{"port":8888,"allowed_origins":"*","installed_app_id":null}]`.
 
+### A failed call is not a failed install
+
+Installing or enabling a hApp makes the conductor compile the app's wasm. On a small machine that takes longer than the admin client's own request deadline, and the call comes back as an error while the conductor carries on and finishes the work:
+
+```
+holochain-happ-installer[1282]: Error: Websocket error: Timeout
+holochain-happ-installer[1282]: Caused by:
+holochain-happ-installer[1282]:     0: Timeout
+holochain-happ-installer[1282]:     1: deadline has elapsed
+```
+
+So the installer does not treat a call's exit status as the answer. It runs `install-app` and `enable-app` tolerantly and then polls `list-apps` for the outcome it wanted, failing the unit only if the app never appears or never reaches `enabled` within `installerTimeout`. This is what makes the service survive a first boot on modest hardware; it is also why the VM tests give their node four cores rather than the test driver's default of one.
+
+
 ## Test bundles
 
 The VM tests install real, published hApps, fetched by hash and never committed (ADR-012):

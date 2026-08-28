@@ -94,14 +94,41 @@
 
   happInstaller = pkgs.writeShellApplication {
     name = "holochain-happ-installer";
-    runtimeInputs = [cfg.hcPackage pkgs.coreutils pkgs.gnugrep];
+    runtimeInputs = [cfg.hcPackage pkgs.coreutils pkgs.jq];
     text = ''
+      timeout=${toString cfg.installerTimeout}
+
       call() { ${callPrefix} "$@"; }
+
+      # Empty when the app is not installed, otherwise its status: "enabled",
+      # "disabled", and so on. list-apps returns JSON on both lines.
+      app_status() {
+        call list-apps 2>/dev/null \
+          | jq -r --arg id "$1" '.[] | select(.installed_app_id == $id) | .status.type'
+      }
+
+      # Installing or enabling a hApp makes the conductor compile the app's wasm,
+      # which on a small machine takes longer than the admin client's own request
+      # deadline: the call returns `Websocket error: Timeout` while the conductor
+      # carries on and finishes. So the exit status of a call is not evidence
+      # either way, and the outcome is polled instead.
+      await_status() {
+        id=$1
+        want=$2
+        for _ in $(seq 1 "$timeout"); do
+          got=$(app_status "$id")
+          if [ "$want" = "installed" ] && [ -n "$got" ]; then return 0; fi
+          if [ "$got" = "$want" ]; then return 0; fi
+          sleep 1
+        done
+        echo "hApp $id never reached '$want' within ''${timeout}s (last status: '$(app_status "$id")')" >&2
+        exit 1
+      }
 
       # The admin interface answers only once the conductor is ready; list-apps is
       # the cheapest probe that proves the socket is usable rather than just open.
       ready=0
-      for _ in $(seq 1 ${toString cfg.installerTimeout}); do
+      for _ in $(seq 1 "$timeout"); do
         if call list-apps > /dev/null 2>&1; then
           ready=1
           break
@@ -109,33 +136,32 @@
         sleep 1
       done
       if [ "$ready" -ne 1 ]; then
-        echo "admin interface on port ${toString cfg.adminPort} did not answer list-apps within ${toString cfg.installerTimeout}s" >&2
+        echo "admin interface on port ${toString cfg.adminPort} did not answer list-apps within ''${timeout}s" >&2
         exit 1
       fi
 
       ${lib.concatStringsSep "\n" (lib.mapAttrsToList (name: happ: ''
           # ---- ${name} ----
-          if call list-apps | grep -q ${lib.escapeShellArg ''"installed_app_id":"${name}"''}; then
+          if [ -n "$(app_status ${lib.escapeShellArg name})" ]; then
             echo "hApp ${name} is already installed, skipping install-app"
           else
             call install-app --app-id ${lib.escapeShellArg name} \
-              ${happ.src}${lib.optionalString (happ.networkSeed != null) " ${lib.escapeShellArg happ.networkSeed}"}
+              ${happ.src}${lib.optionalString (happ.networkSeed != null) " ${lib.escapeShellArg happ.networkSeed}"} \
+              || echo "install-app for ${name} did not return cleanly; verifying below" >&2
+            await_status ${lib.escapeShellArg name} installed
           fi
 
           # enable-app on an already-enabled app exits 0 on both lines, so this
           # runs on every boot and is what makes "always enabled" true.
-          call enable-app ${lib.escapeShellArg name}
-
-          if ! call list-apps | grep -q ${lib.escapeShellArg ''"installed_app_id":"${name}"''}; then
-            echo "hApp ${name} is not listed after install and enable" >&2
-            exit 1
-          fi
+          call enable-app ${lib.escapeShellArg name} \
+            || echo "enable-app for ${name} did not return cleanly; verifying below" >&2
+          await_status ${lib.escapeShellArg name} enabled
         '')
         (lib.filterAttrs (_: happ: happ.installed) cfg.happs))}
 
       # add-app-ws is NOT idempotent: a second call on the same port fails with
       # AddrInUse. Consult list-app-ws first so a reboot does not fail the unit.
-      if call list-app-ws | grep -q ${lib.escapeShellArg ''"port":${toString cfg.appPort}''}; then
+      if call list-app-ws | jq -e --argjson p ${toString cfg.appPort} 'any(.[]; .port == $p)' > /dev/null; then
         echo "app websocket already attached on port ${toString cfg.appPort}"
       else
         call add-app-ws ${toString cfg.appPort} --allowed-origins ${lib.escapeShellArg cfg.allowedOrigins}

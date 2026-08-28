@@ -67,6 +67,22 @@ nixos-rebuild build-vm --flake .#minimal-vm
 systemctl is-active holochain-conductor
 ```
 
+The flake declares the Holochain Foundation's binary cache in its `nixConfig`, but Nix only honours that with your consent. If you see
+
+```
+warning: ignoring untrusted flake configuration setting 'extra-substituters'.
+Pass '--accept-flake-config' to trust it
+```
+
+then the conductor is about to be built from source, which takes hours. Pass `--accept-flake-config`, or add the substituter to your own `nix.conf`:
+
+```
+extra-substituters = https://holochain-ci.cachix.org
+extra-trusted-public-keys = holochain-ci.cachix.org-1:5IUSkZc0aoRS53rfkvH9Kid40NpyjwCMCzwRTXy+QN8=
+```
+
+The first boot is not fast even so: the conductor takes a minute or more to open its admin port on a VM, and installing a hApp is slower still.
+
 ## First boot sequence
 
 1. NixOS boots.

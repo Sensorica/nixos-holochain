@@ -91,7 +91,6 @@
         system,
         ...
       }: let
-        holonix07 = inputs.holonix.packages.${system};
         holonix06 = inputs.holonix-0_6.packages.${system};
 
         # Bundles are fetched by hash and never committed (ADR-012).
@@ -118,6 +117,17 @@
           environment.systemPackages = [config.services.holochain-edgenode.hcPackage];
         };
 
+        # The test driver's default node is a single core with 1G of RAM, on
+        # which the conductor needs five minutes to come up and compiling an
+        # app's wasm outruns the admin client's request deadline.
+        roomToWork = {
+          virtualisation = {
+            cores = 4;
+            memorySize = 4096;
+            diskSize = 8192;
+          };
+        };
+
         on06 = {
           services.holochain-edgenode = {
             package = holonix06.holochain;
@@ -140,7 +150,7 @@
           pkgs.nixosTest {
             inherit name;
             nodes.machine = {
-              imports = [edgenodeNode hcOnPath nodeExtra];
+              imports = [edgenodeNode hcOnPath roomToWork nodeExtra];
               services.holochain-edgenode.enable = true;
             };
             testScript = ''
@@ -177,7 +187,7 @@
           pkgs.nixosTest {
             inherit name;
             nodes.machine = {
-              imports = [edgenodeNode hcOnPath nodeExtra];
+              imports = [edgenodeNode hcOnPath roomToWork nodeExtra];
               services.holochain-edgenode = {
                 enable = true;
                 appPort = 8888;
