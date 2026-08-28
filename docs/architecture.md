@@ -39,7 +39,7 @@ The root flake ships modules only. A fleet is its own flake that takes this repo
 
 ```
 cd examples/sensorica-fleet
-colmena apply --on @all
+colmena apply --impure --on @all
 ```
 
 Each node is a standard NixOS system. Colmena handles SSH-based parallel deployment. No custom daemon, no extra moving parts.
