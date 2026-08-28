@@ -66,6 +66,10 @@ Update `docs/` in the same PR as the behaviour it describes. `README.md` has a r
 - Nothing binary and nothing secret in git. hApp bundles are fetched by hash with `pkgs.fetchurl`; private keys, tokens and passphrases never enter the repository. Public SSH keys are not secrets and are committed in the example fleet on purpose.
 - A PR body says what commands prove the change, and what they printed.
 
+## Known upstream advisory
+
+`nix flake show --no-eval-cache` prints one line, `evaluation warning: crane requires at least nixpkgs-26.05, supplied nixpkgs-25.11`. It is holonix `main-0.6`'s own crane-versus-nixpkgs advisory, surfaced because this flake re-exports `packages.<system>.holochain-0_6` and `hc-0_6` for 0.6 fleets; nothing this repository defines warns. A warm evaluation cache hides the line, so any check of it must pass `--no-eval-cache`. Do not remove the 0.6 outputs to silence it.
+
 ## Licence
 
 By contributing you agree that your work is licensed under AGPL-3.0, the same as the rest of the repository.

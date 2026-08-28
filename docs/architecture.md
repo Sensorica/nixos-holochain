@@ -350,6 +350,10 @@ services.holochain-http-gateway = {
 
 The gateway does nothing to tell a read from a write. `allowedFns.<app> = ["*"]` is accepted, because upstream accepts it, and raises an evaluation warning, because it publishes the app's write functions to anything that can reach the port.
 
+### The first call after boot is slow
+
+The conductor compiles a hApp's wasm on its first zome call, and on a cold node that took 54 to 61 s in the VM tests. `zomeCallTimeoutMs` defaults to 10000, so a reader who curls the gateway right after boot may see one 500 before the cell is warm; the second call answers in milliseconds. Wait for `holochain-happ-installer.service` to finish and call once before pointing a demo at it.
+
 ### Two implementation details worth knowing
 
 The binary reads its configuration from the environment, and one of those variables carries the app id in its *name*: `HC_GW_ALLOWED_FNS_<app-id>`. systemd rejects an `Environment=` assignment whose name contains a dash, and app ids routinely contain dashes, so the module passes those through `env` in a small launch script and keeps the fixed-name variables in the unit's environment where `systemctl show` can print them.
