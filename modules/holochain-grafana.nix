@@ -42,6 +42,18 @@ in {
       '';
     };
 
+    scrapeInterval = lib.mkOption {
+      type = lib.types.str;
+      default = "15s";
+      description = ''
+        How often Prometheus scrapes its targets. Prometheus itself defaults to
+        one minute, which for a lab fleet of a handful of nodes draws a
+        fifteen-minute window as about fifteen points, and makes `rate()` over
+        a short range flat or empty. The conductor metrics timer writes every
+        30 s by default, so this is deliberately below it.
+      '';
+    };
+
     adminUser = lib.mkOption {
       type = lib.types.str;
       default = "admin";
@@ -144,6 +156,8 @@ in {
     services.prometheus = {
       enable = true;
       port = cfg.prometheusPort;
+
+      globalConfig.scrape_interval = cfg.scrapeInterval;
 
       scrapeConfigs = [
         {
