@@ -117,7 +117,9 @@ The module provisions both halves, so a fresh monitor node comes up with a worki
 - a Prometheus data source with uid `holochain-prometheus`, pointed at `127.0.0.1:<prometheusPort>`. The shipped dashboard refers to it by uid, so renaming it in the UI cannot break it.
 - every JSON file in `dashboards`, re-read every 30 seconds. `allowUiUpdates` is off: the files come from the Nix store, so edits made in the UI would be discarded by the next rebuild without saying so.
 
-`modules/dashboards/holochain-fleet.json` (uid `holochain-fleet`, title "Holochain Fleet") has six panels: conductors up, peer connections, conductor network throughput, CPU busy, memory used, and host network throughput. The first three come from the edgenode module's `conductorMetrics`; the last three from node_exporter.
+`modules/dashboards/holochain-fleet.json` (uid `holochain-fleet`, title "Holochain Fleet") has six panels: conductors up, conductor peers, conductor network throughput, CPU busy, memory used, and host network throughput. The first three come from the edgenode module's `conductorMetrics`; the last three from node_exporter.
+
+A conductor with no hApp installed joins no DHT, so its connection and byte counts sit at zero while `holochain_conductor_up` and `holochain_conductor_peer_urls` are already non-zero. That is the correct reading of a bare node, not a broken panel.
 
 ### Example: 5-node fleet
 

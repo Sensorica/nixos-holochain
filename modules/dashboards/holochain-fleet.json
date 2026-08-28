@@ -63,19 +63,25 @@
     {
       "id": 3,
       "type": "timeseries",
-      "title": "Peer connections",
-      "description": "holochain_conductor_peer_connections and holochain_conductor_direct_peer_connections: transport connections the conductor holds, and how many of them left the relay for a direct link.",
+      "title": "Conductor peers",
+      "description": "holochain_conductor_peer_urls is how many addresses this conductor can be reached at, which is non-zero as soon as it has a transport. The two connection counts stay at zero until it joins a DHT, which means until a hApp is installed.",
       "gridPos": { "h": 6, "w": 9, "x": 6, "y": 1 },
       "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
       "targets": [
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
-          "expr": "holochain_conductor_peer_connections",
-          "legendFormat": "{{instance}} all"
+          "expr": "holochain_conductor_peer_urls",
+          "legendFormat": "{{instance}} peer urls"
         },
         {
           "refId": "B",
+          "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+          "expr": "holochain_conductor_peer_connections",
+          "legendFormat": "{{instance}} connections"
+        },
+        {
+          "refId": "C",
           "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
           "expr": "holochain_conductor_direct_peer_connections",
           "legendFormat": "{{instance}} direct"
