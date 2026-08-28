@@ -9,7 +9,9 @@
     #   --override-input nixos-holochain <path-to-checkout>
     # (that is what CI and the review commands do).
     nixos-holochain.url = "github:Sensorica/nixos-holochain";
-    nixpkgs.follows = "nixos-holochain/nixpkgs";
+    # The fleet pins its own nixpkgs, as any downstream fleet does; the
+    # Holochain toolchain comes from the module repository.
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
     holonix.follows = "nixos-holochain/holonix";
   };
 
@@ -25,13 +27,8 @@
 
     hosts = ["edgenode-01" "edgenode-02" "edgenode-03" "edgenode-04" "edgenode-05"];
 
-    # Operator public key, kept out of git (ADR-012). The list is empty until
-    # ../../secrets/sensorica.pub exists in the evaluated source tree.
-    authorizedKeyFiles =
-      lib.optional (builtins.pathExists ../../secrets/sensorica.pub) ../../secrets/sensorica.pub;
-
     # Passed to every host: the module reads inputs.holonix for its packages.
-    specialArgs = {inherit inputs authorizedKeyFiles;};
+    specialArgs = {inherit inputs;};
 
     fleetModules = [
       nixos-holochain.nixosModules.holochain-edgenode
