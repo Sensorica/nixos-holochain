@@ -27,26 +27,22 @@ Before running `colmena apply` from `examples/sensorica-fleet`, each host must h
    ```bash
    sudo nixos-generate-config --show-hardware-config > examples/sensorica-fleet/hosts/edgenode-XX/hardware-configuration.nix
    ```
-2. The facilitator SSH public key in `secrets/sensorica.pub` at the repository root (gitignored, never committed):
-   ```bash
-   cp ~/.ssh/id_ed25519.pub secrets/sensorica.pub
-   ```
-
-The example flake passes that file to every host as `authorizedKeyFiles` when it exists; see `examples/sensorica-fleet/README.md`.
+2. The facilitator's SSH public key in `examples/sensorica-fleet/hosts/common.nix` under `users.users.sensorica.openssh.authorizedKeys.keys` (public keys are committed; a flake never sees untracked files).
 
 ## Fleet (Colmena)
 
 ```bash
 cd examples/sensorica-fleet
 
-# Deploy to all nodes in parallel
-colmena apply --on @all
+# Deploy to all nodes in parallel (--impure: Colmena 0.4.0 cannot lock its
+# `hive` input in pure mode, see examples/sensorica-fleet/README.md)
+colmena apply --impure --on @all
 
 # Deploy to a single node
-colmena apply --on edgenode-01
+colmena apply --impure --on edgenode-01
 
 # Dry-run (shows what would change)
-colmena apply --dry-run
+colmena apply --impure --dry-run
 ```
 
 ## Workshop ISO

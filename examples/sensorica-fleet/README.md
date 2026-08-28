@@ -8,10 +8,11 @@ The worked example behind the `nixos-holochain` modules: five Holochain edgenode
 examples/sensorica-fleet/
 ├── flake.nix                      # inputs, the five nixosConfigurations, the ISO, the colmena hive
 ├── hosts/
+│   ├── common.nix                 # shared by every host: user, SSH keys, desktop, edgenode service
 │   ├── edgenode-01/
-│   │   ├── configuration.nix      # monitor node: edgenode + Grafana/Prometheus
+│   │   ├── configuration.nix      # monitor node: adds Grafana/Prometheus
 │   │   └── hardware-configuration.nix   # placeholder, replace per machine (below)
-│   ├── edgenode-02 … 05/          # peer nodes, same shape without Grafana
+│   ├── edgenode-02 … 05/          # peer nodes: hostname + hardware only
 │   └── workshop-iso/configuration.nix   # KDE Plasma live ISO with the repo cloned on boot
 └── README.md
 ```
@@ -38,9 +39,9 @@ Each host ships a placeholder `hardware-configuration.nix` (systemd-boot, an ext
 sudo nixos-generate-config --show-hardware-config > hosts/edgenode-01/hardware-configuration.nix
 ```
 
-## Operator SSH key
+## Operator SSH keys
 
-The hosts add the keys listed in `authorizedKeyFiles` (see `flake.nix`) to the `sensorica` user. That list reads `../../secrets/sensorica.pub` at the repository root when the file is present in the evaluated source tree; the file is gitignored, so copy `secrets/sensorica.pub.example` to `secrets/sensorica.pub` and put the real key in it. Nothing under `secrets/` other than the `.example` is ever committed.
+Public keys are not secrets, and a flake only ever sees git-tracked files, so the operator keys are committed: paste your `ssh-ed25519 ...` line into `users.users.sensorica.openssh.authorizedKeys.keys` in `hosts/common.nix` before deploying. A fleet deployed with that list empty has no way in over SSH. Private keys, tokens and passphrases never enter git.
 
 ## Deploy
 
@@ -50,10 +51,15 @@ sudo nixos-rebuild switch --flake .#edgenode-01
 
 # the whole fleet over SSH, in parallel
 nix develop            # brings colmena into PATH
-colmena apply --on @all
-colmena apply --on edgenode-01
-colmena apply --dry-run
+colmena apply --impure --on @all
+colmena apply --impure --on edgenode-01
+colmena apply --impure --dry-run
+
+# inspect the evaluated hive
+colmena eval --impure -E '{nodes, ...}: nodes.edgenode-01.config.services.holochain-edgenode.enable'
 ```
+
+`--impure` is required with Colmena 0.4.0 on Nix 2.25: Colmena wraps the flake as an input named `hive`, and pure mode refuses to lock it ("cannot update unlocked flake input 'hive' in pure mode"). Colmena resolves `nixos-holochain` from this directory's `flake.lock`, so `--override-input` does not reach it; bump the lock (`nix flake update nixos-holochain`) to deploy modules newer than the locked revision.
 
 ## Workshop ISO
 
