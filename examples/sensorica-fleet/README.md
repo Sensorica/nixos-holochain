@@ -33,7 +33,11 @@ nix flake check --no-build --override-input nixos-holochain "$(git rev-parse --s
 
 ## Hardware configuration
 
-Each host ships a placeholder `hardware-configuration.nix` (systemd-boot, an ext4 root labelled `nixos`, a vfat ESP labelled `boot`) so the fleet evaluates before any machine exists. Before deploying to a real Holoport, generate the real one on that machine and commit it over the placeholder:
+Each host ships a placeholder `hardware-configuration.nix` so the fleet evaluates before any machine exists. It is not a bare stub: it carries the Holoport disk layout of ADR-017, so a machine partitioned the way [`docs/deployment.md`](../../docs/deployment.md) says boots on this file as written.
+
+GPT with a 1 MiB `bios_grub` partition *and* a vfat ESP labelled `boot`, an ext4 root labelled `nixos`, swap labelled `swap`; GRUB installed twice, the UEFI half by NixOS (`device = "nodev"`, `efiSupport`, `efiInstallAsRemovable`, ESP at `/efi-boot`) and the BIOS half by one `grub-install --target=i386-pc` in the runbook. A Holoport boots legacy BIOS only; the laptops the fleet is installed from are usually UEFI; this serves both.
+
+Once a machine exists, generate its real hardware configuration on it and commit that over the placeholder, keeping the `boot.loader` block:
 
 ```bash
 sudo nixos-generate-config --show-hardware-config > hosts/edgenode-01/hardware-configuration.nix

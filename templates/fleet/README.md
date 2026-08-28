@@ -32,11 +32,22 @@ nix eval .#nixosConfigurations.node-01.config.system.build.toplevel.drvPath
 
 ## Hardware configuration
 
-Each host ships a placeholder `hardware-configuration.nix` (systemd-boot, an ext4 root labelled `nixos`, a vfat ESP labelled `boot`) so the fleet evaluates before any machine exists. Before deploying to real hardware, generate the real one on that machine and commit it over the placeholder:
+Each host ships a placeholder `hardware-configuration.nix` so the fleet evaluates before any machine exists. Before deploying to real hardware, generate the real one on that machine and commit it over the placeholder:
 
 ```bash
 sudo nixos-generate-config --show-hardware-config > hosts/node-01/hardware-configuration.nix
 ```
+
+Keep the `boot.loader` block from the placeholder when you do: `nixos-generate-config` writes the loader for the firmware it happens to be running under, and the placeholder deliberately serves both.
+
+### Firmware assumption
+
+The placeholder targets a machine that may boot **legacy BIOS or UEFI**, because the fleet this template came from is built on Holoports (legacy BIOS only) and installed from laptops that are usually UEFI. So the disk is GPT with a 1 MiB `bios_grub` partition *and* a vfat ESP labelled `boot`, an ext4 root labelled `nixos` and a swap partition labelled `swap`, and GRUB is installed twice:
+
+- the UEFI half by NixOS from `boot.loader.grub` (`device = "nodev"`, `efiSupport`, `efiInstallAsRemovable`, ESP mounted at `/efi-boot`);
+- the BIOS half by one command in the install runbook, `grub-install --target=i386-pc --boot-directory=/mnt/boot /dev/sda`.
+
+`efiInstallAsRemovable` writes `EFI/BOOT/BOOTX64.EFI`, so firmware that keeps no boot variables still finds it. If your machines are UEFI only you can drop the `bios_grub` partition and the `i386-pc` command; if they are BIOS only, the ESP and the EFI half are what you drop. The full partitioning sequence is in [`docs/deployment.md`](https://github.com/Sensorica/nixos-holochain/blob/main/docs/deployment.md) upstream. Layout after holochain/wind-tunnel-runner.
 
 ## Deploy
 
