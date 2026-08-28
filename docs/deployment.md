@@ -67,6 +67,13 @@ nixos-rebuild build-vm --flake .#minimal-vm
 systemctl is-active holochain-conductor
 ```
 
+`nixos-rebuild` is absent on non-NixOS hosts (a Linux laptop with plain Nix, or a NixOS container). The same VM is reachable through the flake output it wraps:
+
+```bash
+nix build .#nixosConfigurations.minimal-vm.config.system.build.vm
+./result/bin/run-*-vm
+```
+
 The flake declares the Holochain Foundation's binary cache in its `nixConfig`, but Nix only honours that with your consent. If you see
 
 ```
