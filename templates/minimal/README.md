@@ -11,7 +11,7 @@ One conductor on one machine, built from the [`nixos-holochain`](https://github.
 ## First steps
 
 1. Paste your SSH public key into `users.users.operator.openssh.authorizedKeys.keys` in `configuration.nix`.
-2. On the target machine, replace the placeholder hardware configuration:
+2. On the target machine, replace the placeholder hardware configuration, keeping the `boot.loader` block from the placeholder (see the firmware note below):
    ```bash
    sudo nixos-generate-config --show-hardware-config > hardware-configuration.nix
    ```
@@ -20,6 +20,15 @@ One conductor on one machine, built from the [`nixos-holochain`](https://github.
    nix flake check --no-build
    sudo nixos-rebuild switch --flake .#edgenode
    ```
+
+## Firmware assumption
+
+The placeholder `hardware-configuration.nix` targets a machine that may boot **legacy BIOS or UEFI**, because the fleet this template came from is built on Holoports (legacy BIOS only) and installed from laptops that are usually UEFI. So the disk is GPT with a 1 MiB `bios_grub` partition *and* a vfat ESP labelled `boot`, an ext4 root labelled `nixos` and a swap partition labelled `swap`, and GRUB is installed twice:
+
+- the UEFI half by NixOS from `boot.loader.grub` (`device = "nodev"`, `efiSupport`, `efiInstallAsRemovable`, ESP mounted at `/efi-boot`);
+- the BIOS half by one command at install time, `grub-install --target=i386-pc --boot-directory=/mnt/boot /dev/sda`.
+
+`efiInstallAsRemovable` writes `EFI/BOOT/BOOTX64.EFI`, so firmware that keeps no boot variables still finds it. If your machine is UEFI only you can drop the `bios_grub` partition and the `i386-pc` command; if it is BIOS only, the ESP and the EFI half are what you drop. The full partitioning sequence is in [`docs/deployment.md`](https://github.com/Sensorica/nixos-holochain/blob/main/docs/deployment.md) upstream. Layout after holochain/wind-tunnel-runner.
 
 ## Installing a hApp at boot
 

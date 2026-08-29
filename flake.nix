@@ -297,6 +297,12 @@
           };
         };
 
+        # The Grafana test authenticates against the API, so it needs the
+        # password its node runs with. It sets its own rather than leaning on
+        # the module default, so no credential pair sits next to a curl
+        # invocation in this file.
+        grafanaTestPassword = "vmtest";
+
         on06 = {
           services.holochain-edgenode = {
             package = holonix06.holochain;
@@ -491,6 +497,7 @@
               };
               services.holochain-grafana = {
                 enable = true;
+                adminPassword = grafanaTestPassword;
                 scrapeTargets = ["127.0.0.1:9100"];
                 openFirewall = true;
               };
@@ -555,7 +562,7 @@
 
               # ---- criterion 5: the dashboard is provisioned ----
               search = machine.succeed(
-                  "curl -s -u admin:workshop2026"
+                  "curl -s -u admin:${grafanaTestPassword}"
                   " 'http://localhost:3000/api/search?query=Holochain'"
               )
               machine.log("grafana search: " + search)
@@ -565,7 +572,7 @@
               # A provisioned dashboard that Grafana cannot bind to a data
               # source renders empty panels, which a search hit would not show.
               datasource = machine.succeed(
-                  "curl -s -u admin:workshop2026"
+                  "curl -s -u admin:${grafanaTestPassword}"
                   " http://localhost:3000/api/datasources/uid/holochain-prometheus"
               )
               machine.log("grafana datasource: " + datasource)
