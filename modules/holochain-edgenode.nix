@@ -67,6 +67,10 @@
   # paths are capped at SUN_LEN (108 bytes). A deep dataDir makes the conductor
   # die with `path must be shorter than SUN_LEN` and no mention of the config.
   lairRoot = "${cfg.dataDir}/ks";
+
+  # systemd creates the state directory, and only under /var/lib; an assertion
+  # below rejects any other dataDir rather than leave it uncreated.
+  stateDirectory = lib.removePrefix "/var/lib/" (toString cfg.dataDir);
   passphraseFile = "${cfg.dataDir}/${cfg.passphraseFileName}";
 
   conductorConfig = pkgs.writeText "conductor-config.yaml" ''
@@ -79,7 +83,7 @@
       - driver:
           type: websocket
           port: ${toString cfg.adminPort}
-          allowed_origins: "${cfg.allowedOrigins}"
+          allowed_origins: "${cfg.adminAllowedOrigins}"
     ${networkSection}'';
 
   # 0.7 dispatches admin calls through `hc client call --port <p>`. On 0.6 that
@@ -101,10 +105,14 @@
       call() { ${callPrefix} "$@"; }
 
       # Empty when the app is not installed, otherwise its status: "enabled",
-      # "disabled", and so on. list-apps returns JSON on both lines.
+      # "disabled", and so on. list-apps returns JSON on both lines. Empty, not
+      # a failure, when the call itself fails: the conductor answers slowly
+      # while it compiles wasm, and under `set -e` a failed call here would end
+      # the poll below on its first miss instead of retrying.
       app_status() {
         call list-apps 2>/dev/null \
-          | jq -r --arg id "$1" '.[] | select(.installed_app_id == $id) | .status.type'
+          | jq -r --arg id "$1" '.[] | select(.installed_app_id == $id) | .status.type' 2>/dev/null \
+          || true
       }
 
       # Installing or enabling a hApp makes the conductor compile the app's wasm,
@@ -281,9 +289,21 @@ in {
       type = lib.types.str;
       default = "*";
       description = ''
-        Allowed origins for the admin and app WebSocket interfaces: `*`, a single
-        origin, or a comma-separated list. With `*` no `--origin` header is needed
-        on the admin call.
+        Allowed origins for the app WebSocket interface the installer attaches:
+        `*`, a single origin, or a comma-separated list.
+      '';
+    };
+
+    adminAllowedOrigins = lib.mkOption {
+      type = lib.types.str;
+      default = "holochain_websocket";
+      description = ''
+        Allowed origins for the admin WebSocket interface. The default is the
+        Origin header `hc` sends when given no `--origin`, which is what the
+        hApp installer and the metrics timer use, and which no browser sends:
+        with `*` any web page open in a browser on the node could drive the
+        admin API over `ws://localhost`. Widen it only for an admin UI you
+        trust.
       '';
     };
 
@@ -326,9 +346,11 @@ in {
       type = lib.types.int;
       default = 300;
       description = ''
-        Seconds the hApp installer waits for the admin interface to answer before
-        failing. The conductor needs about 80 seconds to open the port on an
-        unaccelerated VM, so leave room.
+        Seconds the hApp installer allows each of its waits: the admin interface
+        answering at all, then, per hApp, the install and the enable settling.
+        The conductor needs about 80 seconds to open the port on an
+        unaccelerated VM, so leave room. The unit itself has no start timeout,
+        so raising this is enough.
       '';
     };
 
@@ -352,7 +374,11 @@ in {
           installed = lib.mkOption {
             type = lib.types.bool;
             default = true;
-            description = "Whether to install and enable this hApp.";
+            description = ''
+              Whether to install this hApp when absent and keep it enabled.
+              Setting it to false (or removing the entry) stops managing the
+              app; it does not disable or uninstall an app already installed.
+            '';
           };
           networkSeed = lib.mkOption {
             type = lib.types.nullOr lib.types.str;
@@ -430,9 +456,10 @@ in {
       type = lib.types.bool;
       default = false;
       description = ''
-        Open firewall ports for the admin, app and metrics interfaces. The
-        conductor binds its websockets to localhost, so this only matters for
-        the metrics exporter unless `danger_bind_addr` is configured by hand.
+        Open firewall ports for the app and metrics interfaces. The admin port
+        is never opened. The conductor binds its websockets to localhost, so in
+        practice this matters for the metrics exporter, and for the app port
+        only if `danger_bind_addr` is configured by hand.
       '';
     };
   };
@@ -479,7 +506,7 @@ in {
         {
           User = cfg.user;
           Group = cfg.user;
-          StateDirectory = baseNameOf cfg.dataDir;
+          StateDirectory = stateDirectory;
           StateDirectoryMode = "0700";
           WorkingDirectory = cfg.dataDir;
           Restart = "on-failure";
@@ -512,11 +539,22 @@ in {
         WorkingDirectory = cfg.dataDir;
         RemainAfterExit = true;
         ExecStart = lib.getExe happInstaller;
-        TimeoutStartSec = "600s";
+        # The script bounds each of its waits by installerTimeout, and there
+        # are two per hApp plus the readiness wait, so a fixed unit timeout
+        # would cut raising installerTimeout off at an arbitrary total.
+        TimeoutStartSec = "infinity";
       };
     };
 
     assertions = [
+      {
+        assertion = lib.hasPrefix "/var/lib/" (toString cfg.dataDir);
+        message = ''
+          services.holochain-edgenode.dataDir must live under /var/lib/: it is
+          created as the units' systemd StateDirectory, which systemd only
+          creates there. Got ${toString cfg.dataDir}.
+        '';
+      }
       {
         assertion = cfg.conductorMetrics.enable -> cfg.metricsExporter.enable;
         message = ''
@@ -552,7 +590,7 @@ in {
         Type = "oneshot";
         User = cfg.user;
         Group = cfg.user;
-        StateDirectory = baseNameOf cfg.dataDir;
+        StateDirectory = stateDirectory;
         StateDirectoryMode = "0700";
         WorkingDirectory = cfg.dataDir;
         ExecStart = lib.getExe conductorMetricsScript;
@@ -573,7 +611,7 @@ in {
 
     networking.firewall = lib.mkIf cfg.openFirewall {
       allowedTCPPorts =
-        [cfg.adminPort cfg.appPort]
+        [cfg.appPort]
         ++ lib.optional cfg.metricsExporter.enable cfg.metricsExporter.port;
     };
   };
