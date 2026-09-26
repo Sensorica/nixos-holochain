@@ -35,10 +35,11 @@ network-online.target
 
 ## Deployment model
 
-Fleet deployment uses [Colmena](https://github.com/zhaofengli/colmena):
+The root flake ships modules only. A fleet is its own flake that takes this repository as an input; `examples/sensorica-fleet/` is the Sensorica Lab one, with a host per machine and a [Colmena](https://github.com/zhaofengli/colmena) hive:
 
 ```
-colmena apply --on @all
+cd examples/sensorica-fleet
+colmena apply --impure --on @all
 ```
 
 Each node is a standard NixOS system. Colmena handles SSH-based parallel deployment. No custom daemon, no extra moving parts.

@@ -8,5 +8,9 @@ result-*
 
 /Plans
 
-# SSH keys — never commit
-/secrets/
+# Private material never enters git; *.example files document the layout
+/secrets/*
+!/secrets/*.example
+
+# Git worktrees used by the PM/Builder workflow
+.worktrees/

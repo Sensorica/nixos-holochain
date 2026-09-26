@@ -1,12 +1,51 @@
 name: CI
 
+# Every PR runs the checks whatever its base branch, so the stacked slice
+# PRs (which target slice branches, not main) show them on the PR page
+# and `gh pr checks` works; pushes to main run them after each merge (ADR-011).
 on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
+  eval:
+    name: flake eval (no build)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            accept-flake-config = true
+
+      - name: Root outputs
+        run: |
+          nix eval --json .#nixosModules --apply builtins.attrNames
+          nix eval --json .#checks.x86_64-linux --apply builtins.attrNames
+          nix flake metadata --json | jq -r '.locks.nodes.holonix.original.ref, .locks.nodes.nixpkgs.original.ref'
+
+      - name: Example fleet against this checkout
+        working-directory: examples/sensorica-fleet
+        run: |
+          for host in edgenode-01 edgenode-02 edgenode-03 edgenode-04 edgenode-05 workshop-iso; do
+            echo "Evaluating $host..."
+            nix eval --override-input nixos-holochain "$GITHUB_WORKSPACE" \
+              ".#nixosConfigurations.$host.config.system.build.toplevel.drvPath"
+          done
+          nix eval --json --override-input nixos-holochain "$GITHUB_WORKSPACE" \
+            .#colmena --apply 'h: builtins.attrNames (removeAttrs h ["meta"])'
+
   check:
     name: nix flake check
     runs-on: ubuntu-latest
@@ -23,7 +62,7 @@ jobs:
             experimental-features = nix-command flakes
             accept-flake-config = true
 
-      # Enable KVM so NixOS VM tests can run
+      # KVM stays enabled for the VM tests, which slice 2 starts building here (ADR-011).
       - name: Enable KVM group permissions
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
@@ -33,38 +72,16 @@ jobs:
           ls -la /dev/kvm
 
       # Optional: uncomment and add CACHIX_AUTH_TOKEN secret to avoid rebuilding
-      # Holochain from source on every CI run (first build takes 20–60 min without cache).
+      # Holochain from source on every CI run once the VM tests are built here.
       # - name: Cachix binary cache
       #   uses: cachix/cachix-action@v15
       #   with:
       #     name: nixos-holochain
       #     authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
-      - name: nix flake check
-        run: nix flake check --all-systems --show-trace
+      - name: nix flake check (root)
+        run: nix flake check --no-build --all-systems --show-trace
 
-  eval:
-    name: flake eval (no build)
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Nix
-        uses: cachix/install-nix-action@v27
-        with:
-          github_access_token: ${{ secrets.GITHUB_TOKEN }}
-          extra_nix_config: |
-            experimental-features = nix-command flakes
-
-      - name: Evaluate all nixosConfigurations
-        run: |
-          for host in edgenode-01 edgenode-02 edgenode-03 edgenode-04 edgenode-05; do
-            echo "Evaluating $host..."
-            nix eval ".#nixosConfigurations.$host.config.system.build.toplevel" \
-              --apply builtins.toString
-          done
-
-      - name: Check flake schema
-        run: nix flake show --json | jq .
+      - name: nix flake check (example fleet against this checkout)
+        working-directory: examples/sensorica-fleet
+        run: nix flake check --no-build --show-trace --override-input nixos-holochain "$GITHUB_WORKSPACE"

@@ -12,7 +12,8 @@
 git clone https://github.com/Sensorica/nixos-holochain
 cd nixos-holochain
 
-# Edit the host config for your machine
+# The Sensorica fleet is the worked example; edit the host config for your machine
+cd examples/sensorica-fleet
 nano hosts/edgenode-01/configuration.nix
 
 sudo nixos-rebuild switch --flake .#edgenode-01
@@ -20,37 +21,35 @@ sudo nixos-rebuild switch --flake .#edgenode-01
 
 ## Colmena prerequisites
 
-Before running `colmena apply`, each host config must have:
+Before running `colmena apply` from `examples/sensorica-fleet`, each host must have:
 
-1. A real `hardware-configuration.nix` — generated on the target machine:
+1. A real `hardware-configuration.nix` replacing the committed placeholder, generated on the target machine:
    ```bash
-   sudo nixos-generate-config --show-hardware-config > hosts/edgenode-XX/hardware-configuration.nix
+   sudo nixos-generate-config --show-hardware-config > examples/sensorica-fleet/hosts/edgenode-XX/hardware-configuration.nix
    ```
-2. The facilitator SSH public key committed to `secrets/sensorica.pub`:
-   ```bash
-   cp ~/.ssh/id_ed25519.pub secrets/sensorica.pub
-   ```
-
-Host configs already reference `../../secrets/sensorica.pub` via `authorizedKeys.keyFiles`.
+2. The facilitator's SSH public key in `examples/sensorica-fleet/hosts/common.nix` under `users.users.sensorica.openssh.authorizedKeys.keys` (public keys are committed; a flake never sees untracked files).
 
 ## Fleet (Colmena)
 
 ```bash
-# Deploy to all nodes in parallel
-colmena apply --on @all
+cd examples/sensorica-fleet
+
+# Deploy to all nodes in parallel (--impure: Colmena 0.4.0 cannot lock its
+# `hive` input in pure mode, see examples/sensorica-fleet/README.md)
+colmena apply --impure --on @all
 
 # Deploy to a single node
-colmena apply --on edgenode-01
+colmena apply --impure --on edgenode-01
 
 # Dry-run (shows what would change)
-colmena apply --dry-run
+colmena apply --impure --dry-run
 ```
 
 ## Workshop ISO
 
 ```bash
 # Build the ISO
-nix build .#nixosConfigurations.workshop-iso.config.system.build.isoImage
+nix build ./examples/sensorica-fleet#nixosConfigurations.workshop-iso.config.system.build.isoImage
 
 # Flash to USB (replace /dev/sdX with your USB device)
 sudo dd if=result/iso/*.iso of=/dev/sdX bs=4M status=progress
