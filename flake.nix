@@ -55,6 +55,47 @@
           system.stateVersion = "25.05";
         };
       in {
+        # `nix flake init -t github:Sensorica/nixos-holochain#minimal` (or
+        # `#fleet`) is the whole adoption story, so the templates point at the
+        # published flake rather than a relative path: a copied tree has to
+        # build from anywhere, not only from inside a checkout. The template
+        # checks override the input to test the working tree.
+        templates = rec {
+          minimal = {
+            path = ./templates/minimal;
+            description = "A single Holochain edgenode: conductor, lair, hApp installer";
+            welcomeText = ''
+              # A Holochain edgenode
+
+              - Paste your SSH public key into `configuration.nix`.
+              - Replace `hardware-configuration.nix` with
+                `nixos-generate-config --show-hardware-config` from the target machine.
+              - `nix flake check --no-build`, then
+                `sudo nixos-rebuild switch --flake .#edgenode`.
+
+              README.md has the rest.
+            '';
+          };
+
+          fleet = {
+            path = ./templates/fleet;
+            description = "Five Holochain edgenodes with Grafana on node-01, a colmena hive and a live ISO";
+            welcomeText = ''
+              # A Holochain edgenode fleet
+
+              - Rename `hosts/node-0*` and the `hosts` list in `flake.nix` to your machines.
+              - Paste your SSH public key into `hosts/common.nix`.
+              - Replace each `hardware-configuration.nix` with real output from that machine.
+              - `nix flake check --no-build`, then `nix develop` and
+                `colmena apply --impure --on @all`.
+
+              README.md has the rest.
+            '';
+          };
+
+          default = minimal;
+        };
+
         # Reusable modules for downstream consumers.
         # The Sensorica fleet that exercises them lives in examples/sensorica-fleet.
         nixosModules = {
@@ -62,7 +103,6 @@
           holochain-windtunnel = ./modules/holochain-windtunnel.nix;
           holochain-http-gateway = ./modules/holochain-http-gateway.nix;
           holochain-grafana = ./modules/holochain-grafana.nix;
-          pai = ./modules/pai.nix;
           default = ./modules;
         };
 
@@ -148,6 +188,79 @@
         ...
       }: let
         holonix06 = inputs.holonix-0_6.packages.${system};
+
+        # The gateway is a Rust crate on the 2024 edition whose toolchain file
+        # asks for a rustc newer than nixos-25.05 carries, so it is built
+        # against the nixpkgs each holonix line already pins rather than
+        # against ours. That keeps the conductor and its gateway on one
+        # toolchain and adds no input to the lock.
+        gatewayPkgs = inputs.holonix.inputs.nixpkgs.legacyPackages.${system};
+        gatewayPkgs06 = inputs.holonix-0_6.inputs.nixpkgs.legacyPackages.${system};
+
+        # ---- generated option reference ------------------------------------
+        #
+        # docs/module-options.md was hand-written and had already drifted from
+        # the modules twice, so it is generated from the declarations instead
+        # and CI diffs the committed file against a fresh build.
+        #
+        # `evalModules` rather than a whole NixOS system: the four modules
+        # declare the options, and nothing here reads `config`, so the NixOS
+        # module set is not needed and the document contains our options only.
+        optionsEval = pkgs.lib.evalModules {
+          specialArgs = {inherit pkgs inputs;};
+          modules = [
+            # The modules define NixOS options (systemd units, firewall,
+            # assertions) that only a full NixOS evaluation declares. None of
+            # them is read here, so the definitions are left unchecked rather
+            # than dragging in the whole NixOS module set to document four
+            # files' worth of options.
+            {_module.check = false;}
+            ./modules/holochain-edgenode.nix
+            ./modules/holochain-grafana.nix
+            ./modules/holochain-windtunnel.nix
+            ./modules/holochain-http-gateway.nix
+          ];
+        };
+
+        optionsDoc = pkgs.nixosOptionsDoc {
+          # `_module` is the module system's own plumbing, which NixOS hides
+          # and a bare `evalModules` does not.
+          options = builtins.removeAttrs optionsEval.options ["_module"];
+
+          # Declarations come out as absolute store paths, and the store hash
+          # changes with every commit; left alone the document would differ
+          # from itself on any change at all and the drift check would be
+          # noise. Rewritten to repository-relative links instead.
+          transformOptions = opt:
+            opt
+            // {
+              declarations =
+                map (
+                  decl: let
+                    path = pkgs.lib.removePrefix (toString ./. + "/") (toString decl);
+                  in {
+                    name = path;
+                    url = "https://github.com/Sensorica/nixos-holochain/blob/main/${path}";
+                  }
+                )
+                opt.declarations;
+            };
+        };
+
+        optionsDocHeader = pkgs.writeText "module-options-header.md" ''
+          # Module options
+
+          Generated from the module declarations by `nix build .#options-doc`; do not edit by hand. CI fails when this file differs from a fresh build, so regenerate it in the same commit as any option change:
+
+          ```bash
+          cp "$(nix build .#options-doc --print-out-paths)" docs/module-options.md
+          ```
+
+          The prose about how the modules fit together lives in [`architecture.md`](architecture.md).
+
+        '';
+
+        # Bundles are fetched by hash and never committed (ADR-012).
 
         # Bundles are fetched by hash and never committed (ADR-012).
         # Dino Adventure is the Foundation's own 0.7 demo app; Kando is the
@@ -340,6 +453,17 @@
         packages = {
           holochain-0_6 = holonix06.holochain;
           hc-0_6 = holonix06.hc;
+
+          # One gateway build per Holochain line, so an operator can check
+          # which binary a node would run without evaluating a whole system.
+          # The module picks between them from the conductor's version.
+          holochain-http-gateway = gatewayPkgs.callPackage ./packages/holochain-http-gateway.nix {line = "0.7";};
+          holochain-http-gateway-0_6 = gatewayPkgs06.callPackage ./packages/holochain-http-gateway.nix {line = "0.6";};
+
+          # The committed docs/module-options.md is a copy of this build.
+          options-doc = pkgs.runCommand "module-options.md" {} ''
+            cat ${optionsDocHeader} ${optionsDoc.optionsCommonMark} > $out
+          '';
         };
 
         devShells.default = pkgs.mkShell {
@@ -503,6 +627,99 @@
               machine.log(f"is-enabled: {enabled}")
               assert enabled != "enabled", enabled
               assert "wind-tunnel-runner" not in machine.succeed("podman ps")
+            '';
+          };
+
+          # A real zome call through the gateway, on a node that installed a
+          # real hApp. The allow list names exactly one read function, so the
+          # 200 proves the whole path (conductor -> admin API -> app websocket
+          # -> zome -> JSON) and the 403 proves the allow list is what decides,
+          # not the absence of a route: `get_all_dinos` exists, takes the same
+          # (empty) payload and lives in the same zome as the allowed
+          # `get_all_dinos_local`.
+          vmTestGateway = pkgs.nixosTest {
+            name = "holochain-http-gateway";
+            nodes.machine = {
+              imports = [
+                edgenodeNode
+                hcOnPath
+                roomToWork
+                self.nixosModules.holochain-http-gateway
+              ];
+              environment.systemPackages = [pkgs.jq];
+
+              services.holochain-edgenode = {
+                enable = true;
+                appPort = 8888;
+                happs.dino-adventure = {
+                  src = dinoAdventureHapp;
+                  networkSeed = "ci-gateway-seed";
+                };
+              };
+
+              services.holochain-http-gateway = {
+                enable = true;
+                allowedAppIds = ["dino-adventure"];
+                allowedFns.dino-adventure = ["dino_adventure/get_all_dinos_local"];
+              };
+            };
+            testScript = ''
+              import re
+
+              machine.wait_for_unit("holochain-conductor.service")
+              machine.wait_for_unit("holochain-happ-installer.service")
+              machine.wait_for_unit("holochain-http-gateway.service")
+              machine.wait_for_open_port(8090)
+
+              state = machine.succeed(
+                  "systemctl is-active holochain-http-gateway.service"
+              ).strip()
+              assert state == "active", f"expected active, got {state}"
+
+              # /health is the only path that works with nothing allowed, so it
+              # separates "the gateway is up" from "the call was authorised".
+              health = machine.succeed("curl -sf http://127.0.0.1:8090/health").strip()
+              machine.log("health: " + health)
+
+              # The gateway addresses a cell by DNA hash, which is only known
+              # once the app is installed. Every holo_hash is multibase 'u' plus
+              # a three-byte type prefix, and DnaHash's is hC0k, so this picks
+              # the DNA hash out of list-apps without depending on the shape of
+              # its JSON (which differs between lines).
+              apps = machine.succeed("hc client call --port 4444 list-apps")
+              machine.log("list-apps:\n" + apps)
+              dna_hashes = sorted(set(re.findall(r"uhC0k[A-Za-z0-9_-]+", apps)))
+              assert len(dna_hashes) == 1, f"expected one DNA hash, got {dna_hashes}"
+              dna = dna_hashes[0]
+              machine.log("dna hash: " + dna)
+
+              # base64url of the JSON document `null`, which the gateway
+              # transcodes to msgpack nil: the payload a zero-argument zome
+              # function takes.
+              PAYLOAD = "bnVsbA%3D%3D"
+
+              def call(fn):
+                  url = (
+                      f"http://127.0.0.1:8090/{dna}/dino-adventure"
+                      f"/dino_adventure/{fn}?payload={PAYLOAD}"
+                  )
+                  code = machine.succeed(
+                      f"curl -s -o /tmp/body -w '%{{http_code}}' '{url}'"
+                  ).strip()
+                  body = machine.succeed("cat /tmp/body")
+                  machine.log(f"GET {fn} -> {code} {body}")
+                  return code, body
+
+              # ---- the allowed read function answers 200 with JSON ----
+              code, body = call("get_all_dinos_local")
+              assert code == "200", f"allowed function answered {code}: {body}"
+              machine.succeed("jq -e . /tmp/body >/dev/null")
+              assert body.strip() == "[]", f"expected an empty dino list, got {body}"
+
+              # ---- a function outside the allow list answers 403 ----
+              code, body = call("get_all_dinos")
+              assert code == "403", f"unallowed function answered {code}: {body}"
+              machine.succeed("jq -e .error /tmp/body >/dev/null")
             '';
           };
 
