@@ -30,12 +30,32 @@
     # Passed to every host: the module reads inputs.holonix for its packages.
     specialArgs = {inherit inputs;};
 
+    # ADR-015: this fleet runs the 0.6 line for September. Not a preference —
+    # every hApp the workshop installs (hREA, Kando, Requests & Offers) has a
+    # 0.6 release and none has a 0.7 one. Both packages come from the module
+    # repository's own outputs, so the fleet adds no input of its own and cannot
+    # drift onto a different 0.6.3 than the one its VM tests ran against. The
+    # principal re-evaluates this seven days before the workshop date.
+    fleetLine = {
+      holochain = nixos-holochain.packages.${system}.holochain-0_6;
+      hc = nixos-holochain.packages.${system}.hc-0_6;
+    };
+
+    fleetHapps = import ./happs.nix {
+      inherit pkgs;
+      inherit (fleetLine) hc;
+    };
+
     fleetModules = [
       nixos-holochain.nixosModules.holochain-edgenode
       nixos-holochain.nixosModules.holochain-grafana
       # Imported so hosts/common.nix can turn it off in writing rather than by
       # omission; see the comment there.
       nixos-holochain.nixosModules.holochain-windtunnel
+      # Both the nixosConfigurations and the colmena hive get these, so a
+      # `colmena apply` and a `nixos-rebuild switch` install the same bundles
+      # from the same conductor.
+      {_module.args = {inherit fleetLine fleetHapps;};}
     ];
 
     mkEdgenode = name:

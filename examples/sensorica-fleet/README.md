@@ -6,7 +6,8 @@ The worked example behind the `nixos-holochain` modules: five Holochain edgenode
 
 ```
 examples/sensorica-fleet/
-├── flake.nix                      # inputs, the five nixosConfigurations, the ISO, the colmena hive
+├── flake.nix                      # inputs, the Holochain line, the five nixosConfigurations, the ISO, the colmena hive
+├── happs.nix                      # the three hApp bundles, fetched by hash
 ├── hosts/
 │   ├── common.nix                 # shared by every host: user, SSH keys, desktop, edgenode service
 │   ├── edgenode-01/
@@ -16,6 +17,22 @@ examples/sensorica-fleet/
 │   └── workshop-iso/configuration.nix   # KDE Plasma live ISO with the repo cloned on boot
 └── README.md
 ```
+
+## Holochain line and hApps
+
+The fleet runs **Holochain 0.6.3** (ADR-015), taken from the module repository's own `holochain-0_6` and `hc-0_6` outputs so it cannot drift onto a different 0.6.3 than the one the VM tests ran against. The line is not a preference: each of the three hApps below has a 0.6 release and none has a 0.7 one. The principal re-evaluates this seven days before the workshop date.
+
+Every node installs all three at boot, on one network seed (`sensorica-workshop-2026`), which is what makes the five machines one DHT per app rather than five isolated ones:
+
+| hApp | Version | Bundle |
+|---|---|---|
+| hREA | `happ-0.4.0-beta` | `hrea.happ` |
+| Kando | `v0.17.5` | `kando.happ` |
+| Requests & Offers | `v0.5.2` | `requests_and_offers.webhapp`, unpacked at build time |
+
+Requests & Offers publishes a `.webhapp` and nothing else, and a conductor installs a `.happ`, so `happs.nix` unpacks it in a derivation with `hc web-app unpack` from the same line. Nothing binary is committed: every bundle is `pkgs.fetchurl` by sha256 (ADR-012).
+
+Three apps compile their wasm one after another on first boot, which on a Holoport is slow, so `installerTimeout` is 900 s. The installer polls for the result rather than trusting any single admin call, so that is a bound on the whole wait, not on one call.
 
 ## Evaluate
 
@@ -33,7 +50,11 @@ nix flake check --no-build --override-input nixos-holochain "$(git rev-parse --s
 
 ## Hardware configuration
 
-Each host ships a placeholder `hardware-configuration.nix` (systemd-boot, an ext4 root labelled `nixos`, a vfat ESP labelled `boot`) so the fleet evaluates before any machine exists. Before deploying to a real Holoport, generate the real one on that machine and commit it over the placeholder:
+Each host ships a placeholder `hardware-configuration.nix` so the fleet evaluates before any machine exists. It is not a bare stub: it carries the Holoport disk layout of ADR-017, so a machine partitioned the way [`docs/deployment.md`](../../docs/deployment.md) says boots on this file as written.
+
+GPT with a 1 MiB `bios_grub` partition *and* a vfat ESP labelled `boot`, an ext4 root labelled `nixos`, swap labelled `swap`; GRUB installed twice, the UEFI half by NixOS (`device = "nodev"`, `efiSupport`, `efiInstallAsRemovable`, ESP at `/efi-boot`) and the BIOS half by one `grub-install --target=i386-pc` in the runbook. A Holoport boots legacy BIOS only; the laptops the fleet is installed from are usually UEFI; this serves both.
+
+Once a machine exists, generate its real hardware configuration on it and commit that over the placeholder, keeping the `boot.loader` block:
 
 ```bash
 sudo nixos-generate-config --show-hardware-config > hosts/edgenode-01/hardware-configuration.nix

@@ -627,10 +627,9 @@ password, kept as a default so a fleet works out of the box on a lab
 network\.
 
 It ends up world-readable in the Nix store, so it is a lab convenience
-and not a secret\. On anything reachable from outside the lab, set this
-to a value of your own, or drop the option and point
-` services.grafana.settings.security.admin_password ` at a
-` $__file{/run/secrets/...} ` reference instead\.
+and not a secret, and nixpkgs warns about it on every evaluation\. On
+anything reachable from outside the lab use ` adminPasswordFile `, which
+takes precedence over this option\.
 
 
 
@@ -641,6 +640,47 @@ string
 
 *Default:*
 ` "workshop2026" `
+
+*Declared by:*
+ - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+
+
+
+## services\.holochain-grafana\.adminPasswordFile
+
+
+
+Path on the target machine to a file holding the Grafana administrator
+password\. When set it takes precedence over ` adminPassword `, and the
+password never enters the Nix store: the path is handed to Grafana as a
+` $__file{...} ` reference and read by the running service\.
+
+The file is read by the ` grafana ` user, so it has to be readable by it\.
+Create it on the node before the first ` colmena apply `, for example:
+
+```
+sudo install -d -m 0755 /var/lib/secrets
+sudo install -o grafana -g grafana -m 0400 /dev/null /var/lib/secrets/grafana-admin-password
+printf '%s' 'the-password' | sudo tee /var/lib/secrets/grafana-admin-password > /dev/null
+```
+
+The path must survive a reboot, so ` /run ` is the wrong place for it
+unless a secrets manager repopulates it at boot\.
+
+
+
+*Type:*
+null or absolute path
+
+
+
+*Default:*
+` null `
+
+
+
+*Example:*
+` "/var/lib/secrets/grafana-admin-password" `
 
 *Declared by:*
  - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)

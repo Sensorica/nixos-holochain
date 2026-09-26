@@ -143,7 +143,9 @@ On the monitor node:
 curl -s localhost:9090/api/v1/targets | jq '.data.activeTargets[] | {scrapeUrl, health, lastError}'
 
 # the provisioned dashboard should be there
-curl -s -u admin:workshop2026 'localhost:3000/api/search?query=Holochain'
+# export GRAFANA_ADMIN_PASSWORD first; on a node that kept the module
+# default it is the workshop password
+curl -s -u "admin:$GRAFANA_ADMIN_PASSWORD" 'localhost:3000/api/search?query=Holochain'
 ```
 
 ## Rolling back
