@@ -1,64 +1,49 @@
 # happs/
 
-Place compiled `.happ` bundles here. They are referenced by host configurations via relative paths.
+`.happ` bundles are **not** committed to this repository (ADR-012). Nothing in the flake reads from this directory any more; it exists to document where bundles come from and how to point the module at one.
 
-## Adding a hApp
+## Referencing a hApp
 
-1. Build or download the `.happ` file.
-2. Drop it in this directory.
-3. Reference it in your host config:
+Fetch it by hash, so the configuration is reproducible and the bundle stays out of git:
 
 ```nix
 services.holochain-edgenode.happs = {
-  my-app = {
-    src = ../../happs/my-app.happ;
-    networkSeed = "my-network-seed-2026";
+  dino-adventure = {
+    src = pkgs.fetchurl {
+      url = "https://github.com/holochain/dino-adventure/releases/download/v0.3.0/dino-adventure-v0.3.0.happ";
+      sha256 = "4dd11f7c5f5ee73f9472827e48ab3538f53f37f819af610bf8de95c10ee74f72";
+    };
+    networkSeed = "workshop-2026";
   };
 };
 ```
 
-## Workshop hApps
+The attribute name is the installed app id: it is what `install-app --app-id` is given and what `list-apps` reports back.
 
-| File | Source | Purpose |
-|------|--------|---------|
-| `windtunnel.happ` | [holochain/wind-tunnel](https://github.com/holochain/wind-tunnel) | Observable traffic for the Grafana moment |
-| `moss.happ` | [lightningrodlabs/moss](https://github.com/lightningrodlabs/moss) | Participants can join the group from their own laptop after the workshop |
-
-hApp files are not committed to this repo (they can be large). Fetch them before the workshop using the preflight checklist.
-
-## Phase 1 requirements
-
-`windtunnel.happ` must be present for:
-- **P1-03** — `holochain-happ-installer.service` validation on a physical machine
-- **`checks.vmTestWithHapp`** — the hApp installer NixOS VM test (auto-skipped when file is absent)
-
-`moss.happ` is optional for Phase 1 and required for Phase 2 (workshop fleet).
-
-### Fetching the bundles
+To get the hash of a bundle you have not used before:
 
 ```bash
-# Wind Tunnel — check the Releases page for the latest .happ asset
-# https://github.com/holochain/wind-tunnel/releases
-curl -L -o happs/windtunnel.happ \
-  https://github.com/holochain/wind-tunnel/releases/latest/download/windtunnel.happ
-
-# Moss — check the Releases page for the latest .happ asset
-# https://github.com/lightningrodlabs/moss/releases
-curl -L -o happs/moss.happ \
-  https://github.com/lightningrodlabs/moss/releases/latest/download/moss.happ
+nix-prefetch-url --type sha256 <url>   # base32
+# or, from a local file
+sha256sum <file>
 ```
 
-After downloading, record the SHA-256 checksums here for reproducibility:
+## Bundles the VM tests use
 
-| File | SHA-256 |
-|------|---------|
-| `windtunnel.happ` | *(fill in after download: `sha256sum happs/windtunnel.happ`)* |
-| `moss.happ` | *(fill in after download: `sha256sum happs/moss.happ`)* |
+Both are published releases, fetched by hash in `flake.nix`:
 
-### .gitignore
+| Bundle | Line | Used by | sha256 |
+|---|---|---|---|
+| [Dino Adventure v0.3.0](https://github.com/holochain/dino-adventure/releases/download/v0.3.0/dino-adventure-v0.3.0.happ) | 0.7.0 | `checks.vmTestWithHapp` | `4dd11f7c5f5ee73f9472827e48ab3538f53f37f819af610bf8de95c10ee74f72` |
+| [Kando v0.17.5](https://github.com/holochain-apps/kando/releases/download/v0.17.5/kando.happ) | 0.6.3 | `checks.vmTestWithHapp-0_6` | `a4cdee64fe32720077e0aade94630f24d0da5e91da33ccbe5bfd894d9d359f28` |
 
-`.happ` files are excluded from version control. Confirm the repo `.gitignore` contains:
+Neither test is conditional. An earlier version of `vmTestWithHapp` was gated on `builtins.pathExists ./happs/windtunnel.happ`, which meant it silently did not exist: a flake only sees git-tracked files, and `*.happ` is gitignored.
 
-```
-happs/*.happ
-```
+## Workshop bundles
+
+| Bundle | Source | Purpose |
+|---|---|---|
+| Wind Tunnel | [holochain/wind-tunnel](https://github.com/holochain/wind-tunnel) | Observable traffic for the Grafana moment (slice 3) |
+| Moss | [lightningrodlabs/moss](https://github.com/lightningrodlabs/moss) | Participants join the group from their own laptop after the workshop |
+
+Check each project's releases for a bundle built against the Holochain line the fleet runs. As of this writing Wind Tunnel, hREA, Requests & Offers and Nondominium all still publish 0.6.x bundles; only Moss 0.16-dev targets 0.7.

@@ -56,12 +56,49 @@ sudo dd if=result/iso/*.iso of=/dev/sdX bs=4M status=progress
 sync
 ```
 
+## Trying it without hardware
+
+The root flake ships a single-node configuration so you can run the module on a laptop before touching a Holoport:
+
+```bash
+nixos-rebuild build-vm --flake .#minimal-vm
+./result/bin/run-*-vm
+# at the console (autologin as root):
+systemctl is-active holochain-conductor
+```
+
+`nixos-rebuild` is absent on non-NixOS hosts (a Linux laptop with plain Nix, or a NixOS container). The same VM is reachable through the flake output it wraps:
+
+```bash
+nix build .#nixosConfigurations.minimal-vm.config.system.build.vm
+./result/bin/run-*-vm
+```
+
+The flake declares the Holochain Foundation's binary cache in its `nixConfig`, but Nix only honours that with your consent. If you see
+
+```
+warning: ignoring untrusted flake configuration setting 'extra-substituters'.
+Pass '--accept-flake-config' to trust it
+```
+
+then the conductor is about to be built from source, which takes hours. Pass `--accept-flake-config`, or add the substituter to your own `nix.conf`:
+
+```
+extra-substituters = https://holochain-ci.cachix.org
+extra-trusted-public-keys = holochain-ci.cachix.org-1:5IUSkZc0aoRS53rfkvH9Kid40NpyjwCMCzwRTXy+QN8=
+```
+
+The first boot is not fast even so: the conductor takes a minute or more to open its admin port on a VM, and installing a hApp is slower still.
+
 ## First boot sequence
 
-1. NixOS boots
-2. `holochain-conductor.service` starts (waits for network)
-3. `holochain-happ-installer.service` runs once, installs configured hApps
-4. Conductor is reachable on `adminPort` (default: 4444) and `appPort` (default: 8888)
+1. NixOS boots.
+2. `holochain-conductor.service` starts (waits for network). Its `preStart` generates `/var/lib/holochain/lair-passphrase` (mode 0600) if it is not already there, and the conductor reads it over `--piped`. Nothing is prompted and nothing is stored in the Nix store.
+3. The unit is `Type = notify`, so it becomes active when the conductor reports readiness rather than when the process starts. On slow or unaccelerated hardware this takes a minute or more; `TimeoutStartSec` is 600s.
+4. `holochain-happ-installer.service` installs and enables the configured hApps, then attaches the app WebSocket.
+5. The conductor is reachable on `adminPort` (default 4444) and `appPort` (default 8888), both bound to localhost.
+
+Every boot after the first runs the same sequence. The installer is idempotent: it skips `install-app` for apps already present, re-runs `enable-app` unconditionally, and only attaches the app WebSocket if it is not already attached. The passphrase persists in the state directory, so the keystore opens again with nobody present.
 
 ## Verifying the deployment
 
