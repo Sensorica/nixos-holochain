@@ -1,0 +1,238 @@
+{
+  "uid": "holochain-fleet",
+  "title": "Holochain Fleet",
+  "tags": ["holochain", "nixos-holochain"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "refresh": "10s",
+  "time": { "from": "now-15m", "to": "now" },
+  "templating": { "list": [] },
+  "annotations": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "Conductor",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Conductors up",
+      "description": "holochain_conductor_up, written by the holochain-conductor-metrics timer from dump-network-stats. 0 means the node is reporting but its conductor did not answer.",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+          "expr": "holochain_conductor_up",
+          "legendFormat": "{{instance}}",
+          "instant": false
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 1,
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "down", "color": "red", "index": 0 } } },
+            { "type": "value", "options": { "1": { "text": "up", "color": "green", "index": 1 } } }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Conductor peers",
+      "description": "holochain_conductor_peer_urls is how many addresses this conductor can be reached at, which is non-zero as soon as it has a transport. The two connection counts stay at zero until it joins a DHT, which means until a hApp is installed.",
+      "gridPos": { "h": 6, "w": 9, "x": 6, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+          "expr": "holochain_conductor_peer_urls",
+          "legendFormat": "{{instance}} peer urls"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+          "expr": "holochain_conductor_peer_connections",
+          "legendFormat": "{{instance}} connections"
+        },
+        {
+          "refId": "C",
+          "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+          "expr": "holochain_conductor_direct_peer_connections",
+          "legendFormat": "{{instance}} direct"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "unit": "short",
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "auto" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Conductor network throughput",
+      "description": "Rate of holochain_conductor_network_sent_bytes_total and _received_bytes_total, summed over the conductor's peer connections.",
+      "gridPos": { "h": 6, "w": 9, "x": 15, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+          "expr": "rate(holochain_conductor_network_sent_bytes_total[2m])",
+          "legendFormat": "{{instance}} sent"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+          "expr": "rate(holochain_conductor_network_received_bytes_total[2m])",
+          "legendFormat": "{{instance}} received"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "unit": "Bps",
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "auto" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      }
+    },
+    {
+      "id": 5,
+      "type": "row",
+      "title": "Hosts",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 7 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "CPU busy",
+      "description": "Percentage of CPU time not spent idle, from node_exporter's cpu collector.",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+          "expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[2m])) * 100)",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 100,
+          "unit": "percent",
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "auto" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Memory used",
+      "description": "Share of RAM that is not available, from node_exporter's meminfo collector.",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+          "expr": "100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 100,
+          "unit": "percent",
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "auto" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Host network throughput",
+      "description": "Bytes per second in and out of every interface except loopback, from node_exporter's netdev collector.",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+          "expr": "sum by (instance) (rate(node_network_receive_bytes_total{device!=\"lo\"}[2m]))",
+          "legendFormat": "{{instance}} in"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+          "expr": "sum by (instance) (rate(node_network_transmit_bytes_total{device!=\"lo\"}[2m]))",
+          "legendFormat": "{{instance}} out"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "unit": "Bps",
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "auto" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      }
+    }
+  ]
+}

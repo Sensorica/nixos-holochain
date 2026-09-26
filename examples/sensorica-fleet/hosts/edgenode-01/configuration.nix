@@ -6,8 +6,11 @@
 
   networking.hostName = "edgenode-01";
 
-  # edgenode-01 is the monitor node: Grafana + Prometheus scrape the whole fleet.
-  # Dashboard at http://edgenode-01:3000 (admin / workshop2026).
+  # edgenode-01 is the monitor node: Grafana + Prometheus scrape the whole
+  # fleet and provision the "Holochain Fleet" dashboard at
+  # http://edgenode-01:3000. `adminPassword` keeps its module default here
+  # (workshop2026), which is a lab convenience, not a secret; set it before
+  # putting this on a network anyone else can reach.
   services.holochain-grafana = {
     enable = true;
     openFirewall = true;
@@ -18,6 +21,5 @@
       "edgenode-04:9100"
       "edgenode-05:9100"
     ];
-    # windtunnelTargets: slice 3 wires the Wind Tunnel runner (ADR-008).
   };
 }

@@ -33,7 +33,28 @@
     flake-parts.lib.mkFlake {inherit inputs;} {
       systems = ["x86_64-linux" "aarch64-linux"];
 
-      flake = {
+      flake = let
+        # Everything the two demo VMs share: no bootloader or filesystem worth
+        # the name (`build-vm` overrides both from the qemu-vm module), a
+        # console you can read without a password, and room for a conductor.
+        vmBase = {
+          _module.args.inputs = inputs;
+
+          boot.loader.grub = {
+            enable = true;
+            device = "/dev/vda";
+          };
+          fileSystems."/" = {
+            device = "/dev/disk/by-label/nixos";
+            fsType = "ext4";
+          };
+
+          services.getty.autologinUser = "root";
+          users.users.root.initialHashedPassword = "";
+
+          system.stateVersion = "25.05";
+        };
+      in {
         # Reusable modules for downstream consumers.
         # The Sensorica fleet that exercises them lives in examples/sensorica-fleet.
         nixosModules = {
@@ -53,34 +74,69 @@
           system = "x86_64-linux";
           modules = [
             self.nixosModules.holochain-edgenode
+            vmBase
             {
-              _module.args.inputs = inputs;
-
               services.holochain-edgenode.enable = true;
-
-              # Placeholders for the non-VM build; `build-vm` overrides both from
-              # the qemu-vm module, so this configuration stays evaluable without
-              # a hardware-configuration.nix.
-              boot.loader.grub = {
-                enable = true;
-                device = "/dev/vda";
-              };
-              fileSystems."/" = {
-                device = "/dev/disk/by-label/nixos";
-                fsType = "ext4";
-              };
-
-              # Log in at the console without a password to read the unit status.
-              services.getty.autologinUser = "root";
-              users.users.root.initialHashedPassword = "";
 
               virtualisation.vmVariant.virtualisation = {
                 memorySize = 4096;
                 cores = 2;
                 graphics = false;
               };
+            }
+          ];
+        };
 
-              system.stateVersion = "25.05";
+        # The observability stack on one machine, for looking at the dashboard
+        # before deploying a fleet:
+        #   nixos-rebuild build-vm --flake .#observability-vm
+        #   ./result/bin/run-observability-vm-vm
+        # then http://localhost:13000 (admin / workshop2026). Grafana and
+        # Prometheus are forwarded to the host so a real browser can reach
+        # them; nothing else is.
+        nixosConfigurations.observability-vm = nixpkgs.lib.nixosSystem {
+          system = "x86_64-linux";
+          modules = [
+            self.nixosModules.holochain-edgenode
+            self.nixosModules.holochain-grafana
+            vmBase
+            {
+              networking.hostName = "observability-vm";
+
+              services.holochain-edgenode = {
+                enable = true;
+                metricsExporter.enable = true;
+                conductorMetrics.enable = true;
+                # A short interval so a demo VM fills its panels while someone
+                # is still watching. A real fleet leaves this at 30s.
+                conductorMetrics.interval = "10s";
+              };
+
+              services.holochain-grafana = {
+                enable = true;
+                scrapeTargets = ["127.0.0.1:9100"];
+                # Without this the forwarded ports connect and then hang: the
+                # NixOS firewall drops them inside the guest.
+                openFirewall = true;
+              };
+
+              virtualisation.vmVariant.virtualisation = {
+                memorySize = 4096;
+                cores = 4;
+                graphics = false;
+                forwardPorts = [
+                  {
+                    from = "host";
+                    host.port = 13000;
+                    guest.port = 3000;
+                  }
+                  {
+                    from = "host";
+                    host.port = 19090;
+                    guest.port = 9090;
+                  }
+                ];
+              };
             }
           ];
         };
@@ -177,6 +233,52 @@
             '';
           };
 
+        # The conductor gauges have to exist on both lines, and the only thing
+        # that differs between them is the admin call prefix. So this runs the
+        # module's own timer against a real conductor of each line rather than
+        # asserting that the prefix is right.
+        metricsTest = {
+          name,
+          nodeExtra ? {},
+        }:
+          pkgs.nixosTest {
+            inherit name;
+            nodes.machine = {
+              imports = [edgenodeNode roomToWork nodeExtra];
+              services.holochain-edgenode = {
+                enable = true;
+                metricsExporter.enable = true;
+                conductorMetrics.enable = true;
+              };
+            };
+            testScript = ''
+              machine.wait_for_unit("holochain-conductor.service")
+              machine.wait_for_unit("prometheus-node-exporter.service")
+              machine.wait_for_unit("holochain-conductor-metrics.timer")
+
+              machine.wait_until_succeeds(
+                  "curl -s localhost:9100/metrics | grep '^holochain_conductor_up 1'",
+                  timeout=180,
+              )
+              series = machine.succeed("curl -s localhost:9100/metrics | grep '^holochain_'")
+              machine.log("holochain series on /metrics:\n" + series)
+
+              for name in [
+                  "holochain_conductor_up",
+                  "holochain_conductor_peer_connections",
+                  "holochain_conductor_direct_peer_connections",
+                  "holochain_conductor_peer_urls",
+                  "holochain_conductor_network_sent_bytes_total",
+                  "holochain_conductor_network_received_bytes_total",
+                  "holochain_conductor_network_sent_messages_total",
+                  "holochain_conductor_network_received_messages_total",
+                  "holochain_conductor_blocked_messages_total",
+                  "holochain_conductor_metrics_scrape_timestamp_seconds",
+              ]:
+                  assert name in series, f"{name} missing:\n{series}"
+            '';
+          };
+
         happTest = {
           name,
           line,
@@ -245,17 +347,23 @@
         };
 
         checks = {
+          # One node wearing both roles: an edgenode exporting its conductor's
+          # own stats, and the monitor scraping and drawing them. That is the
+          # whole observability path in a single VM, so a break anywhere in it
+          # fails here rather than at the workshop.
           vmTestGrafana = pkgs.nixosTest {
             name = "holochain-grafana-smoke";
             nodes.machine = {
               imports = [
-                self.nixosModules.holochain-edgenode
+                edgenodeNode
+                roomToWork
                 self.nixosModules.holochain-grafana
               ];
-              _module.args.inputs = inputs;
+              environment.systemPackages = [pkgs.jq];
               services.holochain-edgenode = {
                 enable = true;
                 metricsExporter.enable = true;
+                conductorMetrics.enable = true;
               };
               services.holochain-grafana = {
                 enable = true;
@@ -269,6 +377,132 @@
               machine.wait_for_open_port(3000)
               machine.wait_for_open_port(9090)
               machine.succeed("curl -sf http://localhost:3000/api/health")
+
+              # ---- criterion 4: the conductor's own series ----
+              machine.wait_for_unit("holochain-conductor.service")
+              machine.wait_for_unit("holochain-conductor-metrics.timer")
+
+              # The timer fires on its interval; the first file may not exist
+              # yet when the conductor has only just come up.
+              machine.wait_until_succeeds(
+                  "curl -s localhost:9100/metrics | grep '^holochain_'", timeout=180
+              )
+              holochain_metrics = machine.succeed(
+                  "curl -s localhost:9100/metrics | grep '^holochain_'"
+              )
+              machine.log("holochain series on /metrics:\n" + holochain_metrics)
+              assert "holochain_conductor_up 1" in holochain_metrics, (
+                  "the conductor answered dump-network-stats nowhere:\n" + holochain_metrics
+              )
+
+              # ---- criterion 3: every configured target is up ----
+              machine.wait_until_succeeds(
+                  "curl -s localhost:9090/api/v1/targets"
+                  " | jq -e '.data.activeTargets | length > 0"
+                  " and all(.[]; .health == \"up\")'",
+                  timeout=120,
+              )
+              targets = machine.succeed(
+                  "curl -s localhost:9090/api/v1/targets"
+                  " | jq -c '.data.activeTargets[] | {scrapeUrl, health, lastError}'"
+              )
+              machine.log("prometheus targets:\n" + targets)
+              assert '"health":"up"' in targets, targets
+              assert '"health":"down"' not in targets, targets
+
+              # Prometheus has to have kept the conductor series, not merely
+              # scraped it once: this is what the dashboard actually queries.
+              # The target goes "up" on its first scrape, which can land before
+              # the metrics timer has written its first textfile, so this waits
+              # for a scrape that carries the series rather than asserting once.
+              machine.wait_until_succeeds(
+                  "curl -s --get localhost:9090/api/v1/query"
+                  " --data-urlencode 'query=holochain_conductor_up'"
+                  " | jq -e '.data.result | length > 0'",
+                  timeout=180,
+              )
+              series = machine.succeed(
+                  "curl -s --get localhost:9090/api/v1/query"
+                  " --data-urlencode 'query=holochain_conductor_up'"
+                  " | jq -c '.data.result'"
+              )
+              machine.log("holochain_conductor_up in prometheus: " + series)
+              assert '"__name__":"holochain_conductor_up"' in series, series
+
+              # ---- criterion 5: the dashboard is provisioned ----
+              search = machine.succeed(
+                  "curl -s -u admin:workshop2026"
+                  " 'http://localhost:3000/api/search?query=Holochain'"
+              )
+              machine.log("grafana search: " + search)
+              assert '"title":"Holochain Fleet"' in search, search
+              assert '"uid":"holochain-fleet"' in search, search
+
+              # A provisioned dashboard that Grafana cannot bind to a data
+              # source renders empty panels, which a search hit would not show.
+              datasource = machine.succeed(
+                  "curl -s -u admin:workshop2026"
+                  " http://localhost:3000/api/datasources/uid/holochain-prometheus"
+              )
+              machine.log("grafana datasource: " + datasource)
+              assert '"type":"prometheus"' in datasource, datasource
+            '';
+          };
+
+          # The test sandbox has no network, so this asserts what the module
+          # generates rather than a running container; the image is pulled and
+          # run for real on the Builder's machine (see the PR body).
+          vmTestWindtunnel = pkgs.nixosTest {
+            name = "holochain-windtunnel-unit";
+            nodes.machine = {
+              imports = [self.nixosModules.holochain-windtunnel];
+              services.holochain-windtunnel = {
+                enable = true;
+                # No registry is reachable from the sandbox, so the unit is
+                # generated but never started.
+                autoStart = false;
+              };
+              networking.hostName = "edgenode-42";
+              virtualisation.diskSize = 4096;
+            };
+            testScript = ''
+              import re
+
+              machine.wait_for_unit("multi-user.target")
+
+              # The backend has to be there for the unit to mean anything.
+              machine.succeed("podman --version")
+              machine.succeed("podman ps")
+
+              unit = machine.succeed("systemctl cat podman-wind-tunnel-runner.service")
+              machine.log("unit:\n" + unit)
+
+              exec_start = re.search(r"ExecStart=(\S+)", unit)
+              assert exec_start is not None, "no ExecStart in the unit:\n" + unit
+              run = machine.succeed(f"cat {exec_start.group(1)}")
+              machine.log("generated run script:\n" + run)
+
+              for flag in ["--net=host", "--privileged", "--cgroupns=host"]:
+                  assert flag in run, f"{flag} missing from the generated run command:\n{run}"
+
+              assert "--hostname=nomad-client-edgenode-42" in run, run
+              assert (
+                  "ghcr.io/holochain/wind-tunnel-runner@sha256:"
+                  "650c91806275681bc1961e0e55e85fa7fbf31bebe0c8665fc0a6af71ac330fa2"
+              ) in run, run
+
+              # `--pull missing` is the pull command the unit runs: podman
+              # fetches the digest on first start and never again.
+              assert "--pull missing" in run, run
+
+              # autoStart = false has to mean exactly that, or a fleet would
+              # start donating compute the moment the module is imported.
+              enabled = machine.succeed(
+                  "systemctl is-enabled podman-wind-tunnel-runner.service || true"
+              ).strip()
+              machine.log(f"is-enabled: {enabled}")
+              assert enabled != "enabled", enabled
+              assert "wind-tunnel-runner" not in machine.succeed("podman ps")
             '';
           };
 
@@ -288,6 +522,13 @@
             line = "0.7";
             appId = "dino-adventure";
             happ = dinoAdventureHapp;
+          };
+
+          # The 0.7 line's gauges are covered end to end by vmTestGrafana; this
+          # is the 0.6 half of "both lines produce it".
+          vmTestConductorMetrics-0_6 = metricsTest {
+            name = "holochain-conductor-metrics-0_6";
+            nodeExtra = on06;
           };
 
           vmTestWithHapp-0_6 = happTest {

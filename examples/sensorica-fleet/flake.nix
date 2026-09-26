@@ -33,6 +33,9 @@
     fleetModules = [
       nixos-holochain.nixosModules.holochain-edgenode
       nixos-holochain.nixosModules.holochain-grafana
+      # Imported so hosts/common.nix can turn it off in writing rather than by
+      # omission; see the comment there.
+      nixos-holochain.nixosModules.holochain-windtunnel
     ];
 
     mkEdgenode = name:

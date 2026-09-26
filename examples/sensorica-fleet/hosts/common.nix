@@ -26,8 +26,18 @@
   services.holochain-edgenode = {
     enable = true;
     openFirewall = true;
+    # node_exporter for the host series, and the conductor metrics timer for
+    # the holochain_* series the fleet dashboard is built around. Every node
+    # runs both; edgenode-01 additionally scrapes and draws them.
     metricsExporter.enable = true;
+    conductorMetrics.enable = true;
   };
+
+  # The Wind Tunnel runner stays off on every fleet node (ADR-008 as amended).
+  # It is not a dashboard data source: it would join the machine to the
+  # Holochain Foundation's Nomad cluster and run the Foundation's scenarios,
+  # which is a donation of the machine, not observability for this fleet.
+  services.holochain-windtunnel.enable = false;
 
   system.stateVersion = "25.05";
 }
