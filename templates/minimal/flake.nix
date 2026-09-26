@@ -9,7 +9,7 @@
 
   inputs = {
     nixos-holochain.url = "github:Sensorica/nixos-holochain";
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
     # The edgenode module takes its default conductor and `hc` packages from
     # `inputs.holonix`, so an input under that name has to reach it. Following
     # the module repository keeps this node on the Holochain line the modules

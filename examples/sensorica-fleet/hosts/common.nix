@@ -76,5 +76,5 @@
   # which is a donation of the machine, not observability for this fleet.
   services.holochain-windtunnel.enable = false;
 
-  system.stateVersion = "25.05";
+  system.stateVersion = "26.05";
 }

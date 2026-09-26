@@ -203,7 +203,7 @@ Each ticked item names the pull request that closed it.
 
 **Phase 1: the flake evaluates and the module works**
 - [x] Sensorica fleet moved to `examples/sensorica-fleet` with its own flake, so adopting the modules never evaluates Sensorica's machines (#13)
-- [x] Toolchain pinned: holonix `main-0.7`, nixpkgs `nixos-25.05`, committed hardware placeholders (#13)
+- [x] Toolchain pinned: holonix `main-0.7`, nixpkgs `nixos-26.05` (moved from the end-of-life 25.05), committed hardware placeholders (#13)
 - [x] CI on every push and every pull request: `nix flake check` plus example-fleet evaluation (#13)
 - [x] Workshop live ISO in the fleet example, cloning the repo on first boot (#13)
 - [x] Colmena prerequisites documented in `docs/deployment.md` (#13)

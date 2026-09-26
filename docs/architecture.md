@@ -334,7 +334,7 @@ Holonix's `hc` ships an `http-gw` subcommand, and the first design (ADR-009) use
 
 `packages/holochain-http-gateway.nix` builds the tagged source with `rustPlatform.buildRustPackage` and picks the release from the Holochain line, exactly as the network section does. Both are exposed as `packages.<system>.holochain-http-gateway` and `holochain-http-gateway-0_6`, so an operator can check which binary a node would run without evaluating a system.
 
-The build uses the nixpkgs the matching holonix already pins rather than this flake's `nixos-25.05`: the crate's `rust-toolchain.toml` asks for a rustc newer than 25.05 carries, and holonix's is new enough. That adds no input to the lock.
+The build uses the nixpkgs the matching holonix already pins rather than this flake's own nixpkgs, so the gateway shares the conductor's toolchain; this started because the crate's `rust-toolchain.toml` asked for a rustc newer than nixos-25.05 carried. That adds no input to the lock.
 
 ### Nothing is exposed by default
 

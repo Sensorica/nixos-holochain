@@ -11,7 +11,7 @@
     nixos-holochain.url = "github:Sensorica/nixos-holochain";
     # The fleet pins its own nixpkgs, as any downstream fleet does; the
     # Holochain toolchain comes from the module repository.
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
     holonix.follows = "nixos-holochain/holonix";
   };
 

@@ -16,6 +16,12 @@
   # The dashboard JSON refers to its data source by this uid rather than by
   # name, so the file stays valid whatever the datasource is called.
   datasourceUid = "holochain-prometheus";
+
+  generatedSecretKey = "${config.services.grafana.dataDir}/secret_key";
+  secretKeyPath =
+    if cfg.secretKeyFile != null
+    then toString cfg.secretKeyFile
+    else generatedSecretKey;
 in {
   options.services.holochain-grafana = {
     enable = lib.mkEnableOption "Prometheus + Grafana observability for Holochain fleet";
@@ -99,6 +105,24 @@ in {
       '';
     };
 
+    secretKeyFile = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      example = "/var/lib/secrets/grafana-secret-key";
+      description = ''
+        Path on the target machine to a file holding Grafana's
+        `security.secret_key`, the key it encrypts data source secrets with.
+        Since NixOS 26.05 Grafana has no default key and refuses to evaluate
+        without one.
+
+        When null, the module generates a random key once, at first boot, in
+        `''${services.grafana.dataDir}/secret_key` (mode 0400, owned by
+        `grafana`) and keeps it across rebuilds, so the key never enters the
+        Nix store. Set this only to share one key between machines or to
+        restore one from a backup.
+      '';
+    };
+
     dashboards = lib.mkOption {
       type = lib.types.path;
       default = ./dashboards;
@@ -140,6 +164,9 @@ in {
             if cfg.adminPasswordFile != null
             then "$__file{${toString cfg.adminPasswordFile}}"
             else cfg.adminPassword;
+
+          # Same file provider: only the path reaches the store.
+          secret_key = "$__file{${secretKeyPath}}";
         };
         analytics.reporting_enabled = false;
       };
@@ -182,6 +209,29 @@ in {
           ];
         };
       };
+    };
+
+    # Generates the key once and never rotates it: Grafana cannot decrypt what
+    # it stored under an older key, and nixpkgs offers no rotation path.
+    systemd.services.grafana-secret-key = lib.mkIf (cfg.secretKeyFile == null) {
+      description = "Generate Grafana's secret key on first boot";
+      wantedBy = ["grafana.service"];
+      before = ["grafana.service"];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+      };
+      script = ''
+        dir=${lib.escapeShellArg config.services.grafana.dataDir}
+        key=${lib.escapeShellArg generatedSecretKey}
+        install -d -m 0700 -o grafana -g grafana "$dir"
+        if [ ! -s "$key" ]; then
+          umask 0377
+          head -c 32 /dev/urandom | base64 > "$key.tmp"
+          chown grafana:grafana "$key.tmp"
+          mv "$key.tmp" "$key"
+        fi
+      '';
     };
 
     services.prometheus = {
