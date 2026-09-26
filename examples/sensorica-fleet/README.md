@@ -20,7 +20,7 @@ examples/sensorica-fleet/
 
 ## Holochain line and hApps
 
-The fleet runs **Holochain 0.6.3** (ADR-015), taken from the module repository's own `holochain-0_6` and `hc-0_6` outputs so it cannot drift onto a different 0.6.3 than the one the VM tests ran against. The line is not a preference: each of the three hApps below has a 0.6 release and none has a 0.7 one. The principal re-evaluates this seven days before the workshop date.
+The fleet runs **Holochain 0.6.3** (ADR-015), taken from the module repository's own `holochain-0_6` and `hc-0_6` outputs so it cannot drift onto a different 0.6.3 than the one the VM tests ran against. The line is not a preference: each of the three hApps below has a 0.6 release and none has a 0.7 one. The maintainers re-evaluate this seven days before the workshop date.
 
 Every node installs all three at boot, on one network seed (`sensorica-workshop-2026`), which is what makes the five machines one DHT per app rather than five isolated ones:
 
@@ -32,7 +32,7 @@ Every node installs all three at boot, on one network seed (`sensorica-workshop-
 
 Requests & Offers publishes a `.webhapp` and nothing else, and a conductor installs a `.happ`, so `happs.nix` unpacks it in a derivation with `hc web-app unpack` from the same line. Nothing binary is committed: every bundle is `pkgs.fetchurl` by sha256 (ADR-012).
 
-Three apps compile their wasm one after another on first boot, which on a Holoport is slow, so `installerTimeout` is 900 s. The installer polls for the result rather than trusting any single admin call, so that is a bound on the whole wait, not on one call.
+Three apps compile their wasm one after another on first boot, which on a Holoport is slow, so `installerTimeout` is 900 s. The installer polls for the result rather than trusting any single admin call, so that is a bound on each of its waits (per hApp, the install and then the enable settling), not on one call; the unit has no start timeout of its own.
 
 ## Evaluate
 
@@ -50,11 +50,11 @@ nix flake check --no-build --override-input nixos-holochain "$(git rev-parse --s
 
 ## Hardware configuration
 
-Each host ships a placeholder `hardware-configuration.nix` so the fleet evaluates before any machine exists. It is not a bare stub: it carries the Holoport disk layout of ADR-017, so a machine partitioned the way [`docs/deployment.md`](../../docs/deployment.md) says boots on this file as written.
+Each host ships a placeholder `hardware-configuration.nix` so the fleet evaluates before any machine exists. It is not a bare stub: it carries the Holoport disk layout of ADR-017, so a machine partitioned that way boots on this file as written. The partitioning and `grub-install` sequence follows holochain/wind-tunnel-runner and is not yet written up in `docs/deployment.md` (tracked in #6).
 
 GPT with a 1 MiB `bios_grub` partition *and* a vfat ESP labelled `boot`, an ext4 root labelled `nixos`, swap labelled `swap`; GRUB installed twice, the UEFI half by NixOS (`device = "nodev"`, `efiSupport`, `efiInstallAsRemovable`, ESP at `/efi-boot`) and the BIOS half by one `grub-install --target=i386-pc` in the runbook. A Holoport boots legacy BIOS only; the laptops the fleet is installed from are usually UEFI; this serves both.
 
-Once a machine exists, generate its real hardware configuration on it and commit that over the placeholder, keeping the `boot.loader` block:
+Once a machine exists, generate its real hardware configuration on it and commit that over the placeholder. Nothing needs keeping: the GRUB block lives in `hosts/common.nix`, because `nixos-generate-config --show-hardware-config` writes filesystems and kernel modules, never a boot loader.
 
 ```bash
 sudo nixos-generate-config --show-hardware-config > hosts/edgenode-01/hardware-configuration.nix
@@ -62,7 +62,7 @@ sudo nixos-generate-config --show-hardware-config > hosts/edgenode-01/hardware-c
 
 ## Operator SSH keys
 
-Public keys are not secrets, and a flake only ever sees git-tracked files, so the operator keys are committed: paste your `ssh-ed25519 ...` line into `users.users.sensorica.openssh.authorizedKeys.keys` in `hosts/common.nix` before deploying. A fleet deployed with that list empty has no way in over SSH. Private keys, tokens and passphrases never enter git.
+Public keys are not secrets, and a flake only ever sees git-tracked files, so the operator keys are committed: paste your `ssh-ed25519 ...` line into the `operatorKeys` list at the top of `hosts/common.nix` before deploying; it goes on the `sensorica` account and on root, which Colmena connects as. A fleet deployed with that list empty has no way in over SSH. Private keys, tokens and passphrases never enter git.
 
 ## Deploy
 

@@ -20,7 +20,7 @@ Five nodes built from the [`nixos-holochain`](https://github.com/Sensorica/nixos
 ## First steps
 
 1. Rename the `hosts/node-0*` directories and the `hosts` list in `flake.nix` to your machines' names, and update `networking.hostName` in each `configuration.nix` and the `scrapeTargets` list in `node-01`.
-2. Paste your SSH public key into `users.users.operator.openssh.authorizedKeys.keys` in `hosts/common.nix`. A fleet deployed with that list empty has no way in over SSH.
+2. Paste your SSH public key into the `operatorKeys` list at the top of `hosts/common.nix`; it goes on the `operator` account and on root, which Colmena connects as. A fleet deployed with that list empty has no way in over SSH.
 3. Replace each placeholder `hardware-configuration.nix` (see below).
 
 ## Evaluate
@@ -38,16 +38,16 @@ Each host ships a placeholder `hardware-configuration.nix` so the fleet evaluate
 sudo nixos-generate-config --show-hardware-config > hosts/node-01/hardware-configuration.nix
 ```
 
-Keep the `boot.loader` block from the placeholder when you do: `nixos-generate-config` writes the loader for the firmware it happens to be running under, and the placeholder deliberately serves both.
+Nothing needs keeping from the placeholder: `nixos-generate-config --show-hardware-config` writes filesystems and kernel modules, never a boot loader, and the GRUB block that serves both firmwares lives in `hosts/common.nix`.
 
 ### Firmware assumption
 
 The placeholder targets a machine that may boot **legacy BIOS or UEFI**, because the fleet this template came from is built on Holoports (legacy BIOS only) and installed from laptops that are usually UEFI. So the disk is GPT with a 1 MiB `bios_grub` partition *and* a vfat ESP labelled `boot`, an ext4 root labelled `nixos` and a swap partition labelled `swap`, and GRUB is installed twice:
 
-- the UEFI half by NixOS from `boot.loader.grub` (`device = "nodev"`, `efiSupport`, `efiInstallAsRemovable`, ESP mounted at `/efi-boot`);
+- the UEFI half by NixOS from `boot.loader.grub` in `hosts/common.nix` (`device = "nodev"`, `efiSupport`, `efiInstallAsRemovable`, ESP mounted at `/efi-boot`);
 - the BIOS half by one command in the install runbook, `grub-install --target=i386-pc --boot-directory=/mnt/boot /dev/sda`.
 
-`efiInstallAsRemovable` writes `EFI/BOOT/BOOTX64.EFI`, so firmware that keeps no boot variables still finds it. If your machines are UEFI only you can drop the `bios_grub` partition and the `i386-pc` command; if they are BIOS only, the ESP and the EFI half are what you drop. The full partitioning sequence is in [`docs/deployment.md`](https://github.com/Sensorica/nixos-holochain/blob/main/docs/deployment.md) upstream. Layout after holochain/wind-tunnel-runner.
+`efiInstallAsRemovable` writes `EFI/BOOT/BOOTX64.EFI`, so firmware that keeps no boot variables still finds it. If your machines are UEFI only you can drop the `bios_grub` partition and the `i386-pc` command; if they are BIOS only, the ESP and the EFI half are what you drop. Layout and both commands after holochain/wind-tunnel-runner (`base-install.nix`, `installer.nix`); a written partitioning runbook is tracked upstream in Sensorica/nixos-holochain#6.
 
 ## Deploy
 
@@ -73,7 +73,7 @@ sync
 
 ## Monitoring
 
-`node-01` serves Grafana on `:3000` with the "Holochain Fleet" dashboard provisioned, scraping every node's `node_exporter` and the conductor metrics timer. It logs in as `admin` with the password in `/var/lib/secrets/grafana-admin-password`, which you create on the node before the first deploy; `services.holochain-grafana.adminPasswordFile` in the option reference gives the commands. The module's `adminPassword` default is a lab convenience and lands world-readable in the Nix store, so it is not used here.
+`node-01` serves Grafana on `:3000` with the "Holochain Fleet" dashboard provisioned, scraping every node's `node_exporter` and the conductor metrics timer. It logs in as `admin` with the password in `/var/lib/secrets/grafana-admin-password`, which you create on the node before the first deploy (root-owned, mode 0400; systemd hands it to Grafana); `services.holochain-grafana.adminPasswordFile` in the option reference gives the commands. The module's `adminPassword` default is a lab convenience and lands world-readable in the Nix store, so it is not used here.
 
 ## Option reference
 

@@ -181,7 +181,7 @@ nix build .#checks.x86_64-linux.vmTestGateway -L
 
 ---
 
-## Workshop (mid-September 2026, Sensorica Lab)
+## Workshop (Sensorica Lab, date to be fixed in #7)
 
 This repo is the substrate for the Holochain NixOS workshop at Sensorica, the follow-up to the December 2025 HolOS/edgenode event. The exact date is [issue #7](https://github.com/Sensorica/nixos-holochain/issues/7).
 

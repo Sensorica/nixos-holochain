@@ -35,7 +35,7 @@
     # 0.6 release and none has a 0.7 one. Both packages come from the module
     # repository's own outputs, so the fleet adds no input of its own and cannot
     # drift onto a different 0.6.3 than the one its VM tests ran against. The
-    # principal re-evaluates this seven days before the workshop date.
+    # maintainers re-evaluate this seven days before the workshop date.
     fleetLine = {
       holochain = nixos-holochain.packages.${system}.holochain-0_6;
       hc = nixos-holochain.packages.${system}.hc-0_6;
