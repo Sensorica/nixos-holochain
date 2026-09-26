@@ -33,7 +33,15 @@ jobs:
         run: |
           nix eval --json .#nixosModules --apply builtins.attrNames
           nix eval --json .#checks.x86_64-linux --apply builtins.attrNames
-          nix flake metadata --json | jq -r '.locks.nodes.holonix.original.ref, .locks.nodes.nixpkgs.original.ref'
+          # The root's own pins, resolved through root.inputs: a bare
+          # `.locks.nodes.nixpkgs` can be an input's nixpkgs, not ours.
+          set -o pipefail
+          meta=$(nix flake metadata --json)
+          holonix_ref=$(jq -r '.locks.nodes[.locks.nodes.root.inputs.holonix].original.ref' <<<"$meta")
+          nixpkgs_ref=$(jq -r '.locks.nodes[.locks.nodes.root.inputs.nixpkgs].original.ref' <<<"$meta")
+          echo "holonix: $holonix_ref, nixpkgs: $nixpkgs_ref"
+          test "$holonix_ref" = main-0.7
+          test "$nixpkgs_ref" = nixos-26.05
 
       - name: Example fleet against this checkout
         working-directory: examples/sensorica-fleet
@@ -116,4 +124,5 @@ jobs:
             .#checks.x86_64-linux.vmTestGrafana \
             .#checks.x86_64-linux.vmTestConductorMetrics-0_6 \
             .#checks.x86_64-linux.vmTestGateway \
-            .#checks.x86_64-linux.vmTestWindtunnel
+            .#checks.x86_64-linux.vmTestWindtunnel \
+            .#checks.x86_64-linux.conductorMetricsJq

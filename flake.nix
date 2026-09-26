@@ -477,6 +477,36 @@
         };
 
         checks = {
+          # The metrics jq against replies a bare conductor in a VM never
+          # produces: live connections and nested blocked_message_counts. One
+          # malformed line makes node_exporter drop the whole textfile, so the
+          # output must pass promtool as well as carry the right sums.
+          conductorMetricsJq =
+            pkgs.runCommand "conductor-metrics-jq" {
+              nativeBuildInputs = [pkgs.jq pkgs.prometheus.cli];
+            } ''
+              cat > busy.json <<'EOF'
+              {"transport_stats":{"backend":"iroh","peer_urls":["u1","u2"],
+                "connections":[
+                  {"pub_key":"a","send_message_count":3,"send_bytes":100,"recv_message_count":4,"recv_bytes":200,"opened_at_s":1,"is_direct":true},
+                  {"pub_key":"b","send_message_count":5,"send_bytes":50,"recv_message_count":1,"recv_bytes":10,"opened_at_s":2,"is_direct":false}]},
+               "blocked_message_counts":{"space1":{"reasonA":{"incoming":2,"outgoing":3}},"space2":{"reasonB":{"incoming":1,"outgoing":0}}}}
+              EOF
+              for input in busy.json <(echo '{}'); do
+                jq -r --argjson up 1 --argjson now 1700000000 \
+                  -f ${./modules/conductor-metrics.jq} < "$input" > out.prom
+                cat out.prom
+                promtool check metrics < out.prom
+              done
+              jq -r --argjson up 1 --argjson now 1700000000 \
+                -f ${./modules/conductor-metrics.jq} < busy.json > out.prom
+              grep -qx 'holochain_conductor_blocked_messages_total 6' out.prom
+              grep -qx 'holochain_conductor_peer_connections 2' out.prom
+              grep -qx 'holochain_conductor_direct_peer_connections 1' out.prom
+              grep -qx 'holochain_conductor_network_sent_bytes_total 150' out.prom
+              touch $out
+            '';
+
           # One node wearing both roles: an edgenode exporting its conductor's
           # own stats, and the monitor scraping and drawing them. That is the
           # whole observability path in a single VM, so a break anywhere in it
@@ -495,9 +525,17 @@
                 metricsExporter.enable = true;
                 conductorMetrics.enable = true;
               };
+              # Root-owned 0400, as the option reference tells operators to
+              # create it: systemd reads it, the grafana user never does.
+              systemd.tmpfiles.rules = [
+                "d /var/lib/secrets 0700 root root - -"
+                "f /var/lib/secrets/grafana-admin-password 0400 root root - ${grafanaTestPassword}"
+              ];
               services.holochain-grafana = {
                 enable = true;
-                adminPassword = grafanaTestPassword;
+                # The file path, not the plaintext option: this is what the
+                # fleet uses, and the credential hand-off is what can break.
+                adminPasswordFile = "/var/lib/secrets/grafana-admin-password";
                 scrapeTargets = ["127.0.0.1:9100"];
                 openFirewall = true;
               };
