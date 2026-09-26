@@ -8,16 +8,24 @@
 
 ## Single node
 
+On a machine already running NixOS, start from the `#minimal` template in a directory you keep under git (a flake only sees tracked files):
+
 ```bash
-git clone https://github.com/Sensorica/nixos-holochain
-cd nixos-holochain
+mkdir edgenode && cd edgenode && git init
+nix flake init -t github:Sensorica/nixos-holochain#minimal
 
-# The Sensorica fleet is the worked example; edit the host config for your machine
-cd examples/sensorica-fleet
-nano hosts/edgenode-01/configuration.nix
+# The placeholder hardware configuration only lets the flake evaluate; replace
+# it with this machine's before switching, or the next boot looks for disks by
+# labels this machine may not have.
+sudo nixos-generate-config --show-hardware-config > hardware-configuration.nix
 
-sudo nixos-rebuild switch --flake .#edgenode-01
+nano configuration.nix      # SSH key, hostname, hApps
+git add flake.nix configuration.nix hardware-configuration.nix README.md
+nix flake check --no-build
+sudo nixos-rebuild switch --flake .#edgenode
 ```
+
+The template boots with systemd-boot, as the NixOS installer does on UEFI; `templates/minimal/README.md` says what to change for legacy BIOS.
 
 ## Colmena prerequisites
 
@@ -27,7 +35,7 @@ Before running `colmena apply` from `examples/sensorica-fleet`, each host must h
    ```bash
    sudo nixos-generate-config --show-hardware-config > examples/sensorica-fleet/hosts/edgenode-XX/hardware-configuration.nix
    ```
-2. The facilitator's SSH public key in `examples/sensorica-fleet/hosts/common.nix` under `users.users.sensorica.openssh.authorizedKeys.keys` (public keys are committed; a flake never sees untracked files).
+2. The facilitator's SSH public key in `examples/sensorica-fleet/hosts/common.nix` in the `operatorKeys` list at the top (used for the `sensorica` account and for root, which Colmena connects as; public keys are committed, a flake never sees untracked files).
 
 ## Fleet (Colmena)
 

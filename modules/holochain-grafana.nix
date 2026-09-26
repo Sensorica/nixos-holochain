@@ -18,10 +18,14 @@
   datasourceUid = "holochain-prometheus";
 
   generatedSecretKey = "${config.services.grafana.dataDir}/secret_key";
+
+  # Files the operator supplies reach Grafana as systemd credentials, so they
+  # need no grafana ownership and may exist before the grafana user does.
+  credential = name: "$__file{/run/credentials/grafana.service/${name}}";
   secretKeyPath =
     if cfg.secretKeyFile != null
-    then toString cfg.secretKeyFile
-    else generatedSecretKey;
+    then credential "secret_key"
+    else "$__file{${generatedSecretKey}}";
 in {
   options.services.holochain-grafana = {
     enable = lib.mkEnableOption "Prometheus + Grafana observability for Holochain fleet";
@@ -82,23 +86,33 @@ in {
     };
 
     adminPasswordFile = lib.mkOption {
-      type = lib.types.nullOr lib.types.path;
+      # Not a store path: a path literal in a flake would copy the password
+      # into the world-readable store, the one thing this option exists to avoid.
+      type = lib.types.nullOr (lib.types.pathWith {
+        inStore = false;
+        absolute = true;
+      });
       default = null;
       example = "/var/lib/secrets/grafana-admin-password";
       description = ''
         Path on the target machine to a file holding the Grafana administrator
         password. When set it takes precedence over `adminPassword`, and the
-        password never enters the Nix store: the path is handed to Grafana as a
-        `$__file{...}` reference and read by the running service.
+        password never enters the Nix store: systemd hands the file to Grafana
+        as a credential (`LoadCredential`), and Grafana reads it through a
+        `$__file{...}` reference.
 
-        The file is read by the `grafana` user, so it has to be readable by it.
-        Create it on the node before the first `colmena apply`, for example:
+        Because systemd reads it, the file can stay owned by root with mode
+        0400, and it can be created before Grafana (or its user) exists.
+        Create it on the node before the first deploy, for example:
 
         ```
-        sudo install -d -m 0755 /var/lib/secrets
-        sudo install -o grafana -g grafana -m 0400 /dev/null /var/lib/secrets/grafana-admin-password
+        sudo install -d -m 0700 /var/lib/secrets
+        sudo install -m 0400 /dev/null /var/lib/secrets/grafana-admin-password
         printf '%s' 'the-password' | sudo tee /var/lib/secrets/grafana-admin-password > /dev/null
         ```
+
+        If the file is missing, grafana.service fails to start and its journal
+        names the path.
 
         The path must survive a reboot, so `/run` is the wrong place for it
         unless a secrets manager repopulates it at boot.
@@ -106,7 +120,10 @@ in {
     };
 
     secretKeyFile = lib.mkOption {
-      type = lib.types.nullOr lib.types.path;
+      type = lib.types.nullOr (lib.types.pathWith {
+        inStore = false;
+        absolute = true;
+      });
       default = null;
       example = "/var/lib/secrets/grafana-secret-key";
       description = ''
@@ -119,7 +136,8 @@ in {
         `''${services.grafana.dataDir}/secret_key` (mode 0400, owned by
         `grafana`) and keeps it across rebuilds, so the key never enters the
         Nix store. Set this only to share one key between machines or to
-        restore one from a backup.
+        restore one from a backup; like `adminPasswordFile`, it is handed over
+        by systemd and can stay root-owned.
       '';
     };
 
@@ -162,11 +180,11 @@ in {
           # plaintext-password warning.
           admin_password =
             if cfg.adminPasswordFile != null
-            then "$__file{${toString cfg.adminPasswordFile}}"
+            then credential "admin_password"
             else cfg.adminPassword;
 
           # Same file provider: only the path reaches the store.
-          secret_key = "$__file{${secretKeyPath}}";
+          secret_key = secretKeyPath;
         };
         analytics.reporting_enabled = false;
       };
@@ -210,6 +228,10 @@ in {
         };
       };
     };
+
+    systemd.services.grafana.serviceConfig.LoadCredential =
+      lib.optional (cfg.adminPasswordFile != null) "admin_password:${toString cfg.adminPasswordFile}"
+      ++ lib.optional (cfg.secretKeyFile != null) "secret_key:${toString cfg.secretKeyFile}";
 
     # Generates the key once and never rotates it: Grafana cannot decrypt what
     # it stored under an older key, and nixpkgs offers no rotation path.

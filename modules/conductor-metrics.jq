@@ -5,7 +5,10 @@
 # connections[ { pub_key, send_message_count, send_bytes, recv_message_count,
 # recv_bytes, opened_at_s, is_direct } ] }, wrapped by Holochain together with
 # blocked_message_counts. Identical on 0.6.3 and 0.7.0, verified against both
-# binaries; see docs/architecture.md.
+# binaries; see docs/architecture.md. blocked_message_counts nests (per space,
+# then per reason, ending in {incoming, outgoing}), so its total sums every
+# number at any depth: a line that is not a number would make node_exporter
+# drop the whole file, holochain_conductor_up included.
 #
 # $up is 1 when the admin interface answered and 0 when it did not, so the
 # series never disappears from the dashboard when a conductor is down.
@@ -57,7 +60,7 @@ def total(f): [.[] | f] | add // 0;
   metric(
     "holochain_conductor_blocked_messages_total";
     "Messages the conductor refused, summed over every block reason.";
-    "counter"; ([$b[]] | add // 0)),
+    "counter"; ([$b | .. | numbers] | add // 0)),
   metric(
     "holochain_conductor_metrics_scrape_timestamp_seconds";
     "Unix time at which this textfile was written.";

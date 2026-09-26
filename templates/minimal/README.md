@@ -11,7 +11,7 @@ One conductor on one machine, built from the [`nixos-holochain`](https://github.
 ## First steps
 
 1. Paste your SSH public key into `users.users.operator.openssh.authorizedKeys.keys` in `configuration.nix`.
-2. On the target machine, replace the placeholder hardware configuration, keeping the `boot.loader` block from the placeholder (see the firmware note below):
+2. On the target machine, replace the placeholder hardware configuration with the real one. Nothing in the placeholder needs keeping: the boot loader is set in `configuration.nix`.
    ```bash
    sudo nixos-generate-config --show-hardware-config > hardware-configuration.nix
    ```
@@ -20,15 +20,11 @@ One conductor on one machine, built from the [`nixos-holochain`](https://github.
    nix flake check --no-build
    sudo nixos-rebuild switch --flake .#edgenode
    ```
+4. Give `operator` a password on the console (`sudo passwd operator`) if you want it to use sudo over SSH.
 
 ## Firmware assumption
 
-The placeholder `hardware-configuration.nix` targets a machine that may boot **legacy BIOS or UEFI**, because the fleet this template came from is built on Holoports (legacy BIOS only) and installed from laptops that are usually UEFI. So the disk is GPT with a 1 MiB `bios_grub` partition *and* a vfat ESP labelled `boot`, an ext4 root labelled `nixos` and a swap partition labelled `swap`, and GRUB is installed twice:
-
-- the UEFI half by NixOS from `boot.loader.grub` (`device = "nodev"`, `efiSupport`, `efiInstallAsRemovable`, ESP mounted at `/efi-boot`);
-- the BIOS half by one command at install time, `grub-install --target=i386-pc --boot-directory=/mnt/boot /dev/sda`.
-
-`efiInstallAsRemovable` writes `EFI/BOOT/BOOTX64.EFI`, so firmware that keeps no boot variables still finds it. If your machine is UEFI only you can drop the `bios_grub` partition and the `i386-pc` command; if it is BIOS only, the ESP and the EFI half are what you drop. The full partitioning sequence is in [`docs/deployment.md`](https://github.com/Sensorica/nixos-holochain/blob/main/docs/deployment.md) upstream. Layout after holochain/wind-tunnel-runner.
+`configuration.nix` boots with systemd-boot, which is what the NixOS installer sets up on a UEFI machine with its ESP at `/boot`. On a legacy-BIOS machine replace the two `boot.loader` lines with GRUB (`boot.loader.grub = { enable = true; device = "/dev/sda"; };`). The `#fleet` template carries a GRUB layout that boots the same disk under both firmwares, built for Holoports.
 
 ## Installing a hApp at boot
 
@@ -48,7 +44,7 @@ systemctl status holochain-conductor.service
 hc client call --port 4444 list-apps
 ```
 
-The admin interface listens on 4444 (loopback), the app interface on 8888. `openFirewall = true` opens the app interface only.
+The admin interface listens on 4444 and the app interface on 8888, both on loopback. The admin port is never opened in the firewall; `openFirewall = true` opens the app port and, with `metricsExporter.enable`, the node_exporter port.
 
 ## More
 

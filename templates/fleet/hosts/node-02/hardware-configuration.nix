@@ -5,7 +5,8 @@
 # partitioned that way this file boots as written, on legacy BIOS and on UEFI.
 # Replace it with the output of
 #   nixos-generate-config --show-hardware-config
-# run on that machine, keeping the boot.loader block below; see ../../README.md.
+# run on that machine, keeping nothing: the boot loader is set in hosts/common.nix, so
+# replacing this file does not lose it. See ../../README.md.
 {
   lib,
   modulesPath,
@@ -26,26 +27,6 @@
     "sd_mod"
     "sr_mod"
   ];
-
-  # The target may boot legacy BIOS or UEFI, and one tree has to serve both, so
-  # the disk is GPT with a 1 MiB `bios_grub` partition *and* an ESP, and GRUB is
-  # installed twice. NixOS writes the EFI half from this block; the install
-  # runbook runs
-  #   grub-install --target=i386-pc --boot-directory=/mnt/boot /dev/sda
-  # for the BIOS half. `device = "nodev"` is what leaves that half to the
-  # runbook. `efiInstallAsRemovable` writes EFI/BOOT/BOOTX64.EFI, which firmware
-  # that keeps no boot variables still finds. Layout and both commands follow
-  # holochain/wind-tunnel-runner (`base-install.nix`, `installer.nix`).
-  boot.loader.grub = {
-    enable = true;
-    device = "nodev";
-    efiSupport = true;
-    efiInstallAsRemovable = true;
-  };
-
-  # The ESP is not /boot: the BIOS GRUB keeps its own directory on the ext4 root
-  # at /boot/grub, and the two must not land in the same place.
-  boot.loader.efi.efiSysMountPoint = "/efi-boot";
 
   fileSystems."/" = {
     device = "/dev/disk/by-label/nixos";

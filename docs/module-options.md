@@ -67,7 +67,36 @@ inputs.holonix.packages.${pkgs.stdenv.hostPlatform.system}.holochain
 
 
 
+## services\.holochain-edgenode\.adminAllowedOrigins
+
+Allowed origins for the admin WebSocket interface\. The default is the
+Origin header ` hc ` sends when given no ` --origin `, which is what the
+hApp installer and the metrics timer use, and which no browser sends:
+with ` * ` any web page open in a browser on the node could drive the
+admin API over ` ws://localhost `\. Widen it only for an admin UI you
+trust\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+
+```nix
+"holochain_websocket"
+```
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
 ## services\.holochain-edgenode\.adminPort
+
+
 
 WebSocket port for the conductor admin interface (bound to localhost)\.
 
@@ -93,9 +122,8 @@ WebSocket port for the conductor admin interface (bound to localhost)\.
 
 
 
-Allowed origins for the admin and app WebSocket interfaces: ` * `, a single
-origin, or a comma-separated list\. With ` * ` no ` --origin ` header is needed
-on the admin call\.
+Allowed origins for the app WebSocket interface the installer attaches:
+` * `, a single origin, or a comma-separated list\.
 
 
 
@@ -319,7 +347,9 @@ attribute set of (submodule)
 
 
 
-Whether to install and enable this hApp\.
+Whether to install this hApp when absent and keep it enabled\.
+Setting it to false (or removing the entry) stops managing the
+app; it does not disable or uninstall an app already installed\.
 
 
 
@@ -409,9 +439,11 @@ inputs.holonix.packages.${pkgs.stdenv.hostPlatform.system}.hc
 
 
 
-Seconds the hApp installer waits for the admin interface to answer before
-failing\. The conductor needs about 80 seconds to open the port on an
-unaccelerated VM, so leave room\.
+Seconds the hApp installer allows each of its waits: the admin interface
+answering at all, then, per hApp, the install and the enable settling\.
+The conductor needs about 80 seconds to open the port on an
+unaccelerated VM, so leave room\. The unit itself has no start timeout,
+so raising this is enough\.
 
 
 
@@ -521,9 +553,10 @@ absolute path
 
 
 
-Open firewall ports for the admin, app and metrics interfaces\. The
-conductor binds its websockets to localhost, so this only matters for
-the metrics exporter unless ` danger_bind_addr ` is configured by hand\.
+Open firewall ports for the app and metrics interfaces\. The admin port
+is never opened\. The conductor binds its websockets to localhost, so in
+practice this matters for the metrics exporter, and for the app port
+only if ` danger_bind_addr ` is configured by hand\.
 
 
 
@@ -742,17 +775,22 @@ string
 
 Path on the target machine to a file holding the Grafana administrator
 password\. When set it takes precedence over ` adminPassword `, and the
-password never enters the Nix store: the path is handed to Grafana as a
-` $__file{...} ` reference and read by the running service\.
+password never enters the Nix store: systemd hands the file to Grafana
+as a credential (` LoadCredential `), and Grafana reads it through a
+` $__file{...} ` reference\.
 
-The file is read by the ` grafana ` user, so it has to be readable by it\.
-Create it on the node before the first ` colmena apply `, for example:
+Because systemd reads it, the file can stay owned by root with mode
+0400, and it can be created before Grafana (or its user) exists\.
+Create it on the node before the first deploy, for example:
 
 ```
-sudo install -d -m 0755 /var/lib/secrets
-sudo install -o grafana -g grafana -m 0400 /dev/null /var/lib/secrets/grafana-admin-password
+sudo install -d -m 0700 /var/lib/secrets
+sudo install -m 0400 /dev/null /var/lib/secrets/grafana-admin-password
 printf '%s' 'the-password' | sudo tee /var/lib/secrets/grafana-admin-password > /dev/null
 ```
+
+If the file is missing, grafana\.service fails to start and its journal
+names the path\.
 
 The path must survive a reboot, so ` /run ` is the wrong place for it
 unless a secrets manager repopulates it at boot\.
@@ -760,7 +798,7 @@ unless a secrets manager repopulates it at boot\.
 
 
 *Type:*
-null or absolute path
+null or absolute path not in the Nix store
 
 
 
@@ -982,12 +1020,13 @@ When null, the module generates a random key once, at first boot, in
 ` ${services.grafana.dataDir}/secret_key ` (mode 0400, owned by
 ` grafana `) and keeps it across rebuilds, so the key never enters the
 Nix store\. Set this only to share one key between machines or to
-restore one from a backup\.
+restore one from a backup; like ` adminPasswordFile `, it is handed over
+by systemd and can stay root-owned\.
 
 
 
 *Type:*
-null or absolute path
+null or absolute path not in the Nix store
 
 
 

@@ -5,8 +5,35 @@
   fleetLine,
   fleetHapps,
   ...
-}: {
+}: let
+  # Pasted once, used for the sensorica account and for root below.
+  operatorKeys = [
+    # "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... operator@laptop"
+  ];
+in {
   time.timeZone = "America/Montreal";
+
+  # ADR-017: the Holoport is a legacy-BIOS x86_64 box, and the same tree has to
+  # install on a UEFI laptop, so the disk is GPT with a 1 MiB `bios_grub`
+  # partition *and* an ESP, and GRUB is installed twice. NixOS writes the EFI
+  # half from this block; the install runbook runs
+  #   grub-install --target=i386-pc --boot-directory=/mnt/boot /dev/sda
+  # for the BIOS half. `device = "nodev"` is what leaves that half to the
+  # runbook. `efiInstallAsRemovable` writes EFI/BOOT/BOOTX64.EFI, which firmware
+  # that keeps no boot variables still finds. Layout and both commands follow
+  # holochain/wind-tunnel-runner (`base-install.nix`, `installer.nix`).
+  boot.loader.grub = {
+    enable = true;
+    device = "nodev";
+    efiSupport = true;
+    efiInstallAsRemovable = true;
+  };
+
+  # The ESP is not /boot: the BIOS GRUB keeps its own directory on the ext4 root
+  # at /boot/grub, and the two must not land in the same place.
+  boot.loader.efi.efiSysMountPoint = "/efi-boot";
+  # The ESP itself (`/efi-boot`, label `boot`) is mounted from each host's
+  # hardware-configuration.nix, which `nixos-generate-config` writes.
 
   services.openssh.enable = true;
 
@@ -15,12 +42,15 @@
     extraGroups = ["wheel"];
     # Operator public keys (ADR-012, revised): public keys are not secrets and
     # live here so every flake evaluation, nixos-rebuild and colmena apply sees
-    # them. Paste your `ssh-ed25519 ...` line below before deploying; a fleet
-    # deployed with this list empty has no way in over SSH.
-    openssh.authorizedKeys.keys = [
-      # "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... operator@laptop"
-    ];
+    # them. Paste your `ssh-ed25519 ...` line into `operatorKeys` at the top
+    # of this file before deploying; a fleet deployed with that list empty has
+    # no way in over SSH.
+    openssh.authorizedKeys.keys = operatorKeys;
   };
+
+  # Colmena connects as root by default, so the same keys go on root.
+  # PermitRootLogin stays at its NixOS default, prohibit-password: keys only.
+  users.users.root.openssh.authorizedKeys.keys = operatorKeys;
 
   services.desktopManager.plasma6.enable = true;
   services.displayManager.sddm.enable = true;
@@ -65,8 +95,9 @@
 
     # Three apps compile their wasm one after another on first boot, and a
     # Holoport is not a fast machine. The module polls for the outcome rather
-    # than trusting the admin call's own deadline, so this is how long that
-    # polling is allowed to last, not how long any single call may take.
+    # than trusting the admin call's own deadline, so this is how long each
+    # poll (per hApp: installed, then enabled) may last, not how long any
+    # single call may take. The unit has no start timeout of its own.
     installerTimeout = 900;
   };
 

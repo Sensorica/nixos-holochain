@@ -69,7 +69,7 @@
     (pkgs.writeShellScript "hc-http-gw-launch" ''
       exec ${pkgs.coreutils}/bin/env ${lib.concatStringsSep " " perAppEnv} \
         ${lib.getExe cfg.package} \
-          --address ${cfg.address} \
+          --address ${lib.escapeShellArg cfg.address} \
           --port ${toString cfg.port}
     '');
 in {
