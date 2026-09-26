@@ -46,5 +46,5 @@
   # not observability for this fleet. Turn it on per host if you mean to.
   services.holochain-windtunnel.enable = false;
 
-  system.stateVersion = "25.05";
+  system.stateVersion = "26.05";
 }

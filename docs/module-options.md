@@ -22,12 +22,18 @@ boolean
 
 
 *Default:*
-` false `
+
+```nix
+false
+```
 
 
 
 *Example:*
-` true `
+
+```nix
+true
+```
 
 *Declared by:*
  - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
@@ -51,7 +57,10 @@ package
 
 
 *Default:*
-` inputs.holonix.packages.${pkgs.system}.holochain `
+
+```nix
+inputs.holonix.packages.${pkgs.stdenv.hostPlatform.system}.holochain
+```
 
 *Declared by:*
  - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
@@ -70,7 +79,10 @@ WebSocket port for the conductor admin interface (bound to localhost)\.
 
 
 *Default:*
-` 4444 `
+
+```nix
+4444
+```
 
 *Declared by:*
  - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
@@ -93,7 +105,10 @@ string
 
 
 *Default:*
-` "*" `
+
+```nix
+"*"
+```
 
 *Declared by:*
  - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
@@ -114,7 +129,10 @@ WebSocket port the hApp installer attaches as the app interface\.
 
 
 *Default:*
-` 8888 `
+
+```nix
+8888
+```
 
 *Declared by:*
  - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
@@ -140,7 +158,10 @@ null or string
 
 
 *Default:*
-` null `
+
+```nix
+null
+```
 
 *Declared by:*
  - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
@@ -169,12 +190,18 @@ boolean
 
 
 *Default:*
-` false `
+
+```nix
+false
+```
 
 
 
 *Example:*
-` true `
+
+```nix
+true
+```
 
 *Declared by:*
  - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
@@ -199,12 +226,18 @@ string
 
 
 *Default:*
-` "30s" `
+
+```nix
+"30s"
+```
 
 
 
 *Example:*
-` "1min" `
+
+```nix
+"1min"
+```
 
 *Declared by:*
  - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
@@ -231,7 +264,10 @@ absolute path
 
 
 *Default:*
-` "/var/lib/holochain" `
+
+```nix
+"/var/lib/holochain"
+```
 
 *Declared by:*
  - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
@@ -252,13 +288,16 @@ attribute set of (submodule)
 
 
 *Default:*
-` { } `
+
+```nix
+{ }
+```
 
 
 
 *Example:*
 
-```
+```nix
 {
   dino-adventure = {
     src = pkgs.fetchurl {
@@ -290,7 +329,10 @@ boolean
 
 
 *Default:*
-` true `
+
+```nix
+true
+```
 
 *Declared by:*
  - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
@@ -311,7 +353,10 @@ null or string
 
 
 *Default:*
-` null `
+
+```nix
+null
+```
 
 *Declared by:*
  - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
@@ -350,7 +395,10 @@ package
 
 
 *Default:*
-` inputs.holonix.packages.${pkgs.system}.hc `
+
+```nix
+inputs.holonix.packages.${pkgs.stdenv.hostPlatform.system}.hc
+```
 
 *Declared by:*
  - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
@@ -373,7 +421,10 @@ signed integer
 
 
 *Default:*
-` 300 `
+
+```nix
+300
+```
 
 *Declared by:*
  - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
@@ -394,12 +445,18 @@ boolean
 
 
 *Default:*
-` false `
+
+```nix
+false
+```
 
 
 
 *Example:*
-` true `
+
+```nix
+true
+```
 
 *Declared by:*
  - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
@@ -420,7 +477,10 @@ Port to expose node metrics on\.
 
 
 *Default:*
-` 9100 `
+
+```nix
+9100
+```
 
 *Declared by:*
  - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
@@ -447,7 +507,10 @@ absolute path
 
 
 *Default:*
-` "/var/lib/prometheus-node-exporter-text-files" `
+
+```nix
+"/var/lib/prometheus-node-exporter-text-files"
+```
 
 *Declared by:*
  - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
@@ -470,7 +533,10 @@ boolean
 
 
 *Default:*
-` false `
+
+```nix
+false
+```
 
 *Declared by:*
  - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
@@ -493,7 +559,10 @@ string
 
 
 *Default:*
-` "lair-passphrase" `
+
+```nix
+"lair-passphrase"
+```
 
 *Declared by:*
  - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
@@ -517,7 +586,10 @@ null or string
 
 
 *Default:*
-` null `
+
+```nix
+null
+```
 
 *Declared by:*
  - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
@@ -541,7 +613,10 @@ null or string
 
 
 *Default:*
-` null `
+
+```nix
+null
+```
 
 *Declared by:*
  - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
@@ -564,7 +639,10 @@ boolean
 
 
 *Default:*
-` true `
+
+```nix
+true
+```
 
 *Declared by:*
  - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
@@ -585,7 +663,10 @@ string
 
 
 *Default:*
-` "holochain" `
+
+```nix
+"holochain"
+```
 
 *Declared by:*
  - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
@@ -606,12 +687,18 @@ boolean
 
 
 *Default:*
-` false `
+
+```nix
+false
+```
 
 
 
 *Example:*
-` true `
+
+```nix
+true
+```
 
 *Declared by:*
  - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
@@ -639,7 +726,10 @@ string
 
 
 *Default:*
-` "workshop2026" `
+
+```nix
+"workshop2026"
+```
 
 *Declared by:*
  - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
@@ -675,12 +765,18 @@ null or absolute path
 
 
 *Default:*
-` null `
+
+```nix
+null
+```
 
 
 
 *Example:*
-` "/var/lib/secrets/grafana-admin-password" `
+
+```nix
+"/var/lib/secrets/grafana-admin-password"
+```
 
 *Declared by:*
  - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
@@ -701,7 +797,10 @@ string
 
 
 *Default:*
-` "admin" `
+
+```nix
+"admin"
+```
 
 *Declared by:*
  - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
@@ -726,7 +825,10 @@ absolute path
 
 
 *Default:*
-` ./dashboards `
+
+```nix
+./dashboards
+```
 
 *Declared by:*
  - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
@@ -747,7 +849,10 @@ Port Grafana listens on\.
 
 
 *Default:*
-` 3000 `
+
+```nix
+3000
+```
 
 *Declared by:*
  - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
@@ -768,7 +873,10 @@ boolean
 
 
 *Default:*
-` false `
+
+```nix
+false
+```
 
 *Declared by:*
  - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
@@ -789,7 +897,10 @@ Port Prometheus listens on\.
 
 
 *Default:*
-` 9090 `
+
+```nix
+9090
+```
 
 *Declared by:*
  - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
@@ -814,7 +925,10 @@ string
 
 
 *Default:*
-` "15s" `
+
+```nix
+"15s"
+```
 
 *Declared by:*
  - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
@@ -835,16 +949,60 @@ list of string
 
 
 *Default:*
-` [ ] `
+
+```nix
+[ ]
+```
 
 
 
 *Example:*
 
-```
+```nix
 [ "edgenode-01:9100" "edgenode-02:9100" "edgenode-03:9100"
   "edgenode-04:9100" "edgenode-05:9100" ]
 
+```
+
+*Declared by:*
+ - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+
+
+
+## services\.holochain-grafana\.secretKeyFile
+
+
+
+Path on the target machine to a file holding Grafana’s
+` security.secret_key `, the key it encrypts data source secrets with\.
+Since NixOS 26\.05 Grafana has no default key and refuses to evaluate
+without one\.
+
+When null, the module generates a random key once, at first boot, in
+` ${services.grafana.dataDir}/secret_key ` (mode 0400, owned by
+` grafana `) and keeps it across rebuilds, so the key never enters the
+Nix store\. Set this only to share one key between machines or to
+restore one from a backup\.
+
+
+
+*Type:*
+null or absolute path
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+"/var/lib/secrets/grafana-secret-key"
 ```
 
 *Declared by:*
@@ -866,12 +1024,18 @@ boolean
 
 
 *Default:*
-` false `
+
+```nix
+false
+```
 
 
 
 *Example:*
-` true `
+
+```nix
+true
+```
 
 *Declared by:*
  - [modules/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-http-gateway.nix)
@@ -917,7 +1081,10 @@ string
 
 
 *Default:*
-` "127.0.0.1" `
+
+```nix
+"127.0.0.1"
+```
 
 *Declared by:*
  - [modules/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-http-gateway.nix)
@@ -940,7 +1107,10 @@ requires: without it the process exits immediately\.
 
 
 *Default:*
-` config.services.holochain-edgenode.adminPort `
+
+```nix
+config.services.holochain-edgenode.adminPort
+```
 
 *Declared by:*
  - [modules/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-http-gateway.nix)
@@ -965,13 +1135,16 @@ list of string
 
 
 *Default:*
-` [ ] `
+
+```nix
+[ ]
+```
 
 
 
 *Example:*
 
-```
+```nix
 [
   "dino-adventure"
 ]
@@ -1004,13 +1177,16 @@ attribute set of list of string
 
 
 *Default:*
-` { } `
+
+```nix
+{ }
+```
 
 
 
 *Example:*
 
-```
+```nix
 {
   dino-adventure = ["dino_adventure/get_all_dinos_local"];
   my-app = ["*"];
@@ -1039,7 +1215,10 @@ unsigned integer, meaning >=0
 
 
 *Default:*
-` 50 `
+
+```nix
+50
+```
 
 *Declared by:*
  - [modules/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-http-gateway.nix)
@@ -1063,7 +1242,10 @@ boolean
 
 
 *Default:*
-` false `
+
+```nix
+false
+```
 
 *Declared by:*
  - [modules/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-http-gateway.nix)
@@ -1087,7 +1269,10 @@ unsigned integer, meaning >=0
 
 
 *Default:*
-` 10240 `
+
+```nix
+10240
+```
 
 *Declared by:*
  - [modules/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-http-gateway.nix)
@@ -1108,7 +1293,10 @@ Port the gateway listens on, passed as ` --port ` (` HC_GW_PORT `)\.
 
 
 *Default:*
-` 8090 `
+
+```nix
+8090
+```
 
 *Declared by:*
  - [modules/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-http-gateway.nix)
@@ -1130,7 +1318,10 @@ unsigned integer, meaning >=0
 
 
 *Default:*
-` 10000 `
+
+```nix
+10000
+```
 
 *Declared by:*
  - [modules/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-http-gateway.nix)
@@ -1164,12 +1355,18 @@ boolean
 
 
 *Default:*
-` false `
+
+```nix
+false
+```
 
 
 
 *Example:*
-` true `
+
+```nix
+true
+```
 
 *Declared by:*
  - [modules/holochain-windtunnel\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-windtunnel.nix)
@@ -1192,7 +1389,10 @@ boolean
 
 
 *Default:*
-` true `
+
+```nix
+true
+```
 
 *Declared by:*
  - [modules/holochain-windtunnel\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-windtunnel.nix)
@@ -1216,7 +1416,10 @@ one of “podman”, “docker”
 
 
 *Default:*
-` "podman" `
+
+```nix
+"podman"
+```
 
 *Declared by:*
  - [modules/holochain-windtunnel\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-windtunnel.nix)
@@ -1243,7 +1446,7 @@ list of string
 
 *Default:*
 
-```
+```nix
 [
   "--net=host"
   "--privileged"
@@ -1273,7 +1476,10 @@ string
 
 
 *Default:*
-` "nomad-client-${config.networking.hostName}" `
+
+```nix
+"nomad-client-${config.networking.hostName}"
+```
 
 *Declared by:*
  - [modules/holochain-windtunnel\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-windtunnel.nix)
@@ -1302,7 +1508,10 @@ string
 
 
 *Default:*
-` "ghcr.io/holochain/wind-tunnel-runner@sha256:650c91806275681bc1961e0e55e85fa7fbf31bebe0c8665fc0a6af71ac330fa2" `
+
+```nix
+"ghcr.io/holochain/wind-tunnel-runner@sha256:650c91806275681bc1961e0e55e85fa7fbf31bebe0c8665fc0a6af71ac330fa2"
+```
 
 *Declared by:*
  - [modules/holochain-windtunnel\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-windtunnel.nix)

@@ -214,8 +214,8 @@ in {
 
     package = lib.mkOption {
       type = lib.types.package;
-      default = inputs.holonix.packages.${pkgs.system}.holochain;
-      defaultText = lib.literalExpression "inputs.holonix.packages.\${pkgs.system}.holochain";
+      default = inputs.holonix.packages.${pkgs.stdenv.hostPlatform.system}.holochain;
+      defaultText = lib.literalExpression "inputs.holonix.packages.\${pkgs.stdenv.hostPlatform.system}.holochain";
       description = ''
         Holochain conductor package. Its `version` selects the config schema the
         module renders: below 0.7 the network section carries `bootstrap_url`,
@@ -226,8 +226,8 @@ in {
 
     hcPackage = lib.mkOption {
       type = lib.types.package;
-      default = inputs.holonix.packages.${pkgs.system}.hc;
-      defaultText = lib.literalExpression "inputs.holonix.packages.\${pkgs.system}.hc";
+      default = inputs.holonix.packages.${pkgs.stdenv.hostPlatform.system}.hc;
+      defaultText = lib.literalExpression "inputs.holonix.packages.\${pkgs.stdenv.hostPlatform.system}.hc";
       description = ''
         Holochain CLI package used by the hApp installer. Keep it on the same
         line as `package`: the admin subcommand is `hc client call` from 0.7 and

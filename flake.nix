@@ -13,7 +13,7 @@
   };
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
     # Both supported Holochain lines, so the module's version switch is exercised
     # by real binaries rather than asserted (ADR-007 amended).
     holonix.url = "github:holochain/holonix/main-0.7";
@@ -52,7 +52,7 @@
           services.getty.autologinUser = "root";
           users.users.root.initialHashedPassword = "";
 
-          system.stateVersion = "25.05";
+          system.stateVersion = "26.05";
         };
       in {
         # `nix flake init -t github:Sensorica/nixos-holochain#minimal` (or
@@ -189,10 +189,10 @@
       }: let
         holonix06 = inputs.holonix-0_6.packages.${system};
 
-        # The gateway is a Rust crate on the 2024 edition whose toolchain file
-        # asks for a rustc newer than nixos-25.05 carries, so it is built
-        # against the nixpkgs each holonix line already pins rather than
-        # against ours. That keeps the conductor and its gateway on one
+        # The gateway is a Rust crate on the 2024 edition, built against the
+        # nixpkgs each holonix line already pins rather than against ours
+        # (first because nixos-25.05's rustc was too old for its toolchain
+        # file). That keeps the conductor and its gateway on one
         # toolchain and adds no input to the lock.
         gatewayPkgs = inputs.holonix.inputs.nixpkgs.legacyPackages.${system};
         gatewayPkgs06 = inputs.holonix-0_6.inputs.nixpkgs.legacyPackages.${system};
@@ -322,7 +322,7 @@
           line,
           nodeExtra ? {},
         }:
-          pkgs.nixosTest {
+          pkgs.testers.nixosTest {
             inherit name;
             nodes.machine = {
               imports = [edgenodeNode hcOnPath roomToWork nodeExtra];
@@ -360,7 +360,7 @@
           name,
           nodeExtra ? {},
         }:
-          pkgs.nixosTest {
+          pkgs.testers.nixosTest {
             inherit name;
             nodes.machine = {
               imports = [edgenodeNode roomToWork nodeExtra];
@@ -405,7 +405,7 @@
           happ,
           nodeExtra ? {},
         }:
-          pkgs.nixosTest {
+          pkgs.testers.nixosTest {
             inherit name;
             nodes.machine = {
               imports = [edgenodeNode hcOnPath roomToWork nodeExtra];
@@ -481,7 +481,7 @@
           # own stats, and the monitor scraping and drawing them. That is the
           # whole observability path in a single VM, so a break anywhere in it
           # fails here rather than at the workshop.
-          vmTestGrafana = pkgs.nixosTest {
+          vmTestGrafana = pkgs.testers.nixosTest {
             name = "holochain-grafana-smoke";
             nodes.machine = {
               imports = [
@@ -508,6 +508,17 @@
               machine.wait_for_open_port(3000)
               machine.wait_for_open_port(9090)
               machine.succeed("curl -sf http://localhost:3000/api/health")
+
+              # NixOS 26.05 dropped Grafana's default secret key; the module
+              # generates one at first boot, outside the store, and keeps it.
+              key_stat = machine.succeed("stat -c '%a %U' /var/lib/grafana/secret_key").strip()
+              assert key_stat == "400 grafana", key_stat
+              key_before = machine.succeed("sha256sum /var/lib/grafana/secret_key")
+              machine.succeed("systemctl restart grafana-secret-key.service grafana.service")
+              machine.wait_for_open_port(3000)
+              assert machine.succeed("sha256sum /var/lib/grafana/secret_key") == key_before, (
+                  "the secret key was regenerated on restart"
+              )
 
               # ---- criterion 4: the conductor's own series ----
               machine.wait_for_unit("holochain-conductor.service")
@@ -583,7 +594,7 @@
           # The test sandbox has no network, so this asserts what the module
           # generates rather than a running container; the image is pulled and
           # run for real on the Builder's machine (see the PR body).
-          vmTestWindtunnel = pkgs.nixosTest {
+          vmTestWindtunnel = pkgs.testers.nixosTest {
             name = "holochain-windtunnel-unit";
             nodes.machine = {
               imports = [self.nixosModules.holochain-windtunnel];
@@ -644,7 +655,7 @@
           # not the absence of a route: `get_all_dinos` exists, takes the same
           # (empty) payload and lives in the same zome as the allowed
           # `get_all_dinos_local`.
-          vmTestGateway = pkgs.nixosTest {
+          vmTestGateway = pkgs.testers.nixosTest {
             name = "holochain-http-gateway";
             nodes.machine = {
               imports = [

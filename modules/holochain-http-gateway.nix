@@ -37,9 +37,9 @@
     then "0.6"
     else "0.7";
 
-  # Built against the nixpkgs holonix already pins, because the crate's
-  # toolchain file asks for a rustc newer than nixos-25.05 carries.
-  gatewayPkgs = inputs.holonix.inputs.nixpkgs.legacyPackages.${pkgs.system};
+  # Built against the nixpkgs holonix already pins, so the gateway shares the
+  # conductor's toolchain (and nixos-25.05's rustc was too old for it).
+  gatewayPkgs = inputs.holonix.inputs.nixpkgs.legacyPackages.${pkgs.stdenv.hostPlatform.system};
 
   defaultPackage = gatewayPkgs.callPackage ../packages/holochain-http-gateway.nix {
     line = gatewayLine;
