@@ -156,6 +156,63 @@ curl -s localhost:9090/api/v1/targets | jq '.data.activeTargets[] | {scrapeUrl, 
 curl -s -u "admin:$GRAFANA_ADMIN_PASSWORD" 'localhost:3000/api/search?query=Holochain'
 ```
 
+## Running your own bootstrap and relay
+
+By default every edgenode uses the Holochain Foundation's development bootstrap server and the iroh canary relay, which need the internet and which the Foundation says are not for production hApps. The `holochain-bootstrap` module runs the same service on one of your own machines: `kitsune2-bootstrap-srv`, a single binary that answers peer discovery at `/bootstrap/{space}` and relays iroh traffic at `/relay`, on one TCP port. A fleet on a LAN with no uplink can then still find itself.
+
+On the machine that serves it (a Holoport, say), in its NixOS configuration:
+
+```nix
+imports = [nixos-holochain.nixosModules.holochain-bootstrap];
+services.holochain-bootstrap = { enable = true; openFirewall = true; };
+```
+
+That listens on TCP 443 over plain HTTP and on UDP 7842 for QUIC address discovery. The server keeps nothing on disk: its agent list lives in the unit's private `/tmp` and empties on restart, and conductors re-publish on their own within minutes. Run one server per network; two instances do not share state.
+
+On every edgenode, the three options that point it there (`bootstrap-host` stands for that machine's name or LAN address):
+
+```nix
+services.holochain-edgenode = { bootstrapUrl = "http://bootstrap-host:443"; relayUrl = "http://bootstrap-host:443/relay"; relayAllowPlainText = true; };
+```
+
+`relayAllowPlainText` is required for an `http://` relay: the conductor refuses one without it, and the module fails evaluation rather than ship a conductor that will not start. All nodes that should see each other must use the same bootstrap server.
+
+Check it from any node:
+
+```bash
+curl -sf http://bootstrap-host:443/health
+```
+
+```bash
+journalctl -u holochain-bootstrap -f
+```
+
+To see the other agents a conductor learnt about, on a 0.6 node (`hc client call --port 4444` on 0.7):
+
+```bash
+hc sandbox call --running 4444 list-agents
+```
+
+Each entry's `url` should start with `http://bootstrap-host.:443/relay/`; iroh writes the host with a trailing dot.
+
+**Two limits, stated plainly.**
+
+- **No TLS means no Moss laptops.** Without `tlsCertFile` and `tlsKeyFile` the server is plain HTTP. Fleet conductors accept that through `relayAllowPlainText`; a packaged Moss 0.15.8 desktop does not, since Moss turns that flag on only in development builds. A laptop joining through this server needs it on HTTPS with a certificate the laptop trusts, which on a LAN without a public domain means your own CA installed on every laptop. The module takes the files (`tlsCertFile`, `tlsKeyFile`, read through systemd credentials, so they stay out of the Nix store) but this repository has not tested a TLS setup.
+
+- **The relay is open.** Anyone who can reach the port can relay traffic through it; the server has no authentication by default. Keep it on the LAN, or behind a firewall, unless that is what you want.
+
+Keep the server on the same Holochain line as the conductors. The module defaults to the 0.6 build (kitsune2 0.4.1, `nixos-holochain.packages.<system>.bootstrap-srv-0_6`); a 0.7 fleet sets `package = nixos-holochain.packages.<system>.bootstrap-srv` (kitsune2 0.5.0).
+
+Cost, measured in the `vmTestBootstrap` VM (one vCPU, 1 GiB, kitsune2 0.4.1 with the module's defaults, so four worker threads and nine threads in all) on 2026-09-27. RSS from `ps`, CPU from the unit's `CPUUsageNSec`:
+
+| Phase | RSS | cgroup memory peak | CPU |
+|---|---|---|---|
+| Idle, no conductor, 30 s | 5.9 MiB | 7.2 MiB | 0.005 % of one core (2 ms) |
+| Two conductors booting until each holds the other's agent info, 36 s | 7.7 MiB | 9.2 MiB | 0.08 % (29 ms) |
+| Two conductors connected, 60 s | 7.7 MiB | 9.2 MiB | 0.02 % (10 ms) |
+
+Next to a conductor's gigabyte this is noise, so one Holoport can carry the server beside its own edgenode. Two peers say nothing about a room of fifty; that number is for the lab.
+
 ## Rolling back
 
 ```bash

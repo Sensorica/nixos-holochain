@@ -22,6 +22,7 @@ flake.nix
 │   ├── dashboards/                ← provisioned Grafana dashboards
 │   ├── holochain-windtunnel.nix   ← optional: donate the machine to the Foundation's Nomad cluster
 │   ├── holochain-http-gateway.nix ← optional: HTTP gateway in front of the conductor
+│   ├── holochain-bootstrap.nix    ← optional: Kitsune2 bootstrap and relay server
 │   └── default.nix                ← aggregator
 ├── packages/
 │   └── holochain-http-gateway.nix ← the hc-http-gw build, one release per Holochain line
@@ -45,6 +46,7 @@ Modules are independent. Import only what you need.
 | `prometheus.service` | simple | `holochain-grafana.enable` |
 | `holochain-http-gateway.service` | simple, `DynamicUser`, restarts until the conductor answers | `holochain-http-gateway.enable` |
 | `podman-wind-tunnel-runner.service` | simple, from `virtualisation.oci-containers` | `holochain-windtunnel.enable` |
+| `holochain-bootstrap.service` | simple, `DynamicUser`, no state directory | `holochain-bootstrap.enable` |
 
 ## Service dependency graph
 
@@ -391,4 +393,4 @@ See GitHub issues for outstanding implementation decisions:
 - Secrets management for network seeds (sops-nix integration?)
 - DHT data persistence across config changes
 - Conductor version upgrade paths without state loss
-- A production bootstrap and relay pair for either line, once the Foundation documents one
+- A production bootstrap and relay pair for either line, once the Foundation documents one. The `holochain-bootstrap` module runs your own; it is tested over plain HTTP on a LAN, not yet with TLS.
