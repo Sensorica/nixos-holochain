@@ -1,0 +1,56 @@
+{
+  "uid": "rewrite-fixture",
+  "title": "Provisioning rewrite fixture",
+  "panels": [
+    {
+      "id": 1,
+      "type": "table",
+      "title": "Which watched services are down?",
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "name" },
+            "properties": [
+              { "id": "displayName", "value": "Service" },
+              { "id": "mappings", "value": [{ "type": "value", "options": { "stale": { "text": "stale" } } }] }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "state" },
+            "properties": [
+              { "id": "mappings", "value": [{ "type": "value", "options": { "failed": { "text": "Failed", "color": "red" } } }] }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "type": "row",
+      "title": "Background jobs",
+      "collapsed": true,
+      "panels": [
+        {
+          "id": 3,
+          "type": "table",
+          "title": "Background jobs",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": [{ "matcher": { "id": "byName", "options": "name" }, "properties": [] }]
+          }
+        }
+      ]
+    }
+  ],
+  "templating": {
+    "list": [
+      { "name": "units", "type": "textbox", "query": "sshd.service" },
+      { "name": "room_app", "type": "constant", "query": "" },
+      { "name": "room_part", "type": "constant", "query": "" },
+      { "name": "room_label", "type": "constant", "query": "the room's app" },
+      { "name": "room_app_note", "type": "constant", "query": "untouched" },
+      { "name": "node", "type": "query", "query": "label_values(up, node)" }
+    ]
+  }
+}

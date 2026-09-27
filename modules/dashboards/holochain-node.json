@@ -1,0 +1,2190 @@
+{
+  "uid": "holochain-node",
+  "title": "Is this node working, app by app?",
+  "description": "One machine: is Holochain running, is each app part connected, does it hold what its peers hold, when did it last hear from them, and is the machine healthy.",
+  "tags": [
+    "holochain",
+    "nixos-holochain"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "annotations": {
+    "list": []
+  },
+  "links": [
+    {
+      "type": "link",
+      "title": "Back to fleet",
+      "url": "/d/holochain-fleet/holochain-fleet",
+      "asDropdown": false,
+      "includeVars": false,
+      "keepTime": true,
+      "targetBlank": false,
+      "icon": "dashboard",
+      "tags": [],
+      "tooltip": ""
+    },
+    {
+      "type": "dashboards",
+      "tags": [
+        "holochain"
+      ],
+      "asDropdown": true,
+      "title": "Holochain dashboards",
+      "includeVars": false,
+      "keepTime": true,
+      "targetBlank": false,
+      "icon": "external link",
+      "tooltip": "",
+      "url": ""
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "node",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "holochain-prometheus"
+        },
+        "definition": "label_values(up{job=\"holochain-nodes\"}, node)",
+        "query": {
+          "query": "label_values(up{job=\"holochain-nodes\"}, node)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "multi": false,
+        "includeAll": false,
+        "hide": 0,
+        "current": {},
+        "options": [],
+        "label": "Node"
+      },
+      {
+        "name": "conductor",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "holochain-prometheus"
+        },
+        "definition": "label_values(holochain_conductor_up{node=\"$node\"}, conductor)",
+        "query": {
+          "query": "label_values(holochain_conductor_up{node=\"$node\"}, conductor)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "hide": 0,
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": [],
+        "allValue": ".*",
+        "label": "Conductor"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Conductors",
+      "description": "Whether each Holochain conductor on this machine answers, with fresh readings. A machine can run more than one; the homelab runs two, Workshop and Moss.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 7,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "holochain:conductor_state{node=\"$node\", conductor=~\"$conductor\"}",
+          "legendFormat": "{{conductor}}",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#8e8e8e",
+                "value": null
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "Not answering",
+                  "color": "red",
+                  "index": 0
+                },
+                "2": {
+                  "text": "No fresh readings",
+                  "color": "orange",
+                  "index": 1
+                },
+                "3": {
+                  "text": "Running",
+                  "color": "green",
+                  "index": 2
+                }
+              }
+            }
+          ],
+          "noValue": "No Holochain reported"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "value_and_name",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Readings",
+      "description": "How old the oldest Holochain reading on this page is. Each conductor's exporter writes every 30 s and Prometheus collects every 15 s, so up to about 45 s is normal. If this is not green, nothing below is current.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 7,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "max(time() - holochain_conductor_metrics_scrape_timestamp_seconds{node=\"$node\", conductor=~\"$conductor\"})",
+          "legendFormat": "Oldest reading",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 90,
+                "fromOption": "staleAfterSeconds"
+              },
+              {
+                "color": "red",
+                "value": 300
+              }
+            ]
+          },
+          "noValue": "No readings"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "value",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Apps",
+      "description": "How many installed apps are running, and how many are stopped or missing. Missing means Nix manages the app and Holochain did not list it.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 11,
+        "y": 0,
+        "w": 5,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "count(holochain_app_info{node=\"$node\", conductor=~\"$conductor\", status=\"enabled\"}) or vector(0)",
+          "legendFormat": "running",
+          "instant": true,
+          "range": false
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "count(holochain_app_info{node=\"$node\", conductor=~\"$conductor\", status!=\"enabled\"}) or vector(0)",
+          "legendFormat": "stopped or missing",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "value_and_name",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Connected to computers",
+      "description": "How many network connections this machine's conductors hold to other computers, all apps together. For the whole conductor, not per app; the table below is per app.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "sum(holochain_conductor_peer_connections{node=\"$node\", conductor=~\"$conductor\"})",
+          "legendFormat": "Connections",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "value",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Parts with nobody else",
+      "description": "How many of this machine's app parts have no one to talk to: lost contact, or no one else yet.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "count(holochain:dht_state{node=\"$node\", conductor=~\"$conductor\"} == 2 or holochain:dht_state{node=\"$node\", conductor=~\"$conductor\"} == 3) or vector(0)",
+          "legendFormat": "Parts with nobody else",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "decimals": 0,
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "value",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "Is each app part connected, complete and recent?",
+      "description": "One row per part of each app on this machine: its state, how many other computers it sees, what share of its best peer's data it holds, when it last heard from anyone, how many items it is still fetching, and how many exchanges timed out in the last 15 minutes. A part nobody else runs yet reads grey in every column, not red. Click an app to see its network across every machine.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "holochain:dht_state:named{node=\"$node\", conductor=~\"$conductor\"} + 0",
+          "format": "table",
+          "instant": true,
+          "range": false
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "holochain:dht_peers:named{node=\"$node\", conductor=~\"$conductor\"} + 0",
+          "format": "table",
+          "instant": true,
+          "range": false
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "holochain:dht_share:named{node=\"$node\", conductor=~\"$conductor\"} + 0",
+          "format": "table",
+          "instant": true,
+          "range": false
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "(holochain:dht_heard:named{node=\"$node\", conductor=~\"$conductor\"} unless on (instance, conductor, app_id, role, dna) (holochain:dht_state == 3)) + 0",
+          "format": "table",
+          "instant": true,
+          "range": false
+        },
+        {
+          "refId": "E",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "holochain_dht_pending_fetches{node=\"$node\", conductor=~\"$conductor\"} * on (instance, conductor, app_id, role, dna) group_left (app_name, app_kind, part_name, network_label) holochain:dht_names",
+          "format": "table",
+          "instant": true,
+          "range": false
+        },
+        {
+          "refId": "F",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "clamp_min(holochain_dht_peer_timeouts_total{node=\"$node\", conductor=~\"$conductor\"} - (holochain_dht_peer_timeouts_total{node=\"$node\", conductor=~\"$conductor\"} offset 15m or holochain_dht_peer_timeouts_total{node=\"$node\", conductor=~\"$conductor\"}), 0) * on (instance, conductor, app_id, role, dna) group_left (app_name, app_kind, part_name, network_label) holochain:dht_names",
+          "format": "table",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "app_name",
+                "part_name",
+                "dna",
+                "Value #A",
+                "Value #B",
+                "Value #C",
+                "Value #D",
+                "Value #E",
+                "Value #F"
+              ]
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "indexByName": {
+              "app_name": 0,
+              "part_name": 1,
+              "dna": 2,
+              "Value #A": 3,
+              "Value #B": 4,
+              "Value #C": 5,
+              "Value #D": 6,
+              "Value #E": 7,
+              "Value #F": 8
+            },
+            "renameByName": {
+              "app_name": "App",
+              "part_name": "Part",
+              "Value #A": "State",
+              "Value #B": "Others",
+              "Value #C": "Holds",
+              "Value #D": "Last heard",
+              "Value #E": "Waiting",
+              "Value #F": "Timeouts, 15 min"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "dna"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "App"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "This app on every machine",
+                    "url": "/d/holochain-network/holochain-network?var-network=${__data.fields.dna}&${__url_time_range}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "State"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "Not running",
+                        "color": "red",
+                        "index": 0
+                      },
+                      "1": {
+                        "text": "No fresh readings",
+                        "color": "orange",
+                        "index": 1
+                      },
+                      "2": {
+                        "text": "Lost contact",
+                        "color": "red",
+                        "index": 2
+                      },
+                      "3": {
+                        "text": "No one else yet",
+                        "color": "#8e8e8e",
+                        "index": 3
+                      },
+                      "4": {
+                        "text": "Catching up",
+                        "color": "#EAB839",
+                        "index": 4
+                      },
+                      "5": {
+                        "text": "In step",
+                        "color": "green",
+                        "index": 5
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Others"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "#8e8e8e",
+                      "value": null
+                    },
+                    {
+                      "color": "green",
+                      "value": 1
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Holds"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "noValue",
+                "value": "nobody to compare"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "null",
+                      "result": {
+                        "text": "nobody to compare",
+                        "color": "#8e8e8e",
+                        "index": 0
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "#EAB839",
+                      "value": 0.85
+                    },
+                    {
+                      "color": "green",
+                      "value": 0.95,
+                      "fromOption": "inStepShare"
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Last heard"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 120
+                    },
+                    {
+                      "color": "red",
+                      "value": 600,
+                      "fromOption": "silentAfterSeconds"
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "range",
+                    "options": {
+                      "from": 100000000.0,
+                      "to": null,
+                      "result": {
+                        "text": "never",
+                        "color": "red",
+                        "index": 0
+                      }
+                    }
+                  },
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "null",
+                      "result": {
+                        "text": "nobody else yet",
+                        "color": "#8e8e8e",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Waiting"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "text",
+                      "value": null
+                    },
+                    {
+                      "color": "#EAB839",
+                      "value": 1
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Timeouts, 15 min"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "description",
+                "value": "Exchanges with other computers on this part that got no answer in the last 15 minutes. It can read low for a while after Holochain forgets a computer, since that computer's count goes with it."
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "text",
+                      "value": null
+                    },
+                    {
+                      "color": "#EAB839",
+                      "value": 1
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "State",
+            "desc": false
+          }
+        ]
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Connected to others, per part",
+      "description": "When each app part gained or lost other computers. Below the dashed line at 1 it has nobody.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "holochain:dht_peers:named{node=\"$node\", conductor=~\"$conductor\"}",
+          "legendFormat": "{{network_label}}",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": false,
+            "lineInterpolation": "stepAfter",
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0,
+          "decimals": 0,
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Share held, per part",
+      "description": "What share of its best peer's data each connected part holds, averaged over 10 minutes. Parts with nobody to compare with have no line.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 14,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "holochain:dht_share:named{node=\"$node\", conductor=~\"$conductor\"}",
+          "legendFormat": "{{network_label}}",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": false,
+            "thresholdsStyle": {
+              "mode": "area"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 0.85
+              },
+              {
+                "color": "green",
+                "value": 0.95,
+                "fromOption": "inStepShare"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Items still on their way",
+      "description": "How many items the best peer has that this machine does not have yet. A write elsewhere shows as a rise that falls back.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 22,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "holochain:dht_missing:named{node=\"$node\", conductor=~\"$conductor\"}",
+          "legendFormat": "{{network_label}}",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": false
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0,
+          "decimals": 0,
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Last heard from others, per part",
+      "description": "Seconds since each part last exchanged data with anyone. A part that never has is a gap, not a line. The dashed line is at 600 s, after which a part that knows others reads Lost contact.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 22,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "holochain:dht_heard:named{node=\"$node\", conductor=~\"$conductor\"} < 1e8",
+          "legendFormat": "{{network_label}}",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": false,
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "s",
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 600,
+                "fromOption": "silentAfterSeconds"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 11,
+      "type": "table",
+      "title": "What needs a human on this machine?",
+      "description": "What is wrong on this machine, in words.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 30,
+        "w": 24,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "holochain:node_problem{node=\"$node\"}",
+          "format": "table",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "problem"
+              ]
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "indexByName": {
+              "problem": 0
+            },
+            "renameByName": {
+              "problem": "Problem"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "color-text"
+            }
+          },
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "red"
+          },
+          "noValue": "Nothing needs attention"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "id": 25,
+      "type": "table",
+      "title": "Is each service on this machine running?",
+      "description": "Every service this machine runs for Holochain and beside it, one row each, by name, worst first. The machine lists them itself, from the nixos-holochain modules enabled on it (services.holochain-services.units), and the monitor's services.holochain-grafana.overviewUnits may add more. A Holochain conductor another program runs here, such as a Moss node, has a row of its own, \"Holochain conductor (Moss)\". Failed, Stopped and Not answering are down, and turn this machine's tile on the room screen to A service is down; Failed includes a service that keeps failing while systemd restarts it. Not answering means systemd says the service is running, but it does not answer its health check or, for a conductor, its admin interface; No fresh readings means nobody has checked it lately.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 35,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "holochain:service_state{node=\"$node\"}",
+          "format": "table",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "service",
+                "Value"
+              ]
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "indexByName": {
+              "service": 0,
+              "Value": 1
+            },
+            "renameByName": {
+              "service": "Service",
+              "Value": "State"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          },
+          "noValue": "This machine lists no services: it needs node_exporter's textfile collector and services.holochain-services.textfileDirectory"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "State"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "Failed",
+                        "color": "red",
+                        "index": 0
+                      },
+                      "1": {
+                        "text": "Stopped",
+                        "color": "red",
+                        "index": 1
+                      },
+                      "2": {
+                        "text": "Not answering",
+                        "color": "red",
+                        "index": 2
+                      },
+                      "3": {
+                        "text": "No fresh readings",
+                        "color": "orange",
+                        "index": 3
+                      },
+                      "4": {
+                        "text": "Starting",
+                        "color": "#EAB839",
+                        "index": 4
+                      },
+                      "5": {
+                        "text": "Stopping",
+                        "color": "#EAB839",
+                        "index": 5
+                      },
+                      "6": {
+                        "text": "Running",
+                        "color": "green",
+                        "index": 6
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "State",
+            "desc": false
+          }
+        ]
+      }
+    },
+    {
+      "id": 23,
+      "type": "row",
+      "title": "Network traffic",
+      "collapsed": true,
+      "gridPos": {
+        "x": 0,
+        "y": 43,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [
+        {
+          "id": 12,
+          "type": "timeseries",
+          "title": "Bytes in and out",
+          "description": "Bytes per second each conductor on this machine receives and sends, all apps together.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 44,
+            "w": 16,
+            "h": 7
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "holochain-prometheus"
+              },
+              "expr": "rate(holochain_conductor_network_received_bytes_total{node=\"$node\", conductor=~\"$conductor\"}[2m])",
+              "legendFormat": "{{conductor}} received",
+              "instant": false,
+              "range": true
+            },
+            {
+              "refId": "B",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "holochain-prometheus"
+              },
+              "expr": "rate(holochain_conductor_network_sent_bytes_total{node=\"$node\", conductor=~\"$conductor\"}[2m])",
+              "legendFormat": "{{conductor}} sent",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": false
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "unit": "Bps",
+              "min": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 13,
+          "type": "stat",
+          "title": "Refused messages",
+          "description": "Messages each conductor would not accept in the last hour, usually from a peer on another version or network; the conductor log says which. Not an attack by itself.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "gridPos": {
+            "x": 16,
+            "y": 44,
+            "w": 8,
+            "h": 7
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "holochain-prometheus"
+              },
+              "expr": "sum by (conductor) (increase(holochain_conductor_blocked_messages_total{node=\"$node\", conductor=~\"$conductor\"}[1h]))",
+              "legendFormat": "{{conductor}}",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "decimals": 0,
+              "color": {
+                "mode": "thresholds"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "text",
+                    "value": null
+                  },
+                  {
+                    "color": "#EAB839",
+                    "value": 1
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "textMode": "value_and_name",
+            "wideLayout": true,
+            "showPercentChange": false
+          }
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "type": "row",
+      "title": "Machine",
+      "collapsed": true,
+      "gridPos": {
+        "x": 0,
+        "y": 44,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [
+        {
+          "id": 14,
+          "type": "timeseries",
+          "title": "CPU busy",
+          "description": "Share of processor time not spent idle, over 2 minutes.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 52,
+            "w": 8,
+            "h": 7
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "holochain-prometheus"
+              },
+              "expr": "1 - avg(rate(node_cpu_seconds_total{node=\"$node\", mode=\"idle\"}[2m]))",
+              "legendFormat": "busy",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": false
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "unit": "percentunit",
+              "min": 0,
+              "max": 1
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 15,
+          "type": "timeseries",
+          "title": "Memory used",
+          "description": "Share of memory that is not available.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "gridPos": {
+            "x": 8,
+            "y": 52,
+            "w": 8,
+            "h": 7
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "holochain-prometheus"
+              },
+              "expr": "max(1 - node_memory_MemAvailable_bytes{node=\"$node\"} / node_memory_MemTotal_bytes{node=\"$node\"})",
+              "legendFormat": "used",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": false
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "unit": "percentunit",
+              "min": 0,
+              "max": 1
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 16,
+          "type": "timeseries",
+          "title": "Load",
+          "description": "Five-minute load average divided by the number of processors. Above the dashed line at 1, work is queueing for the processor.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "gridPos": {
+            "x": 16,
+            "y": 52,
+            "w": 8,
+            "h": 7
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "holochain-prometheus"
+              },
+              "expr": "max(node_load5{node=\"$node\"}) / count(node_cpu_seconds_total{node=\"$node\", mode=\"idle\"})",
+              "legendFormat": "load per processor",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": false,
+                "thresholdsStyle": {
+                  "mode": "dashed"
+                }
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "unit": "none",
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 1
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 17,
+          "type": "bargauge",
+          "title": "Disk space",
+          "description": "Share of each disk that is used. Memory-backed and image filesystems are left out, and so is /nix/store, which NixOS bind-mounts from the filesystem that holds /nix.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 59,
+            "w": 8,
+            "h": 7
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "holochain-prometheus"
+              },
+              "expr": "max by (mountpoint) (1 - node_filesystem_avail_bytes{node=\"$node\", fstype!~\"tmpfs|ramfs|overlay|squashfs|nsfs\", mountpoint!=\"/nix/store\"} / node_filesystem_size_bytes{node=\"$node\", fstype!~\"tmpfs|ramfs|overlay|squashfs|nsfs\", mountpoint!=\"/nix/store\"})",
+              "legendFormat": "{{mountpoint}}",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "min": 0,
+              "max": 1,
+              "color": {
+                "mode": "thresholds"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 0.8
+                  },
+                  {
+                    "color": "red",
+                    "value": 0.9
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "basic",
+            "valueMode": "color",
+            "namePlacement": "left",
+            "showUnfilled": true,
+            "sizing": "auto",
+            "minVizHeight": 16,
+            "minVizWidth": 8,
+            "maxVizHeight": 300,
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            }
+          }
+        },
+        {
+          "id": 18,
+          "type": "timeseries",
+          "title": "Disk activity",
+          "description": "Bytes per second read from and written to this machine's disks, optical drives left out.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "gridPos": {
+            "x": 8,
+            "y": 59,
+            "w": 8,
+            "h": 7
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "holochain-prometheus"
+              },
+              "expr": "sum(rate(node_disk_read_bytes_total{node=\"$node\", device!~\"sr[0-9]+\"}[2m]))",
+              "legendFormat": "read",
+              "instant": false,
+              "range": true
+            },
+            {
+              "refId": "B",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "holochain-prometheus"
+              },
+              "expr": "sum(rate(node_disk_written_bytes_total{node=\"$node\", device!~\"sr[0-9]+\"}[2m]))",
+              "legendFormat": "written",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": false
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "unit": "Bps",
+              "min": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 19,
+          "type": "timeseries",
+          "title": "Temperatures",
+          "description": "Every temperature sensor node_exporter finds. A virtual machine usually has none, and this panel then says No data. The dashed line is at 85 °C.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "gridPos": {
+            "x": 16,
+            "y": 59,
+            "w": 8,
+            "h": 7
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "holochain-prometheus"
+              },
+              "expr": "node_hwmon_temp_celsius{node=\"$node\"}",
+              "legendFormat": "{{chip}} {{sensor}}",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 0,
+                "showPoints": "never",
+                "spanNulls": false,
+                "thresholdsStyle": {
+                  "mode": "dashed"
+                }
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "unit": "celsius",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 85
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 20,
+          "type": "timeseries",
+          "title": "Host network",
+          "description": "Bytes per second in and out of every interface except loopback, for the whole machine.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 66,
+            "w": 12,
+            "h": 7
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "holochain-prometheus"
+              },
+              "expr": "sum(rate(node_network_receive_bytes_total{node=\"$node\", device!=\"lo\"}[2m]))",
+              "legendFormat": "in",
+              "instant": false,
+              "range": true
+            },
+            {
+              "refId": "B",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "holochain-prometheus"
+              },
+              "expr": "sum(rate(node_network_transmit_bytes_total{node=\"$node\", device!=\"lo\"}[2m]))",
+              "legendFormat": "out",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": false
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "unit": "Bps",
+              "min": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 21,
+          "type": "timeseries",
+          "title": "Time spent waiting",
+          "description": "Share of time some task was stalled waiting for the processor, memory or disk (the kernel's pressure stall information). Sustained waiting on memory or disk is the early sign of a machine too small for what it runs.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 66,
+            "w": 12,
+            "h": 7
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "holochain-prometheus"
+              },
+              "expr": "rate(node_pressure_cpu_waiting_seconds_total{node=\"$node\"}[2m])",
+              "legendFormat": "processor",
+              "instant": false,
+              "range": true
+            },
+            {
+              "refId": "B",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "holochain-prometheus"
+              },
+              "expr": "rate(node_pressure_memory_waiting_seconds_total{node=\"$node\"}[2m])",
+              "legendFormat": "memory",
+              "instant": false,
+              "range": true
+            },
+            {
+              "refId": "C",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "holochain-prometheus"
+              },
+              "expr": "rate(node_pressure_io_waiting_seconds_total{node=\"$node\"}[2m])",
+              "legendFormat": "disk",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": false
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "unit": "percentunit",
+              "min": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
