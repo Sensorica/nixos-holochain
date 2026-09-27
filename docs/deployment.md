@@ -119,11 +119,11 @@ Symptom: `nixos-install` stops on `unable to download 'https://cache.nixos.org/â
 
 ```bash
 getent ahostsv4 cache.nixos.org
-sudo nmcli con mod "Wired connection 1" ipv4.dns "1.1.1.1 9.9.9.9" ipv4.ignore-auto-dns yes && sudo nmcli con up "Wired connection 1"
+c="$(nmcli -g GENERAL.CONNECTION device show <iface>)"; sudo nmcli con mod "$c" ipv4.dns "1.1.1.1 9.9.9.9" ipv4.ignore-auto-dns yes && sudo nmcli con up "$c"
 nix --extra-experimental-features nix-command store info --store https://cache.nixos.org
 ```
 
-The last line prints `Store URL: https://cache.nixos.org` once the cache is reachable. The installed system asks the same router for DNS, so set `networking.nameservers` in its configuration (or fix the router) before its first `nixos-rebuild`.
+`<iface>` is the Ethernet interface from `ip -br -4 a` (`enp0s31f6` on the homelab). The connection name is looked up rather than typed because it follows the installer's language: "Wired connection 1" in English, "Connexion filaire 1" in French. On an installed system, a user in the `networkmanager` group can run the two `nmcli` commands without `sudo`. The last line prints `Store URL: https://cache.nixos.org` once the cache is reachable. The installed system asks the same router for DNS, so set `networking.nameservers` in its configuration (or fix the router) before its first `nixos-rebuild`.
 
 ### Retrying
 
