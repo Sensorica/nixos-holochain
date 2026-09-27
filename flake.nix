@@ -392,11 +392,16 @@
               machine.wait_for_unit("holochain-conductor-metrics.timer")
 
               machine.wait_until_succeeds(
-                  "curl -s localhost:9100/metrics | grep '^holochain_conductor_up 1'",
+                  "curl -s localhost:9100/metrics | grep -F 'holochain_conductor_up{conductor=\"Holochain\"} 1'",
                   timeout=180,
               )
               series = machine.succeed("curl -s localhost:9100/metrics | grep '^holochain_'")
               machine.log("holochain series on /metrics:\n" + series)
+
+              # Every sample names its conductor, "Holochain" while
+              # conductorMetrics.name is left at its default.
+              for line in series.splitlines():
+                  assert 'conductor="Holochain"' in line, f"no conductor label: {line}"
 
               for name in [
                   "holochain_conductor_up",
@@ -414,7 +419,7 @@
 
               # list-apps answered on this line too, with no app installed; an
               # unanswered call would leave the line out rather than write 0.
-              assert 'holochain_conductor_apps{status="enabled"} 0' in series, series
+              assert 'holochain_conductor_apps{conductor="Holochain",status="enabled"} 0' in series, series
             '';
           };
 
@@ -498,26 +503,51 @@
               machine.wait_for_unit("prometheus-node-exporter.service")
               machine.wait_until_succeeds(
                   "curl -s localhost:9100/metrics"
-                  " | grep -F 'holochain_dht_peers{app=\"${appId}\",'",
+                  " | grep '^holochain_dht_peers{' | grep -F 'app_id=\"${appId}\"'",
                   timeout=180,
               )
               series = machine.succeed("curl -s localhost:9100/metrics | grep '^holochain_'")
               machine.log("holochain series on /metrics:\n" + series)
 
               # The conductor series are still there next to them.
-              assert "holochain_conductor_up 1" in series, series
-              assert 'holochain_conductor_apps{status="enabled"} 1' in series, series
+              assert 'holochain_conductor_up{conductor="Holochain"} 1' in series, series
+              assert 'holochain_conductor_apps{conductor="Holochain",status="enabled"} 1' in series, series
 
               # node_exporter re-sorts labels, so a series is keyed by its
               # name and its label set rather than by the line's spelling.
               values = {}
+              rows = []
               for line in series.splitlines():
                   m = re.fullmatch(r'(\w+)(?:\{(.*)\})? (\S+)', line)
                   assert m, f"unparsable line: {line}"
                   labels = frozenset(re.findall(r'(\w+)="([^"]*)"', m.group(2) or ""))
                   values[m.group(1) + str(sorted(labels))] = m.group(3)
+                  rows.append((m.group(1), dict(labels), m.group(3)))
+
+              # The app is named once, enabled, by a name that is not its id's hash.
+              app_info = [
+                  r for r in rows
+                  if r[0] == "holochain_app_info" and r[1].get("app_id") == "${appId}"
+              ]
+              assert len(app_info) == 1, f"holochain_app_info for ${appId}: {app_info}"
+              assert app_info[0][1]["status"] == "enabled", app_info
+              assert app_info[0][1]["conductor"] == "Holochain", app_info
+              assert app_info[0][1]["app_name"] != "", app_info
+
               for role, dna in cells:
-                  labels = str(sorted({("app", "${appId}"), ("role", role), ("dna", dna)}))
+                  key = {("conductor", "Holochain"), ("app_id", "${appId}"), ("role", role), ("dna", dna)}
+                  labels = str(sorted(key))
+                  # One name row per DHT, keyed like its data series, whose
+                  # names carry no hash and no Moss escape.
+                  info = [
+                      r for r in rows
+                      if r[0] == "holochain_dht_info" and key <= set(r[1].items())
+                  ]
+                  assert len(info) == 1, f"{len(info)} holochain_dht_info rows for {key}:\n{series}"
+                  for label in ["app_name", "app_kind", "part_name", "network_label"]:
+                      value = info[0][1][label]
+                      assert "uhC" not in value and "$" not in value, f"{label}={value!r}"
+                  assert info[0][1]["network_label"] != "", info
                   for name in [
                       "holochain_dht_peers",
                       "holochain_dht_local_ops",
@@ -856,6 +886,12 @@
               touch $out
             '';
 
+          # The whole exporter, run for an edgenode-shaped and a Moss-shaped
+          # conductor on captured replies (tests/metrics.nix): the two files
+          # declare every shared family with the same bytes and a real
+          # node_exporter keeps both, and no name a dashboard shows is a hash.
+          inherit (metricsChecks) metricsHelpAgreement metricsNameShape;
+
           # One node wearing both roles: an edgenode exporting its conductor's
           # own stats, and the monitor scraping and drawing them. That is the
           # whole observability path in a single VM, so a break anywhere in it
@@ -943,7 +979,7 @@
                   "curl -s localhost:9100/metrics | grep '^holochain_'"
               )
               machine.log("holochain series on /metrics:\n" + holochain_metrics)
-              assert "holochain_conductor_up 1" in holochain_metrics, (
+              assert 'holochain_conductor_up{conductor="Holochain"} 1' in holochain_metrics, (
                   "the conductor answered dump-network-stats nowhere:\n" + holochain_metrics
               )
 
@@ -1178,7 +1214,7 @@
               # never gossiped.
               def by_dht(title, ref, name):
                   return {
-                      (r["metric"]["app"], r["metric"]["role"]): r["value"][1]
+                      (r["metric"]["app_id"], r["metric"]["role"]): r["value"][1]
                       for r in prom_query(prom_file(target_expr(title, ref), name))["data"]["result"]
                   }
 
