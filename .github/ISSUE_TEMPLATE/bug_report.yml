@@ -21,7 +21,7 @@ body:
     id: nixos-version
     attributes:
       label: NixOS version
-      description: The output of `nixos-version` on the affected machine.
+      description: The output of `nixos-version` on the affected machine. Not on NixOS (for example `nix flake check` or `nix flake init -t` on another system)? Write "not NixOS" and paste `nix --version` instead.
     validations:
       required: true
 
@@ -50,10 +50,10 @@ body:
     id: options
     attributes:
       label: Module options used
-      description: The `services.holochain-*` options you set, as they appear in your configuration. Remove passwords, passphrases and keys before pasting.
+      description: The `services.holochain-*` options you set, as they appear in your configuration. Remove passwords, passphrases and keys before pasting. Leave it empty if the failure is not in a module, for example a `nix flake check` or template command.
       render: nix
     validations:
-      required: true
+      required: false
 
   - type: textarea
     id: command-output

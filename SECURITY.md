@@ -29,7 +29,7 @@ A useful report says:
 
 Anything in this repository that weakens the machines it configures, for example:
 
-- a secret (lair passphrase, Grafana admin password or secret key, private key) written into the world-readable Nix store or into git,
+- a secret (lair passphrase, Grafana admin password or secret key, private key) written into the world-readable Nix store or into git when the options say it stays out of them; the `services.holochain-grafana.adminPassword` default is a documented lab-only trade-off that lands in the store by design, and `adminPasswordFile` is the supported path for anything reachable from outside a lab,
 - a default or an option combination that exposes the conductor admin interface, or another local-only interface, beyond the machine,
 - a firewall port opened that the options did not ask for,
 - a generated systemd unit, file or directory with broader permissions than it needs.
