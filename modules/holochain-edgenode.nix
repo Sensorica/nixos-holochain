@@ -223,6 +223,14 @@
       # is read from it there.
       app_status=$(printf '%s' "$apps" | jq -c 'if type == "array" then [.[] | {status: {type: .status.type}}] else . end')
 
+      # Gossip and fetch state for every DHT the conductor is in, keyed by DNA
+      # hash; list-apps names the app and role each DNA belongs to. null when
+      # the call fails, and dht-metrics.jq then writes no per-DHT series.
+      if ! { dht=$(timeout 15 ${callPrefix} dump-network-metrics --include-dht-summary 2>/dev/null) \
+        && printf '%s' "$dht" | jq -e 'type == "object"' > /dev/null 2>&1; }; then
+        dht=null
+      fi
+
       # The reply counts bytes and messages per open connection only, so the
       # running totals live here between runs (see conductor-counters.jq). A
       # missing or unreadable file starts them from zero, which Prometheus
@@ -236,11 +244,24 @@
       printf '%s\n' "$counters" > "$state.tmp"
       mv -f "$state.tmp" "$state"
 
+      now=$(date +%s)
       printf '%s' "$stats" \
-        | jq -r --argjson up "$up" --argjson now "$(date +%s)" \
+        | jq -r --argjson up "$up" --argjson now "$now" \
             --argjson totals "$(printf '%s' "$counters" | jq -c .totals)" \
             --argjson apps "$app_status" \
             -f ${./conductor-metrics.jq} > "$tmp"
+
+      # Appended only when jq finished cleanly: a reply of a shape it did not
+      # expect must cost the per-DHT series, never the conductor series above
+      # or the file as a whole. Both replies go through stdin (see
+      # dht-metrics.jq for why not --argjson).
+      if printf '%s\n%s\n' "$apps" "$dht" \
+        | jq -n -r --argjson now "$now" -f ${./dht-metrics.jq} > "$tmp.dht"; then
+        cat "$tmp.dht" >> "$tmp"
+      else
+        echo "dht-metrics.jq failed; per-DHT series left out of this run" >&2
+      fi
+      rm -f "$tmp.dht"
 
       # The collector may read the directory at any moment, so the file is
       # swapped in whole rather than truncated and rewritten in place.
@@ -468,8 +489,12 @@ in {
         connection gauges and byte and message counters from it; it also
         counts installed apps by status from `list-apps`. The counters are
         running totals kept in `conductor-metrics-counters.json` under
-        `dataDir`, so a peer disconnecting does not pull them down. Requires
-        `metricsExporter.enable`
+        `dataDir`, so a peer disconnecting does not pull them down. It also
+        calls `dump-network-metrics --include-dht-summary` and writes one
+        `holochain_dht_*` series set per DHT the conductor is in (peers, ops
+        held here and by the best peer, pending fetches, seconds since the
+        last gossip, completed rounds and timeouts), labelled `app`, `role`
+        and `dna`. Requires `metricsExporter.enable`
       '';
 
       interval = lib.mkOption {

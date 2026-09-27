@@ -423,9 +423,16 @@
                   src = happ;
                   networkSeed = "ci-test-seed";
                 };
+                # The per-DHT series need an installed app to have a DHT at
+                # all, so they are asserted here rather than in metricsTest.
+                metricsExporter.enable = true;
+                conductorMetrics.enable = true;
               };
             };
             testScript = ''
+              import json
+              import re
+
               # The bare app id also appears in the embedded manifest, so counting
               # installations means counting the installed_app_id key. Both lines
               # emit byte-identical JSON for these two.
@@ -460,6 +467,58 @@
               machine.start()
 
               assert_installed_once("after reboot")
+
+              # ---- one per-DHT series set for every cell of the app ----
+              # The cells the conductor itself reports, not a list written here.
+              apps = json.loads(machine.succeed("${adminCall.${line}} list-apps"))
+              cells = [
+                  (role, cell["value"]["cell_id"]["dna_hash"])
+                  for app in apps
+                  if app["installed_app_id"] == "${appId}"
+                  for role, infos in app["cell_info"].items()
+                  for cell in infos
+                  if "cell_id" in cell.get("value", {})
+              ]
+              machine.log(f"cells of ${appId}: {cells}")
+              assert cells, f"no cell with a DNA hash in list-apps: {apps}"
+
+              machine.wait_for_unit("prometheus-node-exporter.service")
+              machine.wait_until_succeeds(
+                  "curl -s localhost:9100/metrics"
+                  " | grep -F 'holochain_dht_peers{app=\"${appId}\",'",
+                  timeout=180,
+              )
+              series = machine.succeed("curl -s localhost:9100/metrics | grep '^holochain_'")
+              machine.log("holochain series on /metrics:\n" + series)
+
+              # The conductor series are still there next to them.
+              assert "holochain_conductor_up 1" in series, series
+              assert 'holochain_conductor_apps{status="enabled"} 1' in series, series
+
+              # node_exporter re-sorts labels, so a series is keyed by its
+              # name and its label set rather than by the line's spelling.
+              values = {}
+              for line in series.splitlines():
+                  m = re.fullmatch(r'(\w+)(?:\{(.*)\})? (\S+)', line)
+                  assert m, f"unparsable line: {line}"
+                  labels = frozenset(re.findall(r'(\w+)="([^"]*)"', m.group(2) or ""))
+                  values[m.group(1) + str(sorted(labels))] = m.group(3)
+              for role, dna in cells:
+                  labels = str(sorted({("app", "${appId}"), ("role", role), ("dna", dna)}))
+                  for name in [
+                      "holochain_dht_peers",
+                      "holochain_dht_local_ops",
+                      "holochain_dht_peer_ops",
+                      "holochain_dht_pending_fetches",
+                      "holochain_dht_seconds_since_gossip",
+                      "holochain_dht_completed_rounds_total",
+                      "holochain_dht_peer_timeouts_total",
+                  ]:
+                      assert name + labels in values, f"{name}{labels} missing:\n{series}"
+                  # A node alone on its network has no peer and has never
+                  # gossiped: 0 peers and -1, not an age since the epoch.
+                  assert values["holochain_dht_peers" + labels] == "0", values
+                  assert values["holochain_dht_seconds_since_gossip" + labels] == "-1", values
             '';
           };
       in {
@@ -559,6 +618,102 @@
               grep -qx 'holochain_conductor_network_sent_bytes_total 177' out.prom
               grep -qx 'holochain_conductor_apps{status="enabled"} 0' out.prom
               grep -qx 'holochain_conductor_apps{status="disabled"} 0' out.prom
+              touch $out
+            '';
+
+          # The per-DHT jq against replies captured from a real Holochain 0.6.1
+          # conductor in seven DHTs (a Moss group node, 2026-09-27; network
+          # seeds redacted, nothing the jq reads changed), against the ways the
+          # calls fail, and against label values that would break the textfile
+          # if they reached it unescaped. Every output goes through promtool,
+          # alone and appended to the conductor series as the timer writes it.
+          dhtMetricsJq =
+            pkgs.runCommand "dht-metrics-jq" {
+              nativeBuildInputs = [pkgs.jq pkgs.prometheus.cli];
+            } ''
+              apps=${./tests/fixtures/dht-0_6_1/list-apps.json}
+              metrics=${./tests/fixtures/dht-0_6_1/dump-network-metrics.json}
+
+              # Both replies on stdin, list-apps first, as the timer passes them.
+              dht() {
+                printf '%s\n%s\n' "$1" "$2" | jq -n -r --argjson now 1790484800 -f ${./modules/dht-metrics.jq}
+              }
+
+              dht "$(cat $apps)" "$(cat $metrics)" > out.prom
+              cat out.prom
+              promtool check metrics < out.prom
+
+              # Seven DHTs, seven series of each metric.
+              for name in peers local_ops peer_ops pending_fetches seconds_since_gossip \
+                completed_rounds_total peer_timeouts_total; do
+                n=$(grep -c "^holochain_dht_$name{" out.prom)
+                test "$n" = 7 || { echo "holochain_dht_$name: $n series, expected 7" >&2; exit 1; }
+              done
+
+              # The group DHT, read by hand from the fixture: one peer holding
+              # 975 ops against 948 here, 61 rounds, last gossip at
+              # 1790484723.53 s, so 76.47 s before the fixed now, floored.
+              group='app="group#4zHNh4L9G9Lr7b6l/lmOORVbiNB2CaUzjKoqLgUR7UE=#null",role="group",dna="uhC0kDTZE5JwUHP9yIz2Bhjq2TPdkLSNhJtqTdq5RzS7vFPfrIvJY"'
+              grep -qxF "holochain_dht_peers{$group} 1" out.prom
+              grep -qxF "holochain_dht_local_ops{$group} 948" out.prom
+              grep -qxF "holochain_dht_peer_ops{$group} 975" out.prom
+              grep -qxF "holochain_dht_pending_fetches{$group} 0" out.prom
+              grep -qxF "holochain_dht_completed_rounds_total{$group} 61" out.prom
+              grep -qxF "holochain_dht_peer_timeouts_total{$group} 0" out.prom
+              grep -qxF "holochain_dht_seconds_since_gossip{$group} 76" out.prom
+
+              # Two applets of one tool share role names; the app label keeps
+              # them apart. The second has never gossiped: -1, not a huge age.
+              grep -c '^holochain_dht_peers{.*role="rVines"' out.prom | grep -qx 2
+              grep '^holochain_dht_seconds_since_gossip{' out.prom | grep -F k1h2cpht | grep -F 'role="rVines"' | grep -q ' -1$'
+
+              # A failed call writes nothing rather than zeros.
+              test -z "$(dht null "$(cat $metrics)")"
+              test -z "$(dht "$(cat $apps)" null)"
+              test -z "$(dht null null)"
+              # A conductor in no network yet: no DHT to report.
+              test -z "$(dht "$(cat $apps)" '{}')"
+              test -z "$(dht '[]' "$(cat $metrics)")"
+
+              # Hostile and malformed input: a quote, a backslash and a newline
+              # in an app id, a stem cell without a cell_id, a cloned cell, a
+              # DNA the reply does not mention, and fields of the wrong type.
+              cat > odd-apps.json <<'EOF'
+              [{"installed_app_id":"we\"ird\\app\nid","status":{"type":"enabled"},
+                "cell_info":{"main":[
+                  {"type":"provisioned","value":{"cell_id":{"dna_hash":"dnaA","agent_pub_key":"k"}}},
+                  {"type":"cloned","value":{"cell_id":{"dna_hash":"dnaB","agent_pub_key":"k"}}},
+                  {"type":"stem","value":{"original_dna_hash":"dnaC"}}],
+                 "gone":[{"type":"provisioned","value":{"cell_id":{"dna_hash":"dnaD","agent_pub_key":"k"}}}]}}]
+              EOF
+              cat > odd-metrics.json <<'EOF'
+              {"dnaA":{"fetch_state_summary":{"pending_requests":{"op1":["u"],"op2":["u"]}},
+                       "gossip_state_summary":{"peer_meta":{
+                         "u1":{"last_gossip_timestamp":1790484790000000,"completed_rounds":2,"peer_timeouts":1,"dht_op_count":10},
+                         "u2":{"last_gossip_timestamp":null,"completed_rounds":"x","peer_timeouts":null,"dht_op_count":12}},
+                         "local_op_count":11}},
+               "dnaB":{"fetch_state_summary":null,"gossip_state_summary":{"peer_meta":null,"local_op_count":null}}}
+              EOF
+              dht "$(cat odd-apps.json)" "$(cat odd-metrics.json)" > odd.prom
+              cat odd.prom
+              promtool check metrics < odd.prom
+              test "$(grep -c '^holochain_dht_peers{' odd.prom)" = 2
+              grep -qF 'holochain_dht_peers{app="we\"ird\\app\nid",role="main",dna="dnaA"} 2' odd.prom
+              grep -qF 'holochain_dht_pending_fetches{app="we\"ird\\app\nid",role="main",dna="dnaA"} 2' odd.prom
+              grep -qF 'holochain_dht_peer_ops{app="we\"ird\\app\nid",role="main",dna="dnaA"} 12' odd.prom
+              grep -qF 'holochain_dht_seconds_since_gossip{app="we\"ird\\app\nid",role="main",dna="dnaA"} 10' odd.prom
+              grep -qF 'holochain_dht_completed_rounds_total{app="we\"ird\\app\nid",role="main",dna="dnaA"} 2' odd.prom
+              grep -qF 'holochain_dht_seconds_since_gossip{app="we\"ird\\app\nid",role="main",dna="dnaB"} -1' odd.prom
+              if grep -q 'dnaC\|dnaD' odd.prom; then
+                echo "a stem cell or a DNA outside the reply got series" >&2
+                exit 1
+              fi
+
+              # The file as the timer writes it: conductor series, then DHT series.
+              echo '{}' | jq -r --argjson up 1 --argjson now 1790484800 --argjson totals '{}' \
+                --argjson apps '[{"status":{"type":"enabled"}}]' -f ${./modules/conductor-metrics.jq} > whole.prom
+              cat out.prom >> whole.prom
+              promtool check metrics < whole.prom
               touch $out
             '';
 
@@ -897,8 +1052,7 @@
               }
               assert mapping("Fleet status", "Conductor") == conductor_states, mapping("Fleet status", "Conductor")
               assert mapping("Conductors up") == conductor_states, mapping("Conductors up")
-              assert mapping("Fleet status", "Node") == {"0": ("down", "red"), "1": ("up", "green")}
-              assert mapping("Services") == {
+              assert mapping("Fleet status", "Node") == {"0": ("down", "red"), "1": ("up", "green")}              assert mapping("Services") == {
                   "0": ("inactive", "orange"), "1": ("active", "green"),
                   "2": ("starting or stopping", "yellow"), "3": ("failed", "red"),
                   "4": ("unreachable", "red"),

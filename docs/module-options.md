@@ -209,8 +209,12 @@ Kitsune2’s ` TransportStats ` on both the 0\.6 and 0\.7 lines, and derives
 connection gauges and byte and message counters from it; it also
 counts installed apps by status from ` list-apps `\. The counters are
 running totals kept in ` conductor-metrics-counters.json ` under
-` dataDir `, so a peer disconnecting does not pull them down\. Requires
-` metricsExporter.enable `
+` dataDir `, so a peer disconnecting does not pull them down\. It also
+calls ` dump-network-metrics --include-dht-summary ` and writes one
+` holochain_dht_* ` series set per DHT the conductor is in (peers, ops
+held here and by the best peer, pending fetches, seconds since the
+last gossip, completed rounds and timeouts), labelled ` app `, ` role `
+and ` dna `\. Requires ` metricsExporter.enable `
 \.
 
 
