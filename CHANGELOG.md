@@ -14,10 +14,12 @@ Nothing has been released yet. This section records what `main` holds after the 
 
 - The Sensorica fleet is no longer part of the root flake. The five hosts, the workshop ISO and the Colmena hive live in `examples/sensorica-fleet/`, a flake of its own that takes this repository as an input; the root `nixosConfigurations` holds only `minimal-vm` and `observability-vm`, and there is no root `colmena` output. (#13)
 - nixpkgs is pinned to `nixos-26.05` instead of following `nixos-unstable`, and holonix to `main-0.7`, so the default conductor is Holochain 0.7.0. (#13, #20)
+- `services.holochain-edgenode.bootstrapUrl` and `signalUrl` default to `null` instead of `https://bootstrap.holo.host` and `wss://signal.holo.host`. `null` resolves to `https://dev-test-bootstrap2.holochain.org` for the bootstrap server (with a trailing slash from 0.7) and, below 0.7, to `wss://dev-test-bootstrap2.holochain.org` for signalling. From 0.7 `signalUrl` is ignored with a warning; use `relayUrl`. A node that kept the old defaults moves to a different bootstrap server on upgrade, so a fleet that must keep peering with nodes still on the old defaults has to set `bootstrapUrl` explicitly. (#16)
 - `nixosModules.pai` and `modules/pai.nix` are removed. (#18)
 - `services.holochain-http-gateway` is a new module under the old name: `listenPort` and `conductorAppPort` are gone, and the gateway listens on `address` (default `127.0.0.1`) and `port` (default `8090`) and serves only the apps and functions named in `allowedAppIds` and `allowedFns`. (#18)
 - `examples/minimal`, `examples/moss-group` and `examples/developer-laptop` are removed; `nix flake init -t github:Sensorica/nixos-holochain#minimal` replaces the first. (#18)
 - `services.holochain-grafana.windtunnelTargets` is removed: the Wind Tunnel runner exposes nothing to scrape. (#17)
+- `services.holochain-windtunnel` is rewritten, and its options `conductorAdminPort` and `metricsPort` are removed. The old module was a placeholder that only raised a warning, so no behaviour is lost, but a configuration that sets either option no longer evaluates. (#17)
 - `services.holochain-edgenode.openFirewall` no longer opens the admin port, and `allowedOrigins` now governs the app interface only. The admin interface takes its origins from the new `adminAllowedOrigins`, default `holochain_websocket`. A configuration that reached the admin API from another machine or from a browser has to open that path explicitly. (#21)
 - `services.holochain-edgenode.dataDir` must be under `/var/lib/`; an assertion rejects any other path. (#21)
 
@@ -27,18 +29,19 @@ Nothing has been released yet. This section records what `main` holds after the 
 - `packages.<system>.holochain-0_6` and `hc-0_6`, for fleets on the 0.6 line. (#16)
 - `services.holochain-edgenode.conductorMetrics`: ten `holochain_conductor_*` series from the conductor's own `dump-network-stats`, written for node_exporter's textfile collector on both lines, with `metricsExporter.textfileDirectory`. (#17)
 - `holochain-grafana` provisions the Prometheus data source and the `Holochain Fleet` dashboard (uid `holochain-fleet`), with the options `dashboards`, `scrapeInterval` (default 15 s), `adminUser` and `adminPassword`. (#17)
-- `holochain-windtunnel` runs the Holochain Foundation's Wind Tunnel runner image, pinned by digest and off by default; its description states what enabling it gives away. (#17)
+- `holochain-windtunnel`, formerly a placeholder, now runs the Holochain Foundation's Wind Tunnel runner image, pinned by digest and off by default; its description states what enabling it gives away. (#17)
 - `holochain-http-gateway` builds `hc-http-gw` from tagged source per Holochain line (v0.4.0 for 0.7, v0.3.5 for 0.6), exposed as `packages.<system>.holochain-http-gateway` and `holochain-http-gateway-0_6`. (#18)
 - Flake templates `minimal` (also `default`) and `fleet`. (#18)
 - `packages.<system>.options-doc`, which generates `docs/module-options.md`; CI fails when the committed copy drifts. (#18)
 - `nixosConfigurations.minimal-vm` (#16) and `observability-vm` (#17), bootable with `nixos-rebuild build-vm`.
 - `holochain-grafana.adminPasswordFile` (#19) and `secretKeyFile` (#20). Without a `secretKeyFile`, Grafana's secret key is generated once at first boot and never enters the store. (#20)
-- NixOS VM tests built in CI: `vmTest`, `vmTestWithHapp`, `vmTest-0_6`, `vmTestWithHapp-0_6` (#16), `vmTestGrafana`, `vmTestConductorMetrics-0_6`, `vmTestWindtunnel` (#17), `vmTestGateway` (#18), and the `conductorMetricsJq` check (#21).
+- New checks built in CI: the NixOS VM tests `vmTest-0_6`, `vmTestWithHapp-0_6` (#16), `vmTestConductorMetrics-0_6`, `vmTestWindtunnel` (#17) and `vmTestGateway` (#18), and `conductorMetricsJq` (#21).
 - The example fleet runs Holochain 0.6.3 with hREA happ-0.4.0-beta, Kando v0.17.5 and Requests & Offers v0.5.2, fetched by hash. The hardware stubs of the example and of the `fleet` template carry the HoloPort disk layout (GPT with a `bios_grub` partition and an ESP, GRUB for both firmwares). (#19, #21)
 - `CONTRIBUTING.md`, with the VM-test and option-reference rules. (#18)
 
 ### Changed
 
+- The VM tests that existed in May are rewritten. `vmTest` boots the 0.7 conductor and checks through the admin CLI that it answers and logs no errors. `vmTestWithHapp` was defined only when a `happs/windtunnel.happ` was present, and no commit ever carried one; it now installs Dino Adventure v0.3.0, fetched by hash, and checks it is installed exactly once, before and after a reboot. (#16) `vmTestGrafana` runs the whole observability path on one node, from the conductor's own stats to the dashboard. (#17)
 - The conductor runs with `Type = "notify"` and reads its lair passphrase from a 0600 file in its state directory; its `network` section follows the line (`signal_url` below 0.7, `relay_url` on both). (#16)
 - Grafana reads `adminPasswordFile` and `secretKeyFile` as systemd credentials, so the files can be root-owned 0400; both options reject Nix store paths. (#21)
 - The boot loader moved out of the placeholder `hardware-configuration.nix` files into `configuration.nix` and `hosts/common.nix`, so replacing a stub with `nixos-generate-config` output keeps it. `#minimal` targets a stock UEFI install with systemd-boot. (#21)

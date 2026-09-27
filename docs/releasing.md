@@ -14,7 +14,7 @@ SemVer on the public surface named at the top of `CHANGELOG.md`. Below 1.0.0, a 
 
 ## Cut a release candidate
 
-1. On a branch, move the entries under `## [Unreleased]` into a new section below it, `## [0.1.0-rc.1] - YYYY-MM-DD`, and leave `## [Unreleased]` empty above it. Update the link references at the foot of the file (see below). Open a PR and merge it.
+1. On a branch, move everything under `## [Unreleased]` into a new section below it, `## [0.1.0-rc.1] - YYYY-MM-DD`, and leave `## [Unreleased]` empty above it. The whole section becomes the release note, prose included, so rewrite any paragraph that no longer holds once the tag exists; for the first candidate, that is the sentence "Nothing has been released yet." Update the link references at the foot of the file (see below). Open a PR and merge it.
 2. Check the notes the release will carry, from an up to date `main`:
 
    ```bash
@@ -35,7 +35,7 @@ To rehearse before tagging, run the workflow by hand from the Actions tab ("Rele
 
 ## Cut a release
 
-The same four steps with `0.1.0` in place of `0.1.0-rc.1`. The `## [0.1.0]` section lists everything since the previous final release, so someone upgrading from it reads one section; the candidate sections stay below it as history.
+The same four steps with `0.1.0` in place of `0.1.0-rc.1`, except for how step 1 fills the section. The `## [0.1.0]` section lists everything since the previous final release, so someone upgrading from it reads one section. After a candidate, `## [Unreleased]` holds only what changed since that candidate, so step 1 assembles `## [0.1.0]` from the entries of every `0.1.0-rc.N` section merged with what is under `## [Unreleased]`, and leaves the candidate sections in place below it as history. When nothing changed since the last candidate, `## [Unreleased]` is empty and the new section is the candidates' entries alone. A section left empty fails the release at its first step.
 
 ## Link references
 
