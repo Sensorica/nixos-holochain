@@ -20,11 +20,17 @@
 #   GossipStateSummary, PeerMeta and FetchStateSummary are declared identically in
 #   kitsune2_api 0.4.1 (the 0.6 line) and 0.5.0 (the 0.7 line); the shape above was
 #   read from a Holochain 0.6.1 conductor on 2026-09-27.
-# names: {apps: {<installed_app_id>: {name, roles: {<role>: part name}}},
+# names: {apps: {<installed_app_id>: {name, kind, roles: {<role>: part name}}},
 #   kinds: {<app kind>: {<role>: part name}}, expected: [<installed_app_id>]}.
 #   Everything that knows a name puts it here (the edgenode module from its happs
 #   options, a Moss wrapper from its own), so this is the only writer of the two
-#   info families and a dashboard join never meets two rows for one key.
+#   info families. `kind` is read only for an expected app that list-apps does
+#   not report, whose bundle, and so whose kind, is then unknown.
+#
+# holochain_dht_info has exactly one row per conductor, app_id, role and dna,
+# the full key of every data series, so a join on all four never meets two
+# rows. A join on fewer does: a clone cell shares its conductor, app_id and
+# role with the cell it was cloned from and differs only in dna.
 #
 # $conductor names the conductor; $now is the scrape time in seconds since the epoch.
 #
@@ -77,44 +83,63 @@ input as $apps
   def given: if type == "string" and . != "" then . else null end;
   (if ($apps | type) == "array" then [$apps[] | objects] else null end) as $listed
 
-# One entry per installed app: its fallback name comes from the bundle, and two
-# apps that would share one (two chats of the same Moss tool) are numbered in
-# the order of their installed_app_id, so no two apps read alike and no hash is
-# ever the way to tell them apart.
+# One entry per installed app, then one per app Nix expects that the conductor
+# did not list (all of them when list-apps did not answer), so an app that
+# stopped reads as not running instead of vanishing. The fallback name comes
+# from the bundle. A Moss app's is its kind, which for an app nobody listed is
+# the names file's `kind`, else "Group" for a group and "Tool" for a tool;
+# never its id, which is a hash.
 | [ ($listed // [])[]
     | (.installed_app_id | str) as $id
     | select($id != "")
     | ($id | is_moss) as $moss
     | ((.manifest.name // "") | str) as $bundle
-    | (if $moss then
-         (if ($id | startswith("group#")) then "Group"
-          else ($bundle | sub("^h(?=[A-Z])"; "") | pretty | if . == "" then "Tool" else . end) end)
-       else
-         (if $bundle == "" then $id else $bundle end | pretty)
-       end) as $fallback
     | {
-        id: $id, moss: $moss, fallback: $fallback,
+        id: $id, moss: $moss,
+        fallback: (if $moss then
+            (if ($id | startswith("group#")) then "Group"
+             else ($bundle | sub("^h(?=[A-Z])"; "") | pretty | if . == "" then "Tool" else . end) end)
+          else
+            (if $bundle == "" then $id else $bundle end | pretty)
+          end),
         status: (.status.type // "unknown" | tostring | ascii_downcase | gsub("[^a-z_]"; "_")),
         roles: ((.cell_info // {}) | if type == "object" then keys | length else 0 end)
       }
-  ]
-| (group_by(.fallback)
-    | map(if length == 1 then [.[0] + {auto: .[0].fallback}]
-          else sort_by(.id) | to_entries | map(.value + {auto: "\(.value.fallback) \(.key + 1)"}) end)
-    | add // []
-    | map(. + {name: ((entry(.id).name | given) // .auto)}
-          | . + {kind: (if .moss then .fallback else .name end)}
-          | {key: .id, value: .})
-    | from_entries) as $info
-
-# Apps Nix manages that the conductor did not list, or all of them when
-# list-apps did not answer.
+  ] as $installed
 | [ $expected[]
     | . as $id
-    | select($info | has($id) | not)
-    | ((entry($id).name | given) // ($id | pretty)) as $name
-    | {id: $id, name: $name, kind: $name, status: "expected"}
+    | select([$installed[].id] | index($id) | not)
+    | ($id | is_moss) as $moss
+    | {
+        id: $id, moss: $moss,
+        fallback: (if $moss then
+            (if ($id | startswith("group#")) then "Group"
+             else ((entry($id).kind | given) // "Tool") end)
+          else ($id | pretty) end),
+        status: "expected", roles: 0
+      }
   ] as $missing
+
+# Apps whose fallbacks match (two chats of the same Moss tool) are numbered in
+# the order of their installed_app_id, then a name from the names file wins.
+# A given name can still match another app's name, so any two that read alike
+# after that are numbered too, a given name keeping its own. No two apps on one
+# conductor share a name, and a hash is never how two of them are told apart.
+| ($installed + $missing
+    | group_by(.fallback)
+    | map(if length == 1 then [.[0] + {name: .[0].fallback}]
+          else sort_by(.id) | to_entries | map(.value + {name: "\(.value.fallback) \(.key + 1)"}) end)
+    | add // []
+    | map((entry(.id).name | given) as $n
+          | if $n == null then . + {given: false} else . + {name: $n, given: true} end)
+    | until((map(.name) | unique | length) == length;
+        group_by(.name)
+        | map(if length == 1 then .
+              else sort_by([(.given | not), .id]) | to_entries
+                | map(if .key == 0 then .value else .value + {name: "\(.value.name) \(.key + 1)"} end) end)
+        | add)
+    | map(. + {kind: (if .moss then .fallback else .name end)} | {key: .id, value: .})
+    | from_entries) as $info
 
 | (if $listed == null or ($metrics | type) != "object" then []
    else
@@ -124,18 +149,39 @@ input as $apps
       | $info[$app] as $a
       | (.cell_info // {}) | to_entries[]
       | .key as $role
-      | .value[]?
-      | (.value.cell_id.dna_hash? // empty) as $dna
+      | (.value | if type == "array" then . else [] end) as $cells
+      | range(0; $cells | length) as $i
+      | $cells[$i] as $cell
+      | ($cell.value.cell_id.dna_hash? // empty) as $dna
       | select($dna | type == "string")
       | select($metrics | has($dna))
       | ($metrics[$dna] // {}) as $m
       | ($m.gossip_state_summary // {}) as $g
       | [($g.peer_meta // {}) | .[]? | objects] as $peers
       | ([$peers[].last_gossip_timestamp | num] | max // 0) as $last
+      # The part the app's own `roles` or its kind's table names. Else nothing
+      # for a one-role app, whose network then reads by the app's name alone
+      # ("Kando", not "Kando: Kando"). Else the role id prettified, or "Main"
+      # when that would only repeat the app's name or kind ("Group: Main", not
+      # "Group: Group").
       | ((entry($app).roles | objects | .[$role] | strings)
          // ($kinds[$a.kind] | objects | .[$role] | strings)
          // null) as $given
-      | ($given // (if $a.roles == 1 then "" else ($role | part_pretty) end)) as $part
+      | ($given
+         // (if $a.roles == 1 then ""
+             else ($role | part_pretty)
+               | if ascii_downcase | IN(($a.name, $a.kind, $a.fallback) | ascii_downcase) then "Main" else . end
+             end)) as $base
+      # A clone cell is a network of its own under the same role, so it gets a
+      # name of its own: its clone index from `clone_id` ("<role>.<index>",
+      # counted from 0), else its place among the role's clones.
+      | (if $cell.type? == "cloned" then
+           (($cell.value.clone_id? | strings | capture("[.](?<n>[0-9]+)$").n | tonumber + 1)
+            // ([$cells[:$i][] | select(.type? == "cloned")] | length + 1))
+         else null end) as $clone
+      | (if $clone == null then $base
+         elif $base == "" then "Clone \($clone)"
+         else "\($base) (clone \($clone))" end) as $part
       | {
           key: {conductor: $conductor, app_id: $app, role: $role, dna: $dna},
           names: {
@@ -153,7 +199,7 @@ input as $apps
     ]
    end) as $rows
 
-| ([$info[]] + $missing) as $apps_named
+| [$info[]] as $apps_named
 | (if $apps_named == [] then empty
    else
      family("holochain_app_info"),

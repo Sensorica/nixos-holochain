@@ -45,8 +45,11 @@
   # picks both at every start.
   workshopAdmin = pkgs.writeShellScript "workshop-admin" "echo 4444";
   mossAdmin = pkgs.writeShellScript "moss-admin" "echo 40123 moss-7f3a";
+  # A Moss node that is not running has no port to print.
+  mossDownAdmin = pkgs.writeShellScript "moss-down-admin" "true";
 
-  # What the edgenode module writes for the homelab's apps.
+  # The shape the edgenode module writes for the homelab's apps, typed by
+  # hand; checks.edgenodeNamesWiring runs the module's own.
   workshopNames = pkgs.writeText "workshop-names.json" (builtins.toJSON {
     apps.requests-and-offers = {
       name = "Requests & Offers";
@@ -59,13 +62,17 @@
     expected = ["hrea" "kando" "requests-and-offers"];
   });
 
-  # What a Moss wrapper would write: the group's name, one chat's name typed
-  # in Nix, and a part table per tool kind. The other chat is left unnamed on
-  # purpose, to take the fallback.
+  # What a Moss wrapper would write: the group's name, one chat's name and
+  # kind typed in Nix, a part table per tool kind, and every app it has seen
+  # as expected, so a stopped Moss conductor still reports them. The other
+  # chat is left unnamed and without a kind on purpose, to take the fallbacks.
   mossNames = pkgs.writeText "moss-names.json" (builtins.toJSON (pkgs.lib.recursiveUpdate {
       apps = {
         "group#4zHNh4L9G9Lr7b6l/lmOORVbiNB2CaUzjKoqLgUR7UE=#null".name = "Sensorica";
-        "applet#uhc$e$krun4ink$1nl$paibamp$j$j3r$t$egt$57b$rc$ue$c$2j$bd$1a$k$hbh$g$p$zu$l$".name = "General chat";
+        "applet#uhc$e$krun4ink$1nl$paibamp$j$j3r$t$egt$57b$rc$ue$c$2j$bd$1a$k$hbh$g$p$zu$l$" = {
+          name = "General chat";
+          kind = "Vines";
+        };
       };
       kinds = {
         Vines = {
@@ -78,7 +85,11 @@
           assets = "Shared assets";
         };
       };
-      expected = [];
+      expected = [
+        "group#4zHNh4L9G9Lr7b6l/lmOORVbiNB2CaUzjKoqLgUR7UE=#null"
+        "applet#uhc$e$krun4ink$1nl$paibamp$j$j3r$t$egt$57b$rc$ue$c$2j$bd$1a$k$hbh$g$p$zu$l$"
+        "applet#uhc$e$k1h2cpht$kfgs$v$l$t$3zhz-b$d_b$t$5kq$lyybe$vs$6lb$xzzsgd$hu$5ry$"
+      ];
     }
     extraMossNames));
 
@@ -103,13 +114,14 @@
     blocked_message_counts = {};
   });
 
-  # One run of each conductor, and the Moss one again with no names file at
-  # all, which is what a Moss node shows before anyone types a name.
+  # One run of each conductor, the Moss one again with no names file at all,
+  # which is what a Moss node shows before anyone types a name, and once more
+  # with the Moss conductor stopped, when only the names file knows its apps.
   runs =
     pkgs.runCommand "holochain-exporter-fixture-runs" {
       nativeBuildInputs = [pkgs.prometheus.cli];
     } ''
-      mkdir workshop moss state-workshop state-moss state-bare
+      mkdir workshop moss state-workshop state-moss state-bare state-down
       cp ${../tests/fixtures/edgenode-0_6_3/list-apps.json} workshop/list-apps.json
       cp ${../tests/fixtures/edgenode-0_6_3/dump-network-metrics.json} workshop/dump-network-metrics.json
       cp ${../tests/fixtures/dht-0_6_1/list-apps.json} moss/list-apps.json
@@ -124,8 +136,10 @@
       : > moss/calls
       FAKE_HC_DIR=$PWD/moss ${pkgs.lib.getExe mossExporter} --conductor Moss \
         --admin ${mossAdmin} --out $PWD/moss-bare.prom --state-dir state-bare
+      FAKE_HC_DIR=$PWD/moss ${pkgs.lib.getExe mossExporter} --conductor Moss \
+        --admin ${mossDownAdmin} --names ${mossNames} --out $PWD/moss-down.prom --state-dir state-down
 
-      for f in holochain-conductor.prom moss-node.prom moss-bare.prom; do
+      for f in holochain-conductor.prom moss-node.prom moss-bare.prom moss-down.prom; do
         echo "==== $f"
         cat $f
         promtool check metrics < $f
@@ -145,9 +159,13 @@
       test "$(grep -c '^holochain_dht_peers{' holochain-conductor.prom)" = 4
       test "$(grep -c '^holochain_dht_peers{' moss-node.prom)" = 7
       test "$(grep -c '^holochain_dht_info{' moss-bare.prom)" = 7
+      # Stopped: down, no DHT series, and each of the three apps still there.
+      grep -qx 'holochain_conductor_up{conductor="Moss"} 0' moss-down.prom
+      test "$(grep -c '^holochain_dht_' moss-down.prom || true)" = 0
+      test "$(grep -c '^holochain_app_info{.*status="expected"} 1$' moss-down.prom)" = 3
 
       mkdir $out
-      cp holochain-conductor.prom moss-node.prom moss-bare.prom $out/
+      cp holochain-conductor.prom moss-node.prom moss-bare.prom moss-down.prom $out/
     '';
 in {
   # node_exporter merges the textfiles of one directory by family, and drops a
@@ -198,6 +216,18 @@ in {
         echo "node_exporter found HELP texts that disagree" >&2
         exit 1
       fi
+      # node_exporter also drops, with scrape_error still 0, a series another
+      # file already gave with the same name and labels (two conductors under
+      # one name, or a family that lost its conductor label). So every sample
+      # line of the two files must come out, one for one.
+      if grep -q 'was collected before with the same name and label values' node_exporter.log; then
+        echo "node_exporter dropped a series it had already collected from another file" >&2
+        exit 1
+      fi
+      written=$(cat textfiles/*.prom | grep -c '^holochain_')
+      served=$(grep -c '^holochain_' scraped)
+      echo "sample lines written: $written, served by node_exporter: $served"
+      test "$written" = "$served" || { echo "node_exporter served $served of $written holochain_* samples" >&2; exit 1; }
       for conductor in Workshop:4 Moss:7; do
         name=''${conductor%:*}
         want=''${conductor#*:}
@@ -209,18 +239,19 @@ in {
       touch $out
     '';
 
-  # No name a dashboard shows may be a machine key: no Moss `$` case escape,
-  # no hash (uhC...), and no long run of id characters without a space.
+  # No name a dashboard shows may be a machine key, or carry one anywhere in
+  # it: no Moss `$` case escape, no hash (uhC...), and no run of twenty or more
+  # id characters without a space, at the start, the end or in between.
   metricsNameShape =
     pkgs.runCommand "metrics-name-shape" {
       nativeBuildInputs = [pkgs.jq];
     } ''
-      for f in holochain-conductor.prom moss-node.prom moss-bare.prom; do
+      for f in holochain-conductor.prom moss-node.prom moss-bare.prom moss-down.prom; do
         jq -R -s --arg file "$f" '
           [split("\n")[]
             | scan("(app_name|app_kind|part_name|network_label)=\"((?:[^\"\\\\]|\\\\.)*)\"")
             | {label: .[0], value: .[1]}] as $names
-          | [$names[] | select(.value | test("\\$") or startswith("uhC") or test("^[A-Za-z0-9_-]{20,}$"))] as $bad
+          | [$names[] | select(.value | test("\\$") or test("uhC") or test("[A-Za-z0-9_-]{20,}"))] as $bad
           | if ($names | length) == 0 then error("\($file): no name labels at all")
             elif $bad != [] then error("\($file): names that are machine keys: \($bad | unique)")
             else "\($file): \($names | length) name labels, none of them a key" end' ${runs}/$f

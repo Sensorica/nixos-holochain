@@ -709,14 +709,34 @@
                       -f ${jqLib}/dht-metrics.jq
               }
 
+              # No two apps of one conductor share an app_name, and no two of
+              # its DHTs share a network_label, or a dashboard would draw two
+              # things under one name.
+              names_unique() {
+                { grep '^holochain_app_info{' "$1" || true; } \
+                  | sed -E 's/^holochain_app_info\{conductor="((\\.|[^"\\])*)",app_id="((\\.|[^"\\])*)",app_name="((\\.|[^"\\])*)",.*/\1 \5/' \
+                  | sort > app.names
+                { grep '^holochain_dht_info{' "$1" || true; } \
+                  | sed -E 's/^holochain_dht_info\{conductor="((\\.|[^"\\])*)",.*,network_label="((\\.|[^"\\])*)"\} 1$/\1 \3/' \
+                  | sort > network.names
+                for f in app.names network.names; do
+                  if [ -n "$(uniq -d $f)" ]; then
+                    echo "$1: names shared by two of one conductor's items in $f:" >&2
+                    uniq -d $f >&2
+                    exit 1
+                  fi
+                done
+              }
+
               # Every data series has exactly one info row with the same key,
-              # and the other way round.
+              # and the other way round; then the names are distinct.
               keys_match() {
                 grep '^holochain_dht_peers{' "$1" | sed -E 's/^holochain_dht_peers\{(.*)\} [-0-9]+$/\1/' | sort > data.keys
                 grep '^holochain_dht_info{' "$1" \
                   | sed -E 's/^holochain_dht_info\{(conductor="[^"]*",app_id="[^"]*",role="[^"]*",dna="[^"]*"),.*/\1/' | sort > info.keys
                 diff data.keys info.keys
                 test "$(sort -u info.keys | wc -l)" = "$(wc -l < info.keys)"
+                names_unique "$1"
               }
 
               dht "$(cat $apps)" "$(cat $metrics)" > out.prom
@@ -756,10 +776,12 @@
 
               # With no names file, Moss names come from the bundles: the two
               # chats of one tool are numbered in installed_app_id order, the
-              # group is Group, and a role reads as its id without its prefix.
+              # group is Group, and a role reads as its id without its prefix,
+              # or as Main where that would only repeat the app's kind.
               grep -qxF 'holochain_dht_info{conductor="Moss",app_id="applet#uhc$e$k1h2cpht$kfgs$v$l$t$3zhz-b$d_b$t$5kq$lyybe$vs$6lb$xzzsgd$hu$5ry$",role="rFiles",dna="uhC0kujTsC4x0m_WoAtP-Ct0WJtsAK8cK-UAOsIgvY0q30XjbFbRj",app_name="Vines 1",app_kind="Vines",part_name="Files",network_label="Vines 1: Files"} 1' out.prom
+              grep -qF 'app_name="Vines 1",app_kind="Vines",part_name="Main",network_label="Vines 1: Main"} 1' out.prom
               grep -qxF 'holochain_app_info{conductor="Moss",app_id="applet#uhc$e$krun4ink$1nl$paibamp$j$j3r$t$egt$57b$rc$ue$c$2j$bd$1a$k$hbh$g$p$zu$l$",app_name="Vines 2",app_kind="Vines",status="enabled"} 1' out.prom
-              grep -qxF "holochain_dht_info{$group,app_name=\"Group\",app_kind=\"Group\",part_name=\"Group\",network_label=\"Group: Group\"} 1" out.prom
+              grep -qxF "holochain_dht_info{$group,app_name=\"Group\",app_kind=\"Group\",part_name=\"Main\",network_label=\"Group: Main\"} 1" out.prom
               test "$(grep -c '^holochain_app_info{' out.prom)" = 3
 
               # A Moss names file: the group's name, one chat's name, a part
@@ -782,9 +804,57 @@
               grep -v '_info' named.prom > named.data
               diff out.data named.data
 
-              # The edgenode shape, with the names file the module writes: a
-              # display name and role names for one app, the bundle's name for
-              # the others, and a one-role app's network named by the app alone.
+              # The Moss conductor stopped: the wrapper's names file still
+              # lists every app it has seen as expected, one of them with its
+              # kind. Nothing is named after its id, a group is still a Group,
+              # and a tool is its given kind, else Tool, numbered like the
+              # chats above.
+              G='group#4zHNh4L9G9Lr7b6l/lmOORVbiNB2CaUzjKoqLgUR7UE=#null'
+              A1='applet#uhc$e$krun4ink$1nl$paibamp$j$j3r$t$egt$57b$rc$ue$c$2j$bd$1a$k$hbh$g$p$zu$l$'
+              A2='applet#uhc$e$k1h2cpht$kfgs$v$l$t$3zhz-b$d_b$t$5kq$lyybe$vs$6lb$xzzsgd$hu$5ry$'
+              jq --arg g "$G" --arg a1 "$A1" --arg a2 "$A2" \
+                '.expected = [$g, $a1, $a2] | .apps[$a1].kind = "Vines"' moss-names.json > moss-seen.json
+              dht null null "$(cat moss-seen.json)" > moss-down.prom
+              cat moss-down.prom
+              promtool check metrics < moss-down.prom
+              names_unique moss-down.prom
+              grep -qxF "holochain_app_info{conductor=\"Moss\",app_id=\"$G\",app_name=\"Sensorica\",app_kind=\"Group\",status=\"expected\"} 1" moss-down.prom
+              grep -qxF "holochain_app_info{conductor=\"Moss\",app_id=\"$A1\",app_name=\"General chat\",app_kind=\"Vines\",status=\"expected\"} 1" moss-down.prom
+              grep -qxF "holochain_app_info{conductor=\"Moss\",app_id=\"$A2\",app_name=\"Tool\",app_kind=\"Tool\",status=\"expected\"} 1" moss-down.prom
+              jq '.expected = [.apps | keys[]] + ["applet#uhc$x", "applet#uhc$y"] | del(.apps[].name)' moss-seen.json > moss-bare-seen.json
+              dht null null "$(cat moss-bare-seen.json)" > moss-bare-down.prom
+              cat moss-bare-down.prom
+              names_unique moss-bare-down.prom
+              grep -qF 'app_id="group#4zHNh4L9G9Lr7b6l/lmOORVbiNB2CaUzjKoqLgUR7UE=#null",app_name="Group",app_kind="Group",status="expected"' moss-bare-down.prom
+              grep -qF 'app_id="applet#uhc$x",app_name="Tool 1",app_kind="Tool",status="expected"' moss-bare-down.prom
+              grep -qF 'app_id="applet#uhc$y",app_name="Tool 2",app_kind="Tool",status="expected"' moss-bare-down.prom
+              if grep -F 'app_name="' moss-down.prom moss-bare-down.prom | grep -E 'app_(name|kind)="[^"]*[$#]'; then
+                echo "an expected Moss app is named after its id" >&2
+                exit 1
+              fi
+
+              # A given name can match another app's fallback, or another given
+              # name. Each app still gets a name of its own, the given one kept
+              # where it can be.
+              cat > clash-apps.json <<'EOF'
+              [{"installed_app_id":"x","status":{"type":"enabled"},"manifest":{"name":"kando"},"cell_info":{}},
+               {"installed_app_id":"y","status":{"type":"enabled"},"manifest":{"name":"board"},"cell_info":{}},
+               {"installed_app_id":"p","status":{"type":"enabled"},"manifest":{"name":"p"},"cell_info":{}},
+               {"installed_app_id":"q","status":{"type":"enabled"},"manifest":{"name":"q"},"cell_info":{}}]
+              EOF
+              dht "$(cat clash-apps.json)" '{}' '{"apps":{"y":{"name":"Kando"},"p":{"name":"Chat"},"q":{"name":"Chat"}}}' W > clash.prom
+              cat clash.prom
+              names_unique clash.prom
+              grep -qxF 'holochain_app_info{conductor="W",app_id="y",app_name="Kando",app_kind="Kando",status="enabled"} 1' clash.prom
+              grep -qxF 'holochain_app_info{conductor="W",app_id="x",app_name="Kando 2",app_kind="Kando 2",status="enabled"} 1' clash.prom
+              grep -qxF 'holochain_app_info{conductor="W",app_id="p",app_name="Chat",app_kind="Chat",status="enabled"} 1' clash.prom
+              grep -qxF 'holochain_app_info{conductor="W",app_id="q",app_name="Chat 2",app_kind="Chat 2",status="enabled"} 1' clash.prom
+
+              # The edgenode shape, with a names file typed in the shape the
+              # module writes (checks.edgenodeNamesWiring runs the module's
+              # own): a display name and role names for one app, the bundle's
+              # name for the others, and a one-role app's network named by the
+              # app alone.
               cat > ws-names.json <<'EOF'
               {"apps":{"requests-and-offers":{"name":"Requests & Offers",
                          "roles":{"requests_and_offers":"Listings","hrea":"Accounting"}}},
@@ -839,13 +909,14 @@
 
               # Hostile and malformed input: a quote, a backslash and a newline
               # in an app id and in the conductor name, a stem cell without a
-              # cell_id, a cloned cell, a DNA the reply does not mention, and
-              # fields of the wrong type.
+              # cell_id, two cloned cells (one with a clone_id, one without), a
+              # DNA the reply does not mention, and fields of the wrong type.
               cat > odd-apps.json <<'EOF'
               [{"installed_app_id":"we\"ird\\app\nid","status":{"type":"enabled"},
                 "cell_info":{"main":[
                   {"type":"provisioned","value":{"cell_id":{"dna_hash":"dnaA","agent_pub_key":"k"}}},
-                  {"type":"cloned","value":{"cell_id":{"dna_hash":"dnaB","agent_pub_key":"k"}}},
+                  {"type":"cloned","value":{"clone_id":"main.2","cell_id":{"dna_hash":"dnaB","agent_pub_key":"k"}}},
+                  {"type":"cloned","value":{"cell_id":{"dna_hash":"dnaE","agent_pub_key":"k"}}},
                   {"type":"stem","value":{"original_dna_hash":"dnaC"}}],
                  "gone":[{"type":"provisioned","value":{"cell_id":{"dna_hash":"dnaD","agent_pub_key":"k"}}}]}}]
               EOF
@@ -855,13 +926,21 @@
                          "u1":{"last_gossip_timestamp":1790484790000000,"completed_rounds":2,"peer_timeouts":1,"dht_op_count":10},
                          "u2":{"last_gossip_timestamp":null,"completed_rounds":"x","peer_timeouts":null,"dht_op_count":12}},
                          "local_op_count":11}},
-               "dnaB":{"fetch_state_summary":null,"gossip_state_summary":{"peer_meta":null,"local_op_count":null}}}
+               "dnaB":{"fetch_state_summary":null,"gossip_state_summary":{"peer_meta":null,"local_op_count":null}},
+               "dnaE":{}}
               EOF
               dht "$(cat odd-apps.json)" "$(cat odd-metrics.json)" null "$(printf 'M"o\\\ns')" > odd.prom
               cat odd.prom
               promtool check metrics < odd.prom
               key='conductor="M\"o\\\ns",app_id="we\"ird\\app\nid",role="main"'
-              test "$(grep -c '^holochain_dht_peers{' odd.prom)" = 2
+              test "$(grep -c '^holochain_dht_peers{' odd.prom)" = 3
+              # The clones share conductor, app_id and role with the cell they
+              # came from, so each gets a name of its own: the clone index plus
+              # one from its clone_id, else its place among the role's clones.
+              names_unique odd.prom
+              for want in 'dnaA:Main' 'dnaB:Main (clone 3)' 'dnaE:Main (clone 2)'; do
+                grep -F "holochain_dht_info{$key,dna=\"''${want%%:*}\"," odd.prom | grep -qF "part_name=\"''${want#*:}\","
+              done
               grep -qF "holochain_dht_peers{$key,dna=\"dnaA\"} 2" odd.prom
               grep -qF "holochain_dht_pending_fetches{$key,dna=\"dnaA\"} 2" odd.prom
               grep -qF "holochain_dht_peer_ops{$key,dna=\"dnaA\"} 12" odd.prom
@@ -891,6 +970,86 @@
           # declare every shared family with the same bytes and a real
           # node_exporter keeps both, and no name a dashboard shows is a hash.
           inherit (metricsChecks) metricsHelpAgreement metricsNameShape;
+
+          # The edgenode module's own names wiring, which the checks above
+          # only mimic by hand: an evaluated system's metrics unit, run with
+          # the exporter binary swapped for one that prints its arguments, so
+          # the shell quoting is the unit's own. Its --conductor must be
+          # conductorMetrics.name, and its --names file, fed with the captured
+          # edgenode replies through the jq the exporter runs, must name the
+          # apps from displayName and roleNames and expect exactly the apps
+          # installed = true.
+          edgenodeNamesWiring = let
+            noHapp = pkgs.writeText "unused.happ" "";
+            node = inputs.nixpkgs.lib.nixosSystem {
+              inherit system;
+              modules = [
+                edgenodeNode
+                {
+                  services.holochain-edgenode = {
+                    enable = true;
+                    metricsExporter.enable = true;
+                    conductorMetrics = {
+                      enable = true;
+                      name = "The Workshop";
+                    };
+                    happs = {
+                      requests-and-offers = {
+                        src = noHapp;
+                        displayName = "Requests & Offers";
+                        roleNames = {
+                          requests_and_offers = "Listings";
+                          hrea = "Accounting";
+                        };
+                      };
+                      kando.src = noHapp;
+                      hrea = {
+                        src = noHapp;
+                        displayName = "Accounting";
+                      };
+                      retired = {
+                        src = noHapp;
+                        installed = false;
+                      };
+                    };
+                  };
+                }
+              ];
+            };
+            unit = node.config.systemd.services.holochain-conductor-metrics;
+          in
+            pkgs.runCommand "edgenode-names-wiring" {
+              nativeBuildInputs = [pkgs.jq pkgs.prometheus.cli];
+            } ''
+              script=${unit.serviceConfig.ExecStart}
+              cat $script
+              sed -E 's|^exec [^ ]*/bin/holochain-conductor-exporter |exec printf "%s\\n" |' $script > args.sh
+              grep -q '^exec printf' args.sh
+              bash args.sh > args
+              cat args
+              arg() { sed -n "/^--$1\$/{n;p;q}" args; }
+              test "$(arg conductor)" = "The Workshop"
+              names=$(arg names)
+              jq . "$names"
+
+              jq -e '.expected == ["hrea", "kando", "requests-and-offers"]' "$names"
+              printf '%s\n%s\n%s\n' "$(cat ${./tests/fixtures/edgenode-0_6_3/list-apps.json})" \
+                "$(cat ${./tests/fixtures/edgenode-0_6_3/dump-network-metrics.json})" "$(cat "$names")" \
+                | jq -n -r -L ${jqLib} --arg conductor "$(arg conductor)" --argjson now 1790484800 \
+                    -f ${jqLib}/dht-metrics.jq > ws.prom
+              cat ws.prom
+              promtool check metrics < ws.prom
+              grep -qF 'holochain_dht_info{conductor="The Workshop",app_id="requests-and-offers",role="requests_and_offers",dna="uhC0k5Kg49j1kwUFmDlTqLBXoQAZHQdutkEojX0m_OKSqBtERwBOY",app_name="Requests & Offers",app_kind="Requests & Offers",part_name="Listings",network_label="Requests & Offers: Listings"} 1' ws.prom
+              grep -qF 'app_id="requests-and-offers",role="hrea",' ws.prom
+              grep '^holochain_dht_info{' ws.prom | grep -F 'app_id="requests-and-offers",role="hrea",' | grep -qF 'network_label="Requests & Offers: Accounting"'
+              grep -qF 'holochain_app_info{conductor="The Workshop",app_id="hrea",app_name="Accounting",app_kind="Accounting",status="enabled"} 1' ws.prom
+              grep -qF 'holochain_app_info{conductor="The Workshop",app_id="kando",app_name="Kando",app_kind="Kando",status="enabled"} 1' ws.prom
+              if grep -q 'retired' ws.prom; then
+                echo "an app with installed = false is expected" >&2
+                exit 1
+              fi
+              touch $out
+            '';
 
           # One node wearing both roles: an edgenode exporting its conductor's
           # own stats, and the monitor scraping and drawing them. That is the
