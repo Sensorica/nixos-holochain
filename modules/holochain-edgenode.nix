@@ -45,23 +45,36 @@
     then cfg.relayUrl
     else defaultRelayUrl;
 
+  # Kitsune2 module config the conductor merges under the keys it sets itself
+  # (`NetworkConfig::to_k2_config`, holochain 0.6.3 and 0.7.0). Rendered as
+  # JSON, which is YAML.
+  advancedConfig = lib.optionalAttrs cfg.relayAllowPlainText {
+    irohTransport.relayAllowPlainText = true;
+  };
+
   # `signal_url` is not a key in the 0.7 schema and the conductor rejects it.
   # `relay_url` is required on BOTH lines: a 0.6.3 conductor given only
   # bootstrap_url and signal_url refuses to start with
-  # `network: missing field `relay_url``.
-  networkSection =
-    if isPre07
-    then ''
-      network:
-        bootstrap_url: ${bootstrapUrl}
-        signal_url: ${signalUrl}
-        relay_url: ${relayUrl}
-    ''
-    else ''
-      network:
-        bootstrap_url: ${bootstrapUrl}
-        relay_url: ${relayUrl}
-    '';
+  # `network: missing field `relay_url``. `request_timeout_s` sits under
+  # `network` on both lines (0.6.3 already had it there).
+  networkSection = lib.concatStringsSep "\n" (
+    [
+      "network:"
+      "  bootstrap_url: ${bootstrapUrl}"
+    ]
+    ++ lib.optional isPre07 "  signal_url: ${signalUrl}"
+    ++ ["  relay_url: ${relayUrl}"]
+    ++ lib.optional (cfg.requestTimeoutS != null) "  request_timeout_s: ${toString cfg.requestTimeoutS}"
+    ++ lib.optional (advancedConfig != {}) "  advanced: ${builtins.toJSON advancedConfig}"
+  );
+
+  # Top-level keys that exist only from 0.7: `db_sync_level` replaced 0.6's
+  # `db_sync_strategy`, and `wasm_backend` is new. Both are rejected below
+  # 0.7, so they are dropped there with a warning.
+  topLevelSection = lib.concatStringsSep "\n" (
+    lib.optional (!isPre07 && cfg.dbSyncLevel != null) "db_sync_level: ${cfg.dbSyncLevel}"
+    ++ lib.optional (!isPre07 && cfg.wasmBackend != null) "wasm_backend: ${cfg.wasmBackend}"
+  );
 
   # The lair keystore opens a unix socket at <lair_root>/socket, and unix socket
   # paths are capped at SUN_LEN (108 bytes). A deep dataDir makes the conductor
@@ -84,7 +97,9 @@
           type: websocket
           port: ${toString cfg.adminPort}
           allowed_origins: "${cfg.adminAllowedOrigins}"
-    ${networkSection}'';
+    ${networkSection}
+    ${topLevelSection}
+  '';
 
   # 0.7 dispatches admin calls through `hc client call --port <p>`. On 0.6 that
   # subcommand does not exist at all (`hc` 0.6.3 panics looking for an external
@@ -350,7 +365,64 @@ in {
         by the conductor on both lines; `null` selects
         `https://use1-1.relay.n0.iroh-canary.iroh.link./`, the default both
         0.6.3 and 0.7.0 write for themselves.
+
+        For a `services.holochain-bootstrap` server this is
+        `http(s)://<host>:<port>/relay`: the same server as `bootstrapUrl`,
+        on the `/relay` path. A plain `http://` relay also needs
+        `relayAllowPlainText`.
       '';
+    };
+
+    relayAllowPlainText = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        Let the iroh transport use a plain-HTTP relay, by rendering
+        `network.advanced.irohTransport.relayAllowPlainText: true`. Kitsune2
+        refuses an `http://` relay URL without it, so the conductor would not
+        start. Needed for a LAN `services.holochain-bootstrap` server without
+        TLS; leave it off for an `https://` relay. Works on both lines.
+      '';
+    };
+
+    requestTimeoutS = lib.mkOption {
+      type = lib.types.nullOr lib.types.ints.positive;
+      default = null;
+      example = 90;
+      description = ''
+        `network.request_timeout_s`: seconds before a request and its response
+        time out. `null` leaves the conductor default, 60. Same key on both
+        lines.
+      '';
+    };
+
+    dbSyncLevel = lib.mkOption {
+      type = lib.types.nullOr (lib.types.enum ["Full" "Normal" "Off"]);
+      default = null;
+      description = ''
+        `db_sync_level`, the SQLite synchronous level, from 0.7 only (0.6 has
+        `db_sync_strategy` instead, which this module does not set). `null`
+        leaves the conductor default, `Normal`. `Off` trades crash safety for
+        speed. Ignored with a warning below 0.7.
+      '';
+    };
+
+    wasmBackend = lib.mkOption {
+      type = lib.types.nullOr (lib.types.enum ["cranelift" "LLVM" "wasmi"]);
+      default = null;
+      description = ''
+        `wasm_backend`, from 0.7 only: which compiler runs zomes when the
+        Holochain binary was built with more than one. The conductor refuses a
+        backend it was not built with. `null` uses whichever is available.
+        Ignored with a warning below 0.7.
+      '';
+    };
+
+    conductorConfigFile = lib.mkOption {
+      type = lib.types.path;
+      readOnly = true;
+      internal = true;
+      description = "The rendered conductor config, exposed so checks can read it.";
     };
 
     installerTimeout = lib.mkOption {
@@ -527,9 +599,15 @@ in {
   };
 
   config = lib.mkIf cfg.enable {
+    services.holochain-edgenode.conductorConfigFile = conductorConfig;
+
     warnings =
       lib.optional (!isPre07 && cfg.signalUrl != null)
-      "services.holochain-edgenode.signalUrl is set, but network.signal_url was removed from the Holochain 0.7 config schema and is ignored. Use services.holochain-edgenode.relayUrl instead.";
+      "services.holochain-edgenode.signalUrl is set, but network.signal_url was removed from the Holochain 0.7 config schema and is ignored. Use services.holochain-edgenode.relayUrl instead."
+      ++ lib.optional (isPre07 && cfg.dbSyncLevel != null)
+      "services.holochain-edgenode.dbSyncLevel is set, but db_sync_level exists only from Holochain 0.7 and is ignored on ${cfg.package.version}."
+      ++ lib.optional (isPre07 && cfg.wasmBackend != null)
+      "services.holochain-edgenode.wasmBackend is set, but wasm_backend exists only from Holochain 0.7 and is ignored on ${cfg.package.version}.";
 
     users.users.${cfg.user} = {
       isSystemUser = true;
@@ -615,6 +693,17 @@ in {
           services.holochain-edgenode.dataDir must live under /var/lib/: it is
           created as the units' systemd StateDirectory, which systemd only
           creates there. Got ${toString cfg.dataDir}.
+        '';
+      }
+      {
+        # kitsune2's iroh transport rejects the config with "Disallowed
+        # plaintext relay URL" (transport_iroh `validate_config`, v0.4.1), and
+        # the conductor never comes up; better to fail at evaluation.
+        assertion = lib.hasPrefix "http://" relayUrl -> cfg.relayAllowPlainText;
+        message = ''
+          services.holochain-edgenode.relayUrl is plain HTTP (${relayUrl}),
+          which the conductor refuses unless
+          services.holochain-edgenode.relayAllowPlainText = true.
         '';
       }
       {

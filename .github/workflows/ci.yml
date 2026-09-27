@@ -131,4 +131,6 @@ jobs:
             .#checks.x86_64-linux.grafanaProvisioning \
             .#checks.x86_64-linux.dashboardLabels \
             .#checks.x86_64-linux.dashboardWords \
-            .#checks.x86_64-linux.dashboardQueries
+            .#checks.x86_64-linux.dashboardQueries \
+            .#checks.x86_64-linux.vmTestBootstrap \
+            .#checks.x86_64-linux.edgenodeConfigRender
