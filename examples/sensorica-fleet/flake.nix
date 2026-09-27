@@ -18,6 +18,17 @@
     # follow too (the same way `holonix` above is needed for
     # `holochain-edgenode`'s own default package).
     holonix-0_6.follows = "nixos-holochain/holonix-0_6";
+    # The operator desk (hosts/desk.nix) declares the sensorica user's Plasma
+    # session. Only this example needs them; the modules stay desktop-free.
+    home-manager = {
+      url = "github:nix-community/home-manager/release-26.05";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    plasma-manager = {
+      url = "github:nix-community/plasma-manager";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.home-manager.follows = "home-manager";
+    };
   };
 
   outputs = inputs @ {
@@ -54,6 +65,10 @@
       # get it, so a `colmena apply` and a `nixos-rebuild switch` install the
       # same bundles from the same conductor.
       nixos-holochain.nixosModules.sensorica-event-node
+      # What a person at the Holoport's own screen gets: launchers, a laid-out
+      # Plasma session and the off-by-default event mode.
+      inputs.home-manager.nixosModules.home-manager
+      ./hosts/desk.nix
     ];
 
     mkEdgenode = name:
