@@ -443,9 +443,15 @@
               machine.log("holochain series on /metrics:\n" + series)
 
               # Every sample names its conductor, "Holochain" while
-              # conductorMetrics.name is left at its default.
-              for line in series.splitlines():
+              # conductorMetrics.name is left at its default. The service
+              # inventory is per unit, so only the conductor's own unit
+              # carries a conductor there.
+              readings = [l for l in series.splitlines() if not l.startswith("holochain_service_info")]
+              assert len(readings) >= 10, f"too few conductor readings: {readings}"
+              for line in readings:
                   assert 'conductor="Holochain"' in line, f"no conductor label: {line}"
+              conductor_unit = [l for l in series.splitlines() if l.startswith("holochain_service_info") and 'name="holochain-conductor.service"' in l]
+              assert len(conductor_unit) == 1 and 'conductor="Holochain"' in conductor_unit[0], f"conductor unit without its conductor: {conductor_unit}"
 
               for name in [
                   "holochain_conductor_up",
