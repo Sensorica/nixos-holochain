@@ -48,26 +48,7 @@
     }
   ],
   "templating": {
-    "list": [
-      {
-        "name": "units",
-        "type": "textbox",
-        "label": "Watched units",
-        "hide": 2,
-        "query": "holochain-conductor.service|holochain-happ-installer.service|holochain-conductor-metrics.timer|holochain-http-gateway.service|prometheus.service|prometheus-node-exporter.service|grafana.service|sshd.service|tailscaled.service|nix-daemon.socket",
-        "current": {
-          "text": "holochain-conductor.service|holochain-happ-installer.service|holochain-conductor-metrics.timer|holochain-http-gateway.service|prometheus.service|prometheus-node-exporter.service|grafana.service|sshd.service|tailscaled.service|nix-daemon.socket",
-          "value": "holochain-conductor.service|holochain-happ-installer.service|holochain-conductor-metrics.timer|holochain-http-gateway.service|prometheus.service|prometheus-node-exporter.service|grafana.service|sshd.service|tailscaled.service|nix-daemon.socket"
-        },
-        "options": [
-          {
-            "selected": true,
-            "text": "holochain-conductor.service|holochain-happ-installer.service|holochain-conductor-metrics.timer|holochain-http-gateway.service|prometheus.service|prometheus-node-exporter.service|grafana.service|sshd.service|tailscaled.service|nix-daemon.socket",
-            "value": "holochain-conductor.service|holochain-happ-installer.service|holochain-conductor-metrics.timer|holochain-http-gateway.service|prometheus.service|prometheus-node-exporter.service|grafana.service|sshd.service|tailscaled.service|nix-daemon.socket"
-          }
-        ]
-      }
-    ]
+    "list": []
   },
   "panels": [
     {
@@ -662,14 +643,19 @@
                         "index": 2
                       },
                       "3": {
-                        "text": "Running",
-                        "color": "green",
+                        "text": "A service is down",
+                        "color": "red",
                         "index": 3
                       },
                       "4": {
+                        "text": "Running",
+                        "color": "green",
+                        "index": 4
+                      },
+                      "5": {
                         "text": "No Holochain here",
                         "color": "#8e8e8e",
-                        "index": 4
+                        "index": 5
                       }
                     }
                   }
@@ -926,7 +912,7 @@
       "id": 9,
       "type": "table",
       "title": "Which watched services are down?",
-      "description": "Watched services (services.holochain-grafana.overviewUnits) that are not running, by the name the fleet gives them, and on which machine. A service that is not listed here is running.",
+      "description": "Every service that is not running, on every machine, by its name: what the modules enabled on each machine install and the services beside them, as the machine lists them itself (services.holochain-services.units), plus the units services.holochain-grafana.overviewUnits adds. Not answering means the service runs but does not answer its health check or, for a conductor, its admin interface. A service that is not listed here is running.",
       "datasource": {
         "type": "prometheus",
         "uid": "holochain-prometheus"
@@ -944,7 +930,7 @@
             "type": "prometheus",
             "uid": "holochain-prometheus"
           },
-          "expr": "node_systemd_unit_state{name=~\"${units:raw}\", state!=\"active\"} == 1",
+          "expr": "holochain:service_state < 6",
           "format": "table",
           "instant": true,
           "range": false
@@ -957,8 +943,8 @@
             "include": {
               "names": [
                 "node",
-                "name",
-                "state"
+                "service",
+                "Value"
               ]
             }
           }
@@ -969,11 +955,13 @@
             "excludeByName": {},
             "indexByName": {
               "node": 0,
-              "name": 1,
-              "state": 2
+              "service": 1,
+              "Value": 2
             },
             "renameByName": {
-              "node": "Node"
+              "node": "Node",
+              "service": "Service",
+              "Value": "State"
             }
           }
         }
@@ -992,54 +980,49 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "name"
+              "options": "State"
             },
             "properties": [
-              {
-                "id": "displayName",
-                "value": "Service"
-              },
-              {
-                "id": "mappings",
-                "value": []
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "state"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "State"
-              },
               {
                 "id": "mappings",
                 "value": [
                   {
                     "type": "value",
                     "options": {
-                      "failed": {
+                      "0": {
                         "text": "Failed",
                         "color": "red",
                         "index": 0
                       },
-                      "activating": {
-                        "text": "Starting",
-                        "color": "#EAB839",
+                      "1": {
+                        "text": "Stopped",
+                        "color": "red",
                         "index": 1
                       },
-                      "deactivating": {
-                        "text": "Stopping",
-                        "color": "#EAB839",
+                      "2": {
+                        "text": "Not answering",
+                        "color": "red",
                         "index": 2
                       },
-                      "inactive": {
-                        "text": "Stopped",
+                      "3": {
+                        "text": "No fresh readings",
                         "color": "orange",
                         "index": 3
+                      },
+                      "4": {
+                        "text": "Starting",
+                        "color": "#EAB839",
+                        "index": 4
+                      },
+                      "5": {
+                        "text": "Stopping",
+                        "color": "#EAB839",
+                        "index": 5
+                      },
+                      "6": {
+                        "text": "Running",
+                        "color": "green",
+                        "index": 6
                       }
                     }
                   }
@@ -1060,7 +1043,13 @@
         "cellHeight": "sm",
         "footer": {
           "show": false
-        }
+        },
+        "sortBy": [
+          {
+            "displayName": "State",
+            "desc": false
+          }
+        ]
       }
     },
     {
@@ -1267,14 +1256,19 @@
                   "index": 2
                 },
                 "3": {
-                  "text": "Running",
-                  "color": "green",
+                  "text": "A service is down",
+                  "color": "red",
                   "index": 3
                 },
                 "4": {
+                  "text": "Running",
+                  "color": "green",
+                  "index": 4
+                },
+                "5": {
                   "text": "No Holochain here",
                   "color": "#8e8e8e",
-                  "index": 4
+                  "index": 5
                 }
               }
             }
