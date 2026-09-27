@@ -13,6 +13,11 @@
     # Holochain toolchain comes from the module repository.
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
     holonix.follows = "nixos-holochain/holonix";
+    # `nixosModules.sensorica-event-node` resolves its 0.6-line packages
+    # through `inputs.holonix-0_6`, so any consumer of that module needs this
+    # follow too (the same way `holonix` above is needed for
+    # `holochain-edgenode`'s own default package).
+    holonix-0_6.follows = "nixos-holochain/holonix-0_6";
   };
 
   outputs = inputs @ {
@@ -27,35 +32,28 @@
 
     hosts = ["edgenode-01" "edgenode-02" "edgenode-03" "edgenode-04" "edgenode-05"];
 
-    # Passed to every host: the module reads inputs.holonix for its packages.
+    # Passed to every host: the modules read inputs.holonix and
+    # inputs.holonix-0_6 for their packages.
     specialArgs = {inherit inputs;};
 
-    # ADR-015: this fleet runs the 0.6 line for September. Not a preference —
-    # every hApp the workshop installs (hREA, Kando, Requests & Offers) has a
-    # 0.6 release and none has a 0.7 one. Both packages come from the module
-    # repository's own outputs, so the fleet adds no input of its own and cannot
-    # drift onto a different 0.6.3 than the one its VM tests ran against. The
-    # maintainers re-evaluate this seven days before the workshop date.
-    fleetLine = {
-      holochain = nixos-holochain.packages.${system}.holochain-0_6;
-      hc = nixos-holochain.packages.${system}.hc-0_6;
-    };
-
-    fleetHapps = import ./happs.nix {
-      inherit pkgs;
-      inherit (fleetLine) hc;
-    };
-
+    # ADR-015: this fleet runs the 0.6 line for September, from
+    # `nixosModules.sensorica-event-node` (#33), which every host in
+    # `fleetModules` below imports. Not a preference — every hApp the
+    # workshop installs (hREA, Kando, Requests & Offers) has a 0.6 release
+    # and none has a 0.7 one. The maintainers re-evaluate this seven days
+    # before the workshop date.
     fleetModules = [
       nixos-holochain.nixosModules.holochain-edgenode
       nixos-holochain.nixosModules.holochain-grafana
       # Imported so hosts/common.nix can turn it off in writing rather than by
       # omission; see the comment there.
       nixos-holochain.nixosModules.holochain-windtunnel
-      # Both the nixosConfigurations and the colmena hive get these, so a
-      # `colmena apply` and a `nixos-rebuild switch` install the same bundles
-      # from the same conductor.
-      {_module.args = {inherit fleetLine fleetHapps;};}
+      # The workshop event's package, hApps, seed, installer timeout and
+      # metrics options — the same export any external host rehearsing the
+      # event builds from. Both the nixosConfigurations and the colmena hive
+      # get it, so a `colmena apply` and a `nixos-rebuild switch` install the
+      # same bundles from the same conductor.
+      nixos-holochain.nixosModules.sensorica-event-node
     ];
 
     mkEdgenode = name:
@@ -88,6 +86,69 @@
 
     devShells.${system}.default = pkgs.mkShell {
       buildInputs = with pkgs; [colmena nixos-rebuild alejandra];
+    };
+
+    checks.${system} = {
+      # Guards #33: fails evaluation if edgenode-01's effective event-profile
+      # values (package, hApp srcs, network seeds, installer timeout, the two
+      # metrics enables) diverge from `nixosModules.sensorica-event-node`'s
+      # own defaults, so a future override in this example that quietly
+      # re-forks the profile is caught here instead of drifting unnoticed.
+      #
+      # `assertion` is forced while the derivation is constructed, which
+      # happens during evaluation of `.drvPath` — so `nix flake check
+      # --no-build` (what CI and the review commands run) catches a
+      # divergence without building anything.
+      eventProfileParity = let
+        edge = self.nixosConfigurations.edgenode-01.config.services.holochain-edgenode;
+
+        # The module's own defaults, evaluated the way any bare consumer
+        # gets them: `holochain-edgenode` plus the profile, nothing else
+        # layered on top. `_module.check = false` skips the rest of the
+        # NixOS option set, the same way the root flake's own
+        # `docs/module-options.md` generator does, since nothing here reads
+        # `config` outside `services.holochain-edgenode`.
+        moduleDefaults =
+          (lib.evalModules {
+            specialArgs = {inherit pkgs inputs;};
+            modules = [
+              {_module.check = false;}
+              nixos-holochain.nixosModules.holochain-edgenode
+              nixos-holochain.nixosModules.sensorica-event-node
+            ];
+          })
+          .config
+          .services
+          .holochain-edgenode;
+
+        # Fixed-output (fetchurl) and normally-built derivations both give a
+        # deterministic store path for identical inputs, so `toString`
+        # compares "the same content" without Nix trying (and failing) to
+        # structurally compare two derivation attrsets.
+        happShape = happs:
+          lib.mapAttrs (_: h: {
+            src = toString h.src;
+            inherit (h) installed networkSeed;
+          })
+          happs;
+
+        diffs = lib.filterAttrs (_: same: !same) {
+          package = toString edge.package == toString moduleDefaults.package;
+          hcPackage = toString edge.hcPackage == toString moduleDefaults.hcPackage;
+          installerTimeout = edge.installerTimeout == moduleDefaults.installerTimeout;
+          "metricsExporter.enable" = edge.metricsExporter.enable == moduleDefaults.metricsExporter.enable;
+          "conductorMetrics.enable" = edge.conductorMetrics.enable == moduleDefaults.conductorMetrics.enable;
+          happs = happShape edge.happs == happShape moduleDefaults.happs;
+        };
+      in
+        pkgs.runCommand "sensorica-event-profile-parity" {
+          assertion =
+            if diffs == {}
+            then "ok"
+            else throw "edgenode-01 diverges from nixosModules.sensorica-event-node on: ${toString (builtins.attrNames diffs)}";
+        } ''
+          echo "$assertion" > $out
+        '';
     };
   };
 }

@@ -104,6 +104,12 @@
           holochain-http-gateway = ./modules/holochain-http-gateway.nix;
           holochain-grafana = ./modules/holochain-grafana.nix;
           default = ./modules;
+
+          # The Sensorica workshop event profile (#33): package, hApps and
+          # network seed for the workshop, layered on top of
+          # `holochain-edgenode`. Not part of `default` on purpose; see the
+          # comment at the top of the module.
+          sensorica-event-node = ./modules/sensorica-event-node.nix;
         };
 
         # The one system in the root flake: a single edgenode with no hApp, so
