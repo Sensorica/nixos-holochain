@@ -160,6 +160,17 @@ network:
 
 The full set of top-level keys the 0.7.0 schema accepts is `admin_interfaces`, `data_root_path`, `db_max_readers`, `db_sync_level`, `incoming_request_concurrency_limit`, `keystore`, `network`, `restore_chain_quorum`, `tracing_override`, `tracing_scope`, `tuning_params` and `wasm_backend`.
 
+Four more options add keys only when set, so the default config above is unchanged by them:
+
+| Option | Renders | Lines |
+|---|---|---|
+| `relayAllowPlainText` | `network.advanced: {"irohTransport":{"relayAllowPlainText":true}}`, merged by the conductor under the keys it sets itself | both |
+| `requestTimeoutS` | `network.request_timeout_s` | both |
+| `dbSyncLevel` | top-level `db_sync_level` (`Full`, `Normal`, `Off`) | 0.7 only; warned and dropped below it |
+| `wasmBackend` | top-level `wasm_backend` (`cranelift`, `LLVM`, `wasmi`) | 0.7 only; warned and dropped below it |
+
+The `edgenodeConfigRender` check renders all four on each line and starts that line's conductor on the result. The holonix 0.7.0 binary is built with cranelift only: given `wasm_backend: LLVM` it exits with "Conductor is configured to use the LLVM WASM backend but this binary does not support it", which is also how that check was shown able to fail.
+
 ### `dataDir` has a length limit
 
 The lair keystore listens on a unix socket at `${dataDir}/ks/socket`, and unix socket paths are capped at `SUN_LEN`, 108 bytes. A deep `dataDir` makes the conductor exit during startup with a message that never mentions the config:

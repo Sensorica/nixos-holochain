@@ -302,6 +302,33 @@ absolute path
 
 
 
+## services\.holochain-edgenode\.dbSyncLevel
+
+
+
+` db_sync_level `, the SQLite synchronous level, from 0\.7 only (0\.6 has
+` db_sync_strategy ` instead, which this module does not set)\. ` null `
+leaves the conductor default, ` Normal `\. ` Off ` trades crash safety for
+speed\. Ignored with a warning below 0\.7\.
+
+
+
+*Type:*
+null or one of “Full”, “Normal”, “Off”
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
 ## services\.holochain-edgenode\.happs
 
 
@@ -602,6 +629,34 @@ string
 
 
 
+## services\.holochain-edgenode\.relayAllowPlainText
+
+
+
+Let the iroh transport use a plain-HTTP relay, by rendering
+` network.advanced.irohTransport.relayAllowPlainText: true `\. Kitsune2
+refuses an ` http:// ` relay URL without it, so the conductor would not
+start\. Needed for a LAN ` services.holochain-bootstrap ` server without
+TLS; leave it off for an ` https:// ` relay\. Works on both lines\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
 ## services\.holochain-edgenode\.relayUrl
 
 
@@ -610,6 +665,11 @@ Iroh relay used when a direct connection cannot be established\. Required
 by the conductor on both lines; ` null ` selects
 ` https://use1-1.relay.n0.iroh-canary.iroh.link./ `, the default both
 0\.6\.3 and 0\.7\.0 write for themselves\.
+
+For a ` services.holochain-bootstrap ` server this is
+` http(s)://<host>:<port>/relay `: the same server as ` bootstrapUrl `,
+on the ` /relay ` path\. A plain ` http:// ` relay also needs
+` relayAllowPlainText `\.
 
 
 
@@ -622,6 +682,40 @@ null or string
 
 ```nix
 null
+```
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
+## services\.holochain-edgenode\.requestTimeoutS
+
+
+
+` network.request_timeout_s `: seconds before a request and its response
+time out\. ` null ` leaves the conductor default, 60\. Same key on both
+lines\.
+
+
+
+*Type:*
+null or (positive integer, meaning >0)
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+90
 ```
 
 *Declared by:*
@@ -699,6 +793,33 @@ string
 
 ```nix
 "holochain"
+```
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
+## services\.holochain-edgenode\.wasmBackend
+
+
+
+` wasm_backend `, from 0\.7 only: which compiler runs zomes when the
+Holochain binary was built with more than one\. The conductor refuses a
+backend it was not built with\. ` null ` uses whichever is available\.
+Ignored with a warning below 0\.7\.
+
+
+
+*Type:*
+null or one of “cranelift”, “LLVM”, “wasmi”
+
+
+
+*Default:*
+
+```nix
+null
 ```
 
 *Declared by:*
