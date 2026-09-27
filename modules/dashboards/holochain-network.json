@@ -351,7 +351,7 @@
             "type": "prometheus",
             "uid": "holochain-prometheus"
           },
-          "expr": "holochain:dna_same_data{dna=\"$network\"}",
+          "expr": "holochain:dna_same_data{dna=\"$network\"} or on () vector(-1)",
           "legendFormat": "Same data",
           "instant": true,
           "range": false
@@ -381,7 +381,19 @@
               }
             ]
           },
-          "noValue": "only one node"
+          "noValue": "only one node",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "-1": {
+                  "text": "only one node",
+                  "color": "#8e8e8e",
+                  "index": 0
+                }
+              }
+            }
+          ]
         },
         "overrides": []
       },
