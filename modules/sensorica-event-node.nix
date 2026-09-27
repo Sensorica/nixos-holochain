@@ -15,15 +15,23 @@
 #
 # It declares no options of its own: it only supplies `mkDefault` values for
 # options `holochain-edgenode.nix` already declares (package, hcPackage,
-# happs, installerTimeout, the two metrics enables). `mkDefault` on the whole
-# `happs` attribute set still lets a host override a single leaf — one hApp's
-# `networkSeed`, or `src`, or the timeout, or the package — with an ordinary
-# assignment, because the module system pushes an outer `mkDefault` down to
-# every leaf of a nested attribute set (`pushDownProperties`). A host that
-# wants a different hApp set entirely reassigns `happs` as a whole, which
-# beats the default the same way. `services.holochain-edgenode.enable` is
-# left to the host: this module carries the workshop's content shape, not
-# whether the service runs at all.
+# happs, installerTimeout, the two metrics enables). A host overrides any one
+# of them with an ordinary assignment (default priority beats `mkDefault`).
+#
+# `happs` is set leaf by leaf (`happs.hrea.src = mkDefault ...;`,
+# `happs.hrea.networkSeed = mkDefault ...;`, one pair per hApp) rather than as
+# one `happs = mkDefault {...};`: `attrsOf (submodule ...)` merges each hApp's
+# fields as independent options, and a whole-set `mkDefault` does not survive
+# a host overriding a sibling field (verified empirically — a host setting
+# only `happs.hrea.networkSeed` left `happs.hrea.src` "accessed but has no
+# value defined", since NixOS's module merge does not push an outer
+# `mkDefault` recursively through a raw nested attribute set here). Per-leaf
+# `mkDefault` has no such gap: each field stands on its own default,
+# independent of what a host does to any other field. A host that wants a
+# different hApp set entirely still reassigns `happs` as a whole, which beats
+# every one of these per-leaf defaults the same way. `services.holochain-
+# edgenode.enable` is left to the host: this module carries the workshop's
+# content shape, not whether the service runs at all.
 {
   lib,
   pkgs,
@@ -64,18 +72,18 @@ in {
       # Holoport is not a fast machine (see examples/sensorica-fleet/README.md).
       installerTimeout = lib.mkDefault 900;
 
-      happs = lib.mkDefault {
+      happs = {
         hrea = {
-          src = happs.hrea;
-          inherit networkSeed;
+          src = lib.mkDefault happs.hrea;
+          networkSeed = lib.mkDefault networkSeed;
         };
         kando = {
-          src = happs.kando;
-          inherit networkSeed;
+          src = lib.mkDefault happs.kando;
+          networkSeed = lib.mkDefault networkSeed;
         };
         requests-and-offers = {
-          src = happs.requests-and-offers;
-          inherit networkSeed;
+          src = lib.mkDefault happs.requests-and-offers;
+          networkSeed = lib.mkDefault networkSeed;
         };
       };
     };
