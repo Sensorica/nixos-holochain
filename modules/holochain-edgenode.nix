@@ -209,11 +209,10 @@
   # Nix manages, so one it manages that the conductor does not list reads as
   # not running instead of vanishing. See dht-metrics.jq for the fallbacks.
   happNames = pkgs.writeText "happ-names.json" (builtins.toJSON {
-    apps =
-      lib.mapAttrs (_: happ:
-        lib.optionalAttrs (happ.displayName != null) {name = happ.displayName;}
-        // lib.optionalAttrs (happ.roleNames != {}) {roles = happ.roleNames;})
-      cfg.happs;
+    apps = lib.mapAttrs (_: happ:
+      lib.optionalAttrs (happ.displayName != null) {name = happ.displayName;}
+      // lib.optionalAttrs (happ.roleNames != {}) {roles = happ.roleNames;})
+    cfg.happs;
     kinds = {};
     expected = lib.attrNames (lib.filterAttrs (_: happ: happ.installed) cfg.happs);
   });
