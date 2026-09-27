@@ -2,7 +2,7 @@
 
 The shortest path from a freshly installed NixOS machine to a running Holochain conductor, using the `#minimal` template. It takes one machine, a network connection, and access to its console or an SSH session. No prior Nix flake experience is assumed.
 
-At the end, the machine runs `holochain-conductor.service` at boot, with its admin interface on port 4444 and its app interface on port 8888, both on loopback, and a hApp of your choice installed on first boot if you name one.
+At the end, the machine runs `holochain-conductor.service` at boot, with its admin interface on port 4444 on loopback. If you name a hApp, it is installed on first boot and the app interface is attached on port 8888, also on loopback; a node with no hApp has no app interface.
 
 ## 1. Start from NixOS
 
@@ -30,6 +30,8 @@ mkdir edgenode && cd edgenode && git init
 nix flake init -t github:Sensorica/nixos-holochain#minimal
 ```
 
+Before writing anything, Nix asks four y/N questions about the module repository's binary cache settings (`extra-substituters` and `extra-trusted-public-keys`, and whether to mark each as untrusted). Answer N to all four, or press Enter; the warnings that follow are expected, and step 5 passes the cache explicitly.
+
 This writes `flake.nix`, `configuration.nix`, a placeholder `hardware-configuration.nix` and a `README.md`. The template's `flake.nix` takes the modules from `github:Sensorica/nixos-holochain`, which is `main`. There is no release tag yet; once `v0.1.0` exists, change that input to `github:Sensorica/nixos-holochain/v0.1.0` to pin it (see the [README](../README.md#pinning-a-version)).
 
 Replace the placeholder hardware configuration with this machine's, or the next boot looks for disks by labels this machine may not have:
@@ -40,7 +42,11 @@ sudo nixos-generate-config --show-hardware-config > hardware-configuration.nix
 
 ## 4. Edit `configuration.nix`
 
-The template's `configuration.nix` becomes the machine's whole system configuration: it replaces `/etc/nixos/configuration.nix`, which stops being read. Carry over anything from that file you still need (networking beyond wired DHCP, locale, keyboard, other users). Then make three changes:
+The template's `configuration.nix` becomes the machine's whole system configuration: it replaces `/etc/nixos/configuration.nix`, which stops being read. Carry over anything from that file you still need (networking beyond wired DHCP, locale, keyboard).
+
+**Carry over your own account, or you lose it on the first switch.** The account you created in the installer is declared in `/etc/nixos/configuration.nix`, and NixOS removes a previously declared user that the new configuration no longer declares. The template declares only `operator`, which has no password and no SSH key until you give it one. Copy your `users.users.<your-name>` block from `/etc/nixos/configuration.nix` into this file, keeping `extraGroups = ["wheel"]` so you still have `sudo`, or make sure you can log in as `root` on the console before switching.
+
+Then make three changes:
 
 1. Paste your SSH public key into `users.users.operator.openssh.authorizedKeys.keys`. Without it, the `operator` account has no way in over SSH.
 2. Keep flakes on after the switch, and keep the Holochain Foundation's binary cache for later rebuilds, by adding this inside the top-level attribute set:
@@ -84,7 +90,7 @@ systemctl status holochain-conductor.service
 hc client call --port 4444 list-apps
 ```
 
-On a node with no hApp configured, `list-apps` prints `[]`. With a hApp, `systemctl status holochain-happ-installer.service` and `journalctl -u holochain-happ-installer` show the install. [`deployment.md`](deployment.md) § First boot sequence explains what runs in which order, and § Verifying the deployment lists the rest of the checks.
+On a node with no hApp configured, `list-apps` prints `[]`. On a node switched to the 0.6.3 line (see the [README](../README.md#supported-holochain-lines)), the same check is `hc sandbox call --running 4444 list-apps`. With a hApp, `systemctl status holochain-happ-installer.service` and `journalctl -u holochain-happ-installer` show the install. [`deployment.md`](deployment.md) § First boot sequence explains what runs in which order, and § Verifying the deployment lists the rest of the checks.
 
 To use `sudo` as `operator` over SSH, give the account a password on the console first: `sudo passwd operator`.
 

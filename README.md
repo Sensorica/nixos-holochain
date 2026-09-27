@@ -21,14 +21,16 @@ One module set serves both lines. The version of the conductor package a node ru
 | 0.7.0 | holonix `main-0.7` (input `holonix`) | the default | `hc-http-gw` 0.4.0 | `vmTest`, `vmTestWithHapp`, `vmTestGrafana`, `vmTestGateway` |
 | 0.6.3 | holonix `main-0.6` (input `holonix-0_6`) | set `package` and `hcPackage` to this flake's `holochain-0_6` and `hc-0_6` | `hc-http-gw` 0.3.5 | `vmTest-0_6`, `vmTestWithHapp-0_6`, `vmTestConductorMetrics-0_6` |
 
-`vmTestWindtunnel` runs no conductor, so it belongs to neither line. To run a node on 0.6.3, as [`examples/sensorica-fleet`](examples/sensorica-fleet/) does:
+`vmTestWindtunnel` runs no conductor, so it belongs to neither line. To run a node on 0.6.3, as [`examples/sensorica-fleet`](examples/sensorica-fleet/) does, set both packages in its `configuration.nix`, whose first line becomes `{config, pkgs, inputs, ...}:` so that `inputs` (passed by the template's `specialArgs`) and `pkgs` are in scope:
 
 ```nix
 services.holochain-edgenode = {
-  package = nixos-holochain.packages.x86_64-linux.holochain-0_6;
-  hcPackage = nixos-holochain.packages.x86_64-linux.hc-0_6;
+  package = inputs.nixos-holochain.packages.${pkgs.stdenv.hostPlatform.system}.holochain-0_6;
+  hcPackage = inputs.nixos-holochain.packages.${pkgs.stdenv.hostPlatform.system}.hc-0_6;
 };
 ```
+
+On 0.6 the admin CLI prefix changes too: check the node with `hc sandbox call --running 4444 list-apps` instead of `hc client call --port 4444 list-apps`.
 
 ---
 
@@ -58,6 +60,8 @@ The short version, on a machine already running NixOS with flakes enabled:
 ```bash
 nix flake init -t github:Sensorica/nixos-holochain#minimal
 ```
+
+Nix first asks whether to accept this repository's binary cache settings (four y/N questions); answering N is fine, because the first switch passes the cache explicitly (see [`docs/getting-started.md`](docs/getting-started.md#5-check-and-switch)).
 
 That writes a flake with one `nixosConfigurations.edgenode`, a `configuration.nix` to edit and a placeholder `hardware-configuration.nix` to replace with `nixos-generate-config --show-hardware-config` from the target machine. Then:
 
@@ -197,7 +201,7 @@ nix build .#checks.x86_64-linux.vmTestGateway -L
 
 ## Used by
 
-**Sensorica Lab, Montreal: the pilot.** Five Holoports at the Sensorica lab run [`examples/sensorica-fleet`](examples/sensorica-fleet/): Holochain 0.6.3 with hREA, Kando and Requests & Offers on one network seed, Grafana on `edgenode-01`, and a live ISO for workshop participants. It is the pilot for `v0.1.0` and has not been deployed on the Holoports yet ([#8](https://github.com/Sensorica/nixos-holochain/issues/8) to [#12](https://github.com/Sensorica/nixos-holochain/issues/12)).
+**Sensorica Lab, Montreal: the pilot.** Five Holoports at the Sensorica lab are to run [`examples/sensorica-fleet`](examples/sensorica-fleet/): Holochain 0.6.3 with hREA, Kando and Requests & Offers on one network seed, Grafana on `edgenode-01`, and a live ISO for workshop participants. It is the pilot for `v0.1.0` and has not been deployed on the Holoports yet ([#8](https://github.com/Sensorica/nixos-holochain/issues/8) to [#12](https://github.com/Sensorica/nixos-holochain/issues/12)).
 
 The fleet is also the substrate of the Holochain NixOS workshop at Sensorica, the follow-up to the December 2025 HolOS/edgenode event; its date is [issue #7](https://github.com/Sensorica/nixos-holochain/issues/7). **Goal:** each participant deploys a working edgenode into a 5-machine fleet, watches live P2P traffic via Grafana, and rolls back a configuration change. 4 hours, no prior Nix experience required. See [`workshop/facilitator-guide.md`](workshop/facilitator-guide.md) and [`workshop/preflight-checklist.md`](workshop/preflight-checklist.md).
 
