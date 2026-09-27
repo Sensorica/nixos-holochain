@@ -181,7 +181,13 @@ nix build .#nixosConfigurations.minimal-vm.config.system.build.vm
 ./result/bin/run-*-vm
 ```
 
-The flake declares the Holochain Foundation's binary cache in its `nixConfig`, but Nix only honours that with your consent. If you see
+A host that imports the `holochain-edgenode` module gets the Holochain Foundation's binary cache in its `nix.settings` (`services.holochain-edgenode.binaryCache.enable`, on by default), so `holochain` and `hc` download prebuilt. That setting reaches `nix.conf` only once a switch has activated it: the first `nixos-rebuild switch` that brings the module still compiles Holochain from source (the `cargo-src-*` and `holochain-deps` derivations are the sign) unless you pass the cache for that one run:
+
+```bash
+sudo nixos-rebuild switch --flake .#<host> --option extra-substituters https://holochain-ci.cachix.org --option extra-trusted-public-keys holochain-ci.cachix.org-1:5IUSkZc0aoRS53rfkvH9Kid40NpyjwCMCzwRTXy+QN8=
+```
+
+Every later switch uses the plain command. This root flake also declares the cache in its `nixConfig`, for building its own outputs, but Nix only honours that with your consent. If you see
 
 ```
 warning: ignoring untrusted flake configuration setting 'extra-substituters'.
