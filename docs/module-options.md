@@ -981,7 +981,10 @@ Host health row drawn from node_exporter\.
 A directory in the Nix store (a path in your flake, or a directory
 inside a flake input or package such as ` "${inputs.x}/dashboards" `)
 has every dashboard’s ` units ` textbox variable set from
-` overviewUnits ` on its way in\. A directory outside the store, or a
+` overviewUnits ` on its way in, every field override matched by name
+to ` name ` given the units’ names as value mappings, and the
+` room_app `, ` room_part ` and ` room_label ` constants set from ` room `
+when that is set\. A directory outside the store, or a
 store path written as a bare string that carries no Nix string
 context, is provisioned as it is\.
 
@@ -1055,62 +1058,76 @@ false
 
 
 
-systemd units the dashboard’s Services panel shows for every node,
-read from node_exporter’s systemd collector (` node_systemd_unit_state `)\.
+systemd units the dashboards watch on every node, read from
+node_exporter’s systemd collector (` node_systemd_unit_state `), each
+with the name a person reads for it\. The keys are units, the values
+their names; a unit whose name is null, or an entry of a plain list of
+units, is shown by its unit name\.
+
 The default covers the long-running units the nixos-holochain modules
-create, plus the services a fleet node usually runs beside them\. Two
-one-shot helpers are left out: ` holochain-conductor-metrics.service `
-sits idle between runs, so its timer is listed instead, and
-` grafana-secret-key.service ` runs once at boot; if either fails, the
-Fleet status panel counts it\. The Nix daemon is listed by its socket:
-NixOS starts ` nix-daemon.service ` on demand, so the service is
-inactive on an idle node that is perfectly healthy\.
+create, plus the services a fleet node usually runs beside them\. It
+holds only units that stay active while all is well: long-running
+services, timers, sockets, and the app installer, a one-shot that
+remains active once it has run\. Two one-shot helpers are left out:
+` holochain-conductor-metrics.service ` sits idle between runs, so its
+timer is listed instead, and ` grafana-secret-key.service ` runs once at
+boot; if either fails, the Fleet status panel counts it\. The Nix
+daemon is listed by its socket: NixOS starts ` nix-daemon.service ` on
+demand, so the service is inactive on an idle node that is perfectly
+healthy\.
 
-The panel has one row per node and one column per unit that some
-selected node has\. A unit one node runs and another does not shows as
-absent on the second node’s row; a unit no selected node runs has no
-column at all, so one list serves a whole fleet whose machines run
-different things\.
+The names reach a dashboard as value mappings: every field override
+matched by name to ` name ` (the unit label) in a provisioned dashboard
+gets one regex mapping per named unit\.
 
-Each entry is a regular expression Prometheus matches against the
-whole unit name, suffix included, so ` restic-backups-.* ` works\. The
-entries are joined with ` | ` into the default of the dashboard’s
-` units ` variable; a viewer can type another regex in the browser,
-which lives in that page’s URL and is never saved to the dashboard\.
+The fleet dashboard’s Services panel has one row per node and one
+column per unit that some selected node has\. A unit one node runs and
+another does not shows as absent on the second node’s row; a unit no
+selected node runs has no column at all, so one set serves a whole
+fleet whose machines run different things\.
 
-Setting this option replaces the default list\. To add a unit and keep
-the defaults, define it with ` lib.mkOptionDefault `, which merges with
-the default instead of overriding it:
-` overviewUnits = lib.mkOptionDefault [ "caddy.service" ]; `\.
+Each key is a regular expression Prometheus matches against the whole
+unit name, suffix included, so ` restic-backups-.* ` works, and its name
+is given to every unit it matches\. The keys are joined with ` | ` into
+the default of the dashboard’s ` units ` variable; a viewer can type
+another regex in the browser, which lives in that page’s URL and is
+never saved to the dashboard\.
 
-This list only picks what the Services panel draws\. The Fleet status
-panel counts every failed unit on the node whatever is listed here,
-except device, scope and slice units, which the node_exporter flags
-these modules set leave out\.
+Setting this option replaces the default\. To add a unit and keep the
+defaults, define it with ` lib.mkOptionDefault `, which merges with the
+default instead of overriding it:
+` overviewUnits = lib.mkOptionDefault { "caddy.service" = "Web server"; }; `
+(a list, ` lib.mkOptionDefault [ "caddy.service" ] `, merges the same
+way)\.
+
+This only picks what the Services panel draws\. The Fleet status panel
+counts every failed unit on the node whatever is listed here, except
+device, scope and slice units, which the node_exporter flags these
+modules set leave out\.
 
 
 
 *Type:*
-list of string
+(attribute set of (null or string)) or (list of string) convertible to it
 
 
 
 *Default:*
 
 ```nix
-[
-  "holochain-conductor.service"
-  "holochain-happ-installer.service"
-  "holochain-conductor-metrics.timer"
-  "holochain-http-gateway.service"
-  "(podman|docker)-wind-tunnel-runner.service"
-  "prometheus.service"
-  "prometheus-node-exporter.service"
-  "grafana.service"
-  "sshd.service"
-  "tailscaled.service"
-  "nix-daemon.socket"
-]
+{
+  "(podman|docker)-wind-tunnel-runner.service" = "Wind Tunnel runner";
+  "grafana.service" = "Dashboards";
+  "holochain-conductor-metrics.timer" = "Holochain readings (timer)";
+  "holochain-conductor.service" = "Holochain conductor";
+  "holochain-happ-installer.service" = "App installer";
+  "holochain-http-gateway.service" = "HTTP gateway";
+  "nix-daemon.socket" = "Nix";
+  "prometheus-node-exporter.service" = "Machine readings";
+  "prometheus.service" = "Metrics database";
+  "sshd.service" = "Remote login";
+  "tailscaled.service" = "Private network (Tailscale)";
+}
 ```
 
 
@@ -1118,8 +1135,11 @@ list of string
 *Example:*
 
 ```nix
-[ "holochain-conductor.service" "holochain-happ-installer.service"
-  "sshd.service" "caddy.service" "restic-backups-.*" ]
+{
+  "holochain-conductor.service" = "Holochain conductor";
+  "caddy.service" = "Web server";
+  "restic-backups-.*" = "Backups";
+}
 
 ```
 
@@ -1145,6 +1165,109 @@ Port Prometheus listens on\.
 
 ```nix
 9090
+```
+
+*Declared by:*
+ - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+
+
+
+## services\.holochain-grafana\.room
+
+
+
+The one app part a room screen follows writes in\. Rendered into the
+constant variables ` room_app `, ` room_part ` and ` room_label ` of every
+provisioned dashboard that declares them; when null, those variables
+keep the defaults their dashboard gives them\.
+
+An app installed by hand in Moss is not a good choice: its id changes
+with every installation and holds ` $ `, which Grafana reads as a
+variable\.
+
+
+
+*Type:*
+null or (submodule)
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+*Declared by:*
+ - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+
+
+
+## services\.holochain-grafana\.room\.app
+
+
+
+The installed_app_id of an app this module’s fleet installs from Nix\.
+
+
+
+*Type:*
+string
+
+
+
+*Example:*
+
+```nix
+"requests-and-offers"
+```
+
+*Declared by:*
+ - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+
+
+
+## services\.holochain-grafana\.room\.label
+
+
+
+The name the room screen gives that app\.
+
+
+
+*Type:*
+string
+
+
+
+*Example:*
+
+```nix
+"Requests & Offers"
+```
+
+*Declared by:*
+ - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+
+
+
+## services\.holochain-grafana\.room\.part
+
+
+
+The role of the app whose writes the room follows\.
+
+
+
+*Type:*
+string
+
+
+
+*Example:*
+
+```nix
+"requests_and_offers"
 ```
 
 *Declared by:*
@@ -1184,12 +1307,27 @@ string
 
 
 
-Prometheus node_exporter targets across the fleet (host:port)\.
+The node_exporter of every node Prometheus scrapes, and the name each
+node goes by on the dashboards\. Prometheus attaches the name to every
+series from the target as the ` node ` label, so a node that is down is
+still shown by its name, and the dashboards never show an address\.
+
+As an attribute set, each key is the node’s name, and the value gives
+its ` address ` (host:port) and, optionally, its ` site `, which becomes a
+` site ` label\. As a list of host:port strings, each node is named after
+the host part of its address, except that a loopback address
+(127\.0\.0\.1, localhost, ::1) takes this machine’s
+` networking.hostName `\.
+
+No two targets may go by the same name: the dashboards aggregate by
+` node `, so two targets named alike would read as one machine\. Two
+list entries on one host (two ports of a loopback, say) need the
+attribute set form\.
 
 
 
 *Type:*
-list of string
+(list of string) or attribute set of (submodule)
 
 
 
@@ -1204,8 +1342,11 @@ list of string
 *Example:*
 
 ```nix
-[ "edgenode-01:9100" "edgenode-02:9100" "edgenode-03:9100"
-  "edgenode-04:9100" "edgenode-05:9100" ]
+{
+  lab-1 = { address = "edgenode-01:9100"; site = "Sensorica lab"; };
+  lab-2 = { address = "edgenode-02:9100"; site = "Sensorica lab"; };
+  homelab.address = "100.64.0.7:9100";
+}
 
 ```
 
@@ -1249,6 +1390,141 @@ null
 
 ```nix
 "/var/lib/secrets/grafana-secret-key"
+```
+
+*Declared by:*
+ - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+
+
+
+## services\.holochain-grafana\.states\.historyWindow
+
+
+
+How far back, as a Prometheus duration, a DHT with no peer is
+remembered to have had one\. Within it the DHT reads “Lost contact”;
+a DHT that had nobody in all of it, on a DNA no other node of the
+fleet runs, reads “No one else yet”, which is normal for a node that
+is alone\.
+
+
+
+*Type:*
+string matching the pattern \[0-9]+(ms|s|m|h|d|w|y)
+
+
+
+*Default:*
+
+```nix
+"24h"
+```
+
+*Declared by:*
+ - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+
+
+
+## services\.holochain-grafana\.states\.inStepShare
+
+
+
+The share of its best peer’s data a connected DHT must hold, on
+average over ` shareWindow `, to read “In step” rather than “Catching
+up”\. A healthy DHT rarely holds everything its best peer does, since
+new data is always on its way, so 1 would read a working network as
+behind for good; 0\.95 is what the Sensorica Moss node’s DHTs held on
+2026-09-27\.
+
+
+
+*Type:*
+integer or floating point number between 0 and 1 (both inclusive)
+
+
+
+*Default:*
+
+```nix
+0.95
+```
+
+*Declared by:*
+ - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+
+
+
+## services\.holochain-grafana\.states\.shareWindow
+
+
+
+The window, as a Prometheus duration, the held share is averaged
+over, so a DHT does not flap between “In step” and “Catching up” at
+every write\.
+
+
+
+*Type:*
+string matching the pattern \[0-9]+(ms|s|m|h|d|w|y)
+
+
+
+*Default:*
+
+```nix
+"10m"
+```
+
+*Declared by:*
+ - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+
+
+
+## services\.holochain-grafana\.states\.silentAfterSeconds
+
+
+
+How long a DHT that knows peers may go without gossiping with any of
+them before it reads “Lost contact”\.
+
+
+
+*Type:*
+positive integer, meaning >0
+
+
+
+*Default:*
+
+```nix
+600
+```
+
+*Declared by:*
+ - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+
+
+
+## services\.holochain-grafana\.states\.staleAfterSeconds
+
+
+
+How old a conductor’s readings may get before every DHT of it reads
+“No fresh readings” and its conductor state reads stale\. The default
+covers the metrics timer’s 30 s interval plus the 15 s scrape, with
+margin; raise it with ` conductorMetrics.interval `\.
+
+
+
+*Type:*
+positive integer, meaning >0
+
+
+
+*Default:*
+
+```nix
+90
 ```
 
 *Declared by:*
