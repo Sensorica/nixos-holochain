@@ -21,9 +21,16 @@
   # everything else in the directory is copied unchanged. A directory outside
   # the store is read by Grafana at runtime and cannot be rewritten here, so it
   # is passed through as it is.
+  #
+  # "In the store" means a path literal, or a string that points into the
+  # store and carries the context that makes it a build input, such as
+  # "''${inputs.x}/dashboards". lib.isStorePath alone would miss the second:
+  # it is true only for a top-level store path, not for a directory inside one.
   unitsRegex = lib.concatStringsSep "|" cfg.overviewUnits;
+  dashboardsPath = toString cfg.dashboards;
   dashboardsInStore =
-    builtins.isPath cfg.dashboards || lib.isStorePath (toString cfg.dashboards);
+    builtins.isPath cfg.dashboards
+    || (lib.hasPrefix "${builtins.storeDir}/" dashboardsPath && builtins.hasContext dashboardsPath);
   provisionedDashboards =
     if dashboardsInStore
     then
@@ -191,9 +198,12 @@ in {
         Holochain row drawn from the edgenode module's metrics timer, and a
         Host health row drawn from node_exporter.
 
-        A directory in the Nix store (a path in your flake, for instance) has
-        every dashboard's `units` textbox variable set from `overviewUnits` on
-        its way in; a directory outside the store is provisioned as it is.
+        A directory in the Nix store (a path in your flake, or a directory
+        inside a flake input or package such as `"''${inputs.x}/dashboards"`)
+        has every dashboard's `units` textbox variable set from
+        `overviewUnits` on its way in. A directory outside the store, or a
+        store path written as a bare string that carries no Nix string
+        context, is provisioned as it is.
       '';
     };
 
@@ -204,7 +214,7 @@ in {
         "holochain-happ-installer.service"
         "holochain-conductor-metrics.timer"
         "holochain-http-gateway.service"
-        "podman-wind-tunnel-runner.service"
+        "(podman|docker)-wind-tunnel-runner.service"
         "prometheus.service"
         "prometheus-node-exporter.service"
         "grafana.service"
@@ -219,13 +229,20 @@ in {
       description = ''
         systemd units the dashboard's Services panel shows for every node,
         read from node_exporter's systemd collector (`node_systemd_unit_state`).
-        The default is every unit the nixos-holochain modules create, plus the
-        services a fleet node usually runs beside them. The Nix daemon is
-        listed by its socket: NixOS starts `nix-daemon.service` on demand, so
-        the service is inactive on an idle node that is perfectly healthy.
-        A unit a node does not
-        have is shown as absent on that node, so one list serves a whole
-        fleet whose machines run different things.
+        The default covers the long-running units the nixos-holochain modules
+        create, plus the services a fleet node usually runs beside them. Two
+        one-shot helpers are left out: `holochain-conductor-metrics.service`
+        sits idle between runs, so its timer is listed instead, and
+        `grafana-secret-key.service` runs once at boot; if either fails, the
+        Fleet status panel counts it. The Nix daemon is listed by its socket:
+        NixOS starts `nix-daemon.service` on demand, so the service is
+        inactive on an idle node that is perfectly healthy.
+
+        The panel has one row per node and one column per unit that some
+        selected node has. A unit one node runs and another does not shows as
+        absent on the second node's row; a unit no selected node runs has no
+        column at all, so one list serves a whole fleet whose machines run
+        different things.
 
         Each entry is a regular expression Prometheus matches against the
         whole unit name, suffix included, so `restic-backups-.*` works. The
@@ -233,8 +250,15 @@ in {
         `units` variable; a viewer can type another regex in the browser,
         which lives in that page's URL and is never saved to the dashboard.
 
+        Setting this option replaces the default list. To add a unit and keep
+        the defaults, define it with `lib.mkOptionDefault`, which merges with
+        the default instead of overriding it:
+        `overviewUnits = lib.mkOptionDefault [ "caddy.service" ];`.
+
         This list only picks what the Services panel draws. The Fleet status
-        panel counts every failed unit on the node whatever is listed here.
+        panel counts every failed unit on the node whatever is listed here,
+        except device, scope and slice units, which the node_exporter flags
+        these modules set leave out.
       '';
     };
 
@@ -362,6 +386,11 @@ in {
       enable = lib.mkDefault true;
       port = lib.mkDefault 9100;
       enabledCollectors = lib.mkDefault ["systemd"];
+      # Counts failed mount units too, which node_exporter leaves out by
+      # default. The same flag as holochain-edgenode's, and at mkDefault so
+      # that module's list replaces this one: node_exporter refuses to start
+      # when the flag is given twice.
+      extraFlags = lib.mkDefault ["--collector.systemd.unit-exclude=.+[.](device|scope|slice)"];
     };
 
     networking.firewall = lib.mkIf cfg.openFirewall {

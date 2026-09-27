@@ -18,6 +18,7 @@ flake.nix
 ├── modules/
 │   ├── holochain-edgenode.nix     ← core: conductor + lair + hApp installer + metrics
 │   ├── conductor-metrics.jq       ← dump-network-stats → Prometheus text
+│   ├── conductor-counters.jq      ← running byte and message totals across closed connections
 │   ├── holochain-grafana.nix      ← optional: Prometheus + Grafana for a fleet
 │   ├── dashboards/                ← provisioned Grafana dashboards
 │   ├── holochain-windtunnel.nix   ← optional: donate the machine to the Foundation's Nomad cluster
@@ -234,7 +235,7 @@ hc client call --port 4444 dump-network-stats        # 0.7
 hc sandbox call --running 4444 dump-network-stats     # 0.6
 ```
 
-pipes the reply through `modules/conductor-metrics.jq`, and moves the result into `metricsExporter.textfileDirectory` atomically, because the collector may read the directory at any moment.
+also calls `list-apps` for the installed apps, folds the reply's per-connection counts into running totals with `modules/conductor-counters.jq`, pipes the lot through `modules/conductor-metrics.jq`, and moves the result into `metricsExporter.textfileDirectory` atomically, because the collector may read the directory at any moment.
 
 The reply is Kitsune2's `TransportStats` (`kitsune2` `crates/api/src/transport.rs`), wrapped by Holochain with `blocked_message_counts`. It is byte-identical on both lines. Verified against the pinned binaries, on a bare conductor with no app installed and no peers:
 
@@ -256,25 +257,26 @@ Each entry of `connections` carries `pub_key`, `send_message_count`, `send_bytes
 | `holochain_conductor_peer_connections` | gauge | Transport connections currently held |
 | `holochain_conductor_direct_peer_connections` | gauge | Of those, the ones that upgraded off the relay |
 | `holochain_conductor_peer_urls` | gauge | Peer URLs this conductor can be reached at |
-| `holochain_conductor_network_sent_bytes_total` | counter | Bytes sent, summed over current connections |
-| `holochain_conductor_network_received_bytes_total` | counter | Bytes received, summed over current connections |
-| `holochain_conductor_network_sent_messages_total` | counter | Messages sent, summed over current connections |
-| `holochain_conductor_network_received_messages_total` | counter | Messages received, summed over current connections |
-| `holochain_conductor_blocked_messages_total` | counter | Messages refused, summed over every block reason |
+| `holochain_conductor_network_sent_bytes_total` | counter | Bytes sent, kept as a running total across connections that have closed |
+| `holochain_conductor_network_received_bytes_total` | counter | Bytes received, kept as a running total across connections that have closed |
+| `holochain_conductor_network_sent_messages_total` | counter | Messages sent, kept as a running total across connections that have closed |
+| `holochain_conductor_network_received_messages_total` | counter | Messages received, kept as a running total across connections that have closed |
+| `holochain_conductor_blocked_messages_total` | counter | Messages blocked in either direction, summed over every block reason |
+| `holochain_conductor_apps{status}` | gauge | Installed apps by status type from `list-apps`; `enabled` and `disabled` always present, absent when `list-apps` did not answer |
 | `holochain_conductor_metrics_scrape_timestamp_seconds` | gauge | When the textfile was last written |
 
 Two properties are worth stating explicitly:
 
 - **A down conductor reports `holochain_conductor_up 0`, it does not disappear.** The script writes the file whether or not the call succeeded, so a dead node is visible on the dashboard rather than absent from it. This is the difference between a panel that says "one node is down" and a panel that quietly draws four lines instead of five.
-- **The byte and message counters describe live connections only.** They sum over the connections the conductor holds at that instant, so a peer that disconnects takes its totals with it and the counter can go down. `rate()` over them is throughput of current links, which is what the dashboard draws; they are not lifetime totals and should not be read as such.
+- **The byte and message counters only go up.** The reply counts per open connection, so its plain sum drops whenever a peer disconnects, and `rate()` reads any drop as a counter reset: it would draw the whole remaining total as a burst of traffic that never happened. So the timer keeps the counts it last saw per connection, keyed by `pub_key` and `opened_at_s`, and the running totals, in `conductor-metrics-counters.json` under the conductor's `dataDir`, and adds each connection's growth since the previous run (`modules/conductor-counters.jq`). What a connection moves between the timer's last look and its closing is not counted, so the totals undercount by at most one interval of a closing connection. Losing the state file restarts them from zero, which Prometheus handles as the reset it is.
 
 ### 2. Prometheus and Grafana
 
-`holochain-grafana` runs both on the monitor node and provisions the pair that makes a dashboard work without a human: a Prometheus data source with the fixed uid `holochain-prometheus`, and every JSON file under `modules/dashboards/`. The shipped dashboard, "Holochain Fleet", opens on an Overview row that says per node whether the node, its conductor and its services are up, then a Holochain row with the conductor series, then a Host health row with CPU, memory, load, disk, temperature, network and pressure from node_exporter, so a spike in one is legible against the other. Every query is filtered by an `instance` variable, so the same dashboard serves one homelab machine and a fleet of five.
+`holochain-grafana` runs both on the monitor node and provisions the pair that makes a dashboard work without a human: a Prometheus data source with the fixed uid `holochain-prometheus`, and every JSON file under `modules/dashboards/`. The shipped dashboard, "Holochain Fleet", opens on an Overview row that says per node whether the node, its conductor and its services are up, and whether the node is about to break (fullest disk, memory, hottest sensor, a recent reboot), then a Holochain row with the conductor series, then a Host health row with CPU, memory, load, disk, temperature, network and pressure from node_exporter, so a spike in one is legible against the other. Every query is filtered by an `instance` variable, so the same dashboard serves one homelab machine and a fleet of five.
 
-The Services panel reads `node_systemd_unit_state`, which node_exporter's systemd collector exports for every unit on the node. Which units it shows is the `units` variable, and its default comes from the `overviewUnits` option: the module rewrites that one default into each provisioned dashboard on its way into the store, because the JSON is read-only once there and a browser edit would not survive a rebuild. Everything else in the JSON reaches Grafana untouched.
+The Services panel reads `node_systemd_unit_state`, which node_exporter's systemd collector exports for every unit on the node except device, scope and slice units; both modules pass `--collector.systemd.unit-exclude` so that mount units, which node_exporter leaves out by default, are counted when they fail. Which units it shows is the `units` variable, and its default comes from the `overviewUnits` option: the module rewrites that one default into each provisioned dashboard on its way into the store, because the JSON is read-only once there and a browser edit would not survive a rebuild. Everything else in the JSON reaches Grafana untouched.
 
-`vmTestGrafana` runs the whole path in one VM: it waits for the conductor, asserts `holochain_conductor_up 1` appears on `/metrics`, asserts every Prometheus target reports `"health":"up"`, asserts Prometheus kept the series, and asserts Grafana's search API returns the provisioned dashboard and its data source. It then reads the dashboard back from Grafana's API, checks every panel title and that the `units` default carries `overviewUnits`, and runs every query on the dashboard against Prometheus with the variables filled in, requiring a non-empty answer from all of them except Temperatures, which a VM has no sensors for. Finally it fails on any provisioning error in Grafana's journal.
+`vmTestGrafana` runs the whole path in one VM, scraping its own node_exporter and a second target nothing listens on. It waits for the conductor, asserts `holochain_conductor_up 1` appears on `/metrics`, asserts the live target is up and the dead one down, asserts Prometheus kept the series, and asserts Grafana's search API returns the provisioned dashboard and its data source. It then reads the dashboard back from Grafana's API and checks every panel title, that the `units` default carries `overviewUnits`, and that the `instance` variable's own `label_values` definition finds both targets. It runs every query on the dashboard against Prometheus with the variables filled in, once for all nodes and once for the live node alone, requiring a non-empty answer from all of them except those on `node_hwmon_temp_celsius`, which a VM has no sensors for (there it requires the hwmon collector to be running instead); checks that every label a query matches negatively exists on its metric, since a misspelled one would match everything; and checks that mount units are exported. The Overview's failure states are exercised for real: a unit that always fails reads failed on the Services panel and counts under Failed units, the dead target reads down, unknown and node unreachable, and the conductor is then stopped, its metrics timer stopped, and its textfile corrupted, with the Conductor state required to read down, stale and textfile error in turn. The value mappings that colour those states are checked too. Finally it fails on any provisioning error in Grafana's journal.
 
 A fleet is the monitor node naming its peers and every node exporting:
 

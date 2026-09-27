@@ -13,13 +13,28 @@
 # $up is 1 when the admin interface answered and 0 when it did not, so the
 # series never disappears from the dashboard when a conductor is down.
 # $now is the scrape time in seconds since the epoch.
+# $totals is the running byte and message totals conductor-counters.jq keeps
+# across runs; the reply's own counts cover only the connections open right
+# now, and would go down whenever a peer disconnects.
+# $apps is the list-apps reply, or null when that call did not answer, in which
+# case no holochain_conductor_apps line is written rather than a false zero.
+# Every installed app counts under its status type; enabled and disabled are
+# always written, so an empty conductor reads 0 rather than nothing.
 
 def metric($name; $help; $type; $value):
   "# HELP \($name) \($help)",
   "# TYPE \($name) \($type)",
   "\($name) \($value)";
 
-def total(f): [.[] | f] | add // 0;
+def apps:
+  if $apps == null then empty
+  else
+    ([$apps[] | .status.type // "unknown" | tostring | ascii_downcase | gsub("[^a-z_]"; "_")]
+      | reduce .[] as $s ({enabled: 0, disabled: 0}; .[$s] += 1)) as $by
+    | "# HELP holochain_conductor_apps Installed apps, by status type from list-apps.",
+      "# TYPE holochain_conductor_apps gauge",
+      ($by | to_entries[] | "holochain_conductor_apps{status=\"\(.key)\"} \(.value)")
+  end;
 
 (.transport_stats // {}) as $t
 | ($t.connections // []) as $c
@@ -43,25 +58,26 @@ def total(f): [.[] | f] | add // 0;
     "gauge"; ($u | length)),
   metric(
     "holochain_conductor_network_sent_bytes_total";
-    "Bytes sent over all current peer connections.";
-    "counter"; ($c | total(.send_bytes))),
+    "Bytes sent to peers since the counter state was created, including closed connections.";
+    "counter"; ($totals.send_bytes // 0)),
   metric(
     "holochain_conductor_network_received_bytes_total";
-    "Bytes received over all current peer connections.";
-    "counter"; ($c | total(.recv_bytes))),
+    "Bytes received from peers since the counter state was created, including closed connections.";
+    "counter"; ($totals.recv_bytes // 0)),
   metric(
     "holochain_conductor_network_sent_messages_total";
-    "Messages sent over all current peer connections.";
-    "counter"; ($c | total(.send_message_count))),
+    "Messages sent to peers since the counter state was created, including closed connections.";
+    "counter"; ($totals.send_message_count // 0)),
   metric(
     "holochain_conductor_network_received_messages_total";
-    "Messages received over all current peer connections.";
-    "counter"; ($c | total(.recv_message_count))),
+    "Messages received from peers since the counter state was created, including closed connections.";
+    "counter"; ($totals.recv_message_count // 0)),
   metric(
     "holochain_conductor_blocked_messages_total";
-    "Messages the conductor refused, summed over every block reason.";
+    "Messages the conductor blocked, incoming and outgoing, summed over every block reason.";
     "counter"; ([$b | .. | numbers] | add // 0)),
   metric(
     "holochain_conductor_metrics_scrape_timestamp_seconds";
     "Unix time at which this textfile was written.";
-    "gauge"; $now)
+    "gauge"; $now),
+  apps

@@ -206,7 +206,10 @@ Whether to enable a timer that exports the conductor’s own network stats as
 This is the fleet dashboard’s Holochain data source\. It calls
 ` dump-network-stats ` on the admin interface, which answers with
 Kitsune2’s ` TransportStats ` on both the 0\.6 and 0\.7 lines, and derives
-connection, byte and message gauges from it\. Requires
+connection gauges and byte and message counters from it; it also
+counts installed apps by status from ` list-apps `\. The counters are
+running totals kept in ` conductor-metrics-counters.json ` under
+` dataDir `, so a peer disconnecting does not pull them down\. Requires
 ` metricsExporter.enable `
 \.
 
@@ -856,9 +859,12 @@ per node whether the node, its conductor and its services are up, a
 Holochain row drawn from the edgenode module’s metrics timer, and a
 Host health row drawn from node_exporter\.
 
-A directory in the Nix store (a path in your flake, for instance) has
-every dashboard’s ` units ` textbox variable set from ` overviewUnits ` on
-its way in; a directory outside the store is provisioned as it is\.
+A directory in the Nix store (a path in your flake, or a directory
+inside a flake input or package such as ` "${inputs.x}/dashboards" `)
+has every dashboard’s ` units ` textbox variable set from
+` overviewUnits ` on its way in\. A directory outside the store, or a
+store path written as a bare string that carries no Nix string
+context, is provisioned as it is\.
 
 
 
@@ -932,13 +938,20 @@ false
 
 systemd units the dashboard’s Services panel shows for every node,
 read from node_exporter’s systemd collector (` node_systemd_unit_state `)\.
-The default is every unit the nixos-holochain modules create, plus the
-services a fleet node usually runs beside them\. The Nix daemon is
-listed by its socket: NixOS starts ` nix-daemon.service ` on demand, so
-the service is inactive on an idle node that is perfectly healthy\.
-A unit a node does not
-have is shown as absent on that node, so one list serves a whole
-fleet whose machines run different things\.
+The default covers the long-running units the nixos-holochain modules
+create, plus the services a fleet node usually runs beside them\. Two
+one-shot helpers are left out: ` holochain-conductor-metrics.service `
+sits idle between runs, so its timer is listed instead, and
+` grafana-secret-key.service ` runs once at boot; if either fails, the
+Fleet status panel counts it\. The Nix daemon is listed by its socket:
+NixOS starts ` nix-daemon.service ` on demand, so the service is
+inactive on an idle node that is perfectly healthy\.
+
+The panel has one row per node and one column per unit that some
+selected node has\. A unit one node runs and another does not shows as
+absent on the second node’s row; a unit no selected node runs has no
+column at all, so one list serves a whole fleet whose machines run
+different things\.
 
 Each entry is a regular expression Prometheus matches against the
 whole unit name, suffix included, so ` restic-backups-.* ` works\. The
@@ -946,8 +959,15 @@ entries are joined with ` | ` into the default of the dashboard’s
 ` units ` variable; a viewer can type another regex in the browser,
 which lives in that page’s URL and is never saved to the dashboard\.
 
+Setting this option replaces the default list\. To add a unit and keep
+the defaults, define it with ` lib.mkOptionDefault `, which merges with
+the default instead of overriding it:
+` overviewUnits = lib.mkOptionDefault [ "caddy.service" ]; `\.
+
 This list only picks what the Services panel draws\. The Fleet status
-panel counts every failed unit on the node whatever is listed here\.
+panel counts every failed unit on the node whatever is listed here,
+except device, scope and slice units, which the node_exporter flags
+these modules set leave out\.
 
 
 
@@ -964,7 +984,7 @@ list of string
   "holochain-happ-installer.service"
   "holochain-conductor-metrics.timer"
   "holochain-http-gateway.service"
-  "podman-wind-tunnel-runner.service"
+  "(podman|docker)-wind-tunnel-runner.service"
   "prometheus.service"
   "prometheus-node-exporter.service"
   "grafana.service"

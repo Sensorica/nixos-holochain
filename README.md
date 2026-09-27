@@ -100,6 +100,7 @@ nixos-holochain/
 ├── modules/
 │   ├── holochain-edgenode.nix         # Core: conductor + lair + hApp installer + metrics
 │   ├── conductor-metrics.jq           # dump-network-stats → Prometheus text
+│   ├── conductor-counters.jq          # running byte and message totals across closed connections
 │   ├── holochain-grafana.nix          # Prometheus + Grafana for a fleet
 │   ├── dashboards/                    # Provisioned Grafana dashboards
 │   ├── holochain-windtunnel.nix       # Opt-in: donate the machine to the Foundation's Nomad cluster
@@ -170,7 +171,7 @@ Eight NixOS VM tests, all built in CI:
 | `vmTest` / `vmTest-0_6` | A bare conductor comes up and answers `list-apps` on 0.7.0 and on 0.6.3 |
 | `vmTestWithHapp` / `vmTestWithHapp-0_6` | A hApp installs once, stays enabled, and survives a cold boot on both lines |
 | `vmTestConductorMetrics-0_6` | The conductor's gauges appear on `/metrics` on the 0.6 line |
-| `vmTestGrafana` | Conductor series reach Prometheus, the dashboard is provisioned with its data source, and every one of its queries answers from real series |
+| `vmTestGrafana` | Conductor series reach Prometheus, the dashboard is provisioned with its data source, every one of its queries answers from real series (temperatures excepted, which a VM has no sensor for), and the Overview reads a failed unit, a dead node and a down, stale or unreadable conductor as such |
 | `vmTestGateway` | A zome read answers 200 with JSON through the HTTP gateway, and a function outside the allow list answers 403 |
 | `vmTestWindtunnel` | The generated container unit carries the flags the runner requires, and stays stopped when `autoStart = false` |
 
