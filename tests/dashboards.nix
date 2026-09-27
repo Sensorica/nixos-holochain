@@ -64,8 +64,8 @@ in {
         '(.. | objects | select(.title? == "What needs a human?") | .transformations[] | select(.id == "filterFieldsByName") | .options.include.names) += ["instance"]'
       broken "shows the column dna" holochain-node.json \
         '(.. | objects | select(.title? == "Is each app part connected, complete and recent?") | .fieldConfig.overrides) |= map(select(.matcher.options != "dna"))'
-      broken "panel \"Services on this node\" shows the column instance" holochain-node.json \
-        '(.. | objects | select(.title? == "Services on this node") | .transformations[] | select(.id == "filterFieldsByName") | .options.include.names) += ["instance"]'
+      broken "panel \"Is each service on this machine running?\" shows the column instance" holochain-node.json \
+        '(.. | objects | select(.title? == "Is each service on this machine running?") | .transformations[] | select(.id == "filterFieldsByName") | .options.include.names) += ["instance"]'
       broken "is used by" holochain-network.json '.uid = "holochain-node"'
       touch $out
     '';
@@ -162,7 +162,7 @@ in {
         unit holochain-http-gateway.service inactive
         unit holochain-bootstrap.service active
       } | jq -s '. + [
-        {series: "holochain_service_info{instance=\"homelab:9100\",job=\"holochain-nodes\",node=\"homelab\",conductor=\"Workshop\",name=\"holochain-conductor.service\",service=\"Holochain conductor\"}", values: "1+0x60"},
+        {series: "holochain_service_info{instance=\"homelab:9100\",job=\"holochain-nodes\",node=\"homelab\",conductor=\"Workshop\",name=\"holochain-conductor.service\",service=\"Holochain conductor (Workshop)\"}", values: "1+0x60"},
         {series: "holochain_service_info{instance=\"homelab:9100\",job=\"holochain-nodes\",node=\"homelab\",name=\"holochain-http-gateway.service\",service=\"HTTP gateway\"}", values: "1+0x60"},
         {series: "holochain_service_info{instance=\"homelab:9100\",job=\"holochain-nodes\",node=\"homelab\",name=\"holochain-bootstrap.service\",service=\"Local bootstrap and relay\"}", values: "1+0x60"},
         {series: "holochain_service_healthy{instance=\"homelab:9100\",job=\"holochain-nodes\",node=\"homelab\",name=\"holochain-bootstrap.service\"}", values: "1+0x60"},
@@ -282,13 +282,13 @@ in {
                     | {expr, eval_time: "30m",
                        exp_samples: [{labels: "holochain:node_state{instance=\"homelab:9100\",job=\"holochain-nodes\",node=\"homelab\"}", value: 1}]}),
                   # The Moss node is a service of its own, and does not answer.
-                  ($targets[0][] | select(.dashboard == "holochain-node" and .title == "Services on this node")
+                  ($targets[0][] | select(.dashboard == "holochain-node" and .title == "Is each service on this machine running?")
                     | {expr: "max by (service) (\(.expr))", eval_time: "30m",
                        exp_samples: [
-                         {labels: "{service=\"Holochain conductor\"}", value: 6},
+                         {labels: "{service=\"Holochain conductor (Workshop)\"}", value: 6},
                          {labels: "{service=\"HTTP gateway\"}", value: 1},
                          {labels: "{service=\"Local bootstrap and relay\"}", value: 6},
-                         {labels: "{service=\"Moss node\"}", value: 2}]})
+                         {labels: "{service=\"Holochain conductor (Moss)\"}", value: 2}]})
                 ]
               },
               {
@@ -297,22 +297,22 @@ in {
                 input_series: $up[0],
                 promql_expr_test: [
                   # One row per service: the three the node lists, and a row
-                  # for each conductor no unit claims, Moss as "Moss node".
-                  ($targets[0][] | select(.dashboard == "holochain-node" and .title == "Services on this node")
+                  # for each conductor no unit claims, Moss as "Holochain conductor (Moss)".
+                  ($targets[0][] | select(.dashboard == "holochain-node" and .title == "Is each service on this machine running?")
                     | {expr: "max by (service) (\(.expr))", eval_time: "30m",
                        exp_samples: [
-                         {labels: "{service=\"Holochain conductor\"}", value: 6},
+                         {labels: "{service=\"Holochain conductor (Workshop)\"}", value: 6},
                          {labels: "{service=\"HTTP gateway\"}", value: 1},
                          {labels: "{service=\"Local bootstrap and relay\"}", value: 6},
-                         {labels: "{service=\"Moss node\"}", value: 6},
-                         {labels: "{service=\"Clones node\"}", value: 6}]}),
-                  ($targets[0][] | select(.dashboard == "holochain-fleet" and .title == "Which watched services are down?")
+                         {labels: "{service=\"Holochain conductor (Moss)\"}", value: 6},
+                         {labels: "{service=\"Holochain conductor (Clones)\"}", value: 6}]}),
+                  ($targets[0][] | select(.dashboard == "holochain-fleet" and .title == "Which services are not running?")
                     | {expr: "max by (node, service) (\(.expr))", eval_time: "30m",
                        exp_samples: [{labels: "{node=\"homelab\", service=\"HTTP gateway\"}", value: 1}]}),
                   # A stopped gateway turns the tile of the machine to A service is down.
                   ($targets[0][] | select(.dashboard == "holochain-now" and .title == "Which machines are on?")
                     | {expr, eval_time: "30m",
-                       exp_samples: [{labels: "holochain:node_state{instance=\"homelab:9100\",job=\"holochain-nodes\",node=\"homelab\"}", value: 3}]})
+                       exp_samples: [{labels: "holochain:node_state{instance=\"homelab:9100\",job=\"holochain-nodes\",node=\"homelab\"}", value: 2}]})
                 ]
               }
             ]
@@ -365,7 +365,7 @@ in {
         'map(if .dashboard == "holochain-network" and .title == "Lost contact" then .expr |= sub("dna=\""; "dna=\"no-such-") else . end)' \
         'count(holochain:dht_state{dna=\"no-such-'
       broken "a services table that reads the watched list, not the states" \
-        'map(if .title == "Services on this node" then .expr |= sub("holochain:service_state"; "holochain:service_watched") else . end)' \
+        'map(if .title == "Is each service on this machine running?" then .expr |= sub("holochain:service_state"; "holochain:service_watched") else . end)' \
         'got:'
       broken "a join on part of the key" \
         'map(if .title == "Is each app part connected, complete and recent?" then .expr |= gsub("instance, conductor, app_id, role, dna"; "instance, conductor, app_id, role") else . end)' \

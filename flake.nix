@@ -808,8 +808,9 @@
         # One machine running an edgenode, the HTTP gateway, Grafana and, when
         # `bootstrap` is true, the local bootstrap and relay. The pass
         # condition is what a person reads through Grafana's own query API:
-        # the node page's "Services on this node" names every service the
-        # enabled modules installed, and nothing else, each Running; with
+        # the node page's "Is each service on this machine running?" names
+        # every service the enabled modules installed, and nothing else, each
+        # Running; with
         # bootstrap, the server frozen reads Not answering while systemd still
         # says active, and stopped reads Stopped, the room screen's tile for
         # the machine turning to A service is down both times.
@@ -860,8 +861,8 @@
                 else "False"
               }
               BOOTSTRAP = "Local bootstrap and relay"
-              RUNNING, NOT_ANSWERING, STOPPED = 6, 2, 1
-              TILE_RUNNING, TILE_SERVICE_DOWN = 4, 3
+              RUNNING, NOT_ANSWERING, STOPPED, FAILED = 6, 2, 1, 0
+              TILE_RUNNING, TILE_SERVICE_DOWN = 4, 2
 
               machine.wait_for_unit("grafana.service")
               machine.wait_for_unit("prometheus.service")
@@ -886,9 +887,9 @@
 
 
               # The queries the pages run, as Grafana serves them.
-              services_expr = target("holochain-node", "Services on this node")
+              services_expr = target("holochain-node", "Is each service on this machine running?")
               tile_expr = target("holochain-now", "Which machines are on?")
-              down_expr = target("holochain-fleet", "Which watched services are down?")
+              down_expr = target("holochain-fleet", "Which services are not running?")
               problems_expr = target("holochain-fleet", "What needs a human?")
               machine.log(f"services query: {services_expr}")
 
@@ -1019,6 +1020,31 @@
                   assert problem(f"{BOOTSTRAP} is stopped")
                   assert tile() == TILE_SERVICE_DOWN, tile()
                   machine.log("stopped: Stopped")
+
+                  # Failing at every start: systemd restarts it every
+                  # RestartSec and calls it activating in between, so only the
+                  # restart count tells the loop from a slow start.
+                  loop = "failed and systemd is restarting it"
+                  assert not reads(FAILED)(None)
+                  assert not problem(f"{BOOTSTRAP} {loop}")
+                  machine.succeed(
+                      "mkdir -p /run/systemd/system/holochain-bootstrap.service.d"
+                      " && printf '[Service]\\nExecStart=\\nExecStart=/bin/sh -c \"exit 1\"\\n'"
+                      " > /run/systemd/system/holochain-bootstrap.service.d/fail.conf"
+                      " && systemctl daemon-reload"
+                      " && systemctl start --no-block holochain-bootstrap.service"
+                  )
+                  retry(lambda _: problem(f"{BOOTSTRAP} {loop}"), timeout_seconds=180)
+                  retry(reads(FAILED), timeout_seconds=60)
+                  machine.log("systemd: " + machine.succeed(
+                      "systemctl show -p ActiveState -p SubState -p NRestarts holochain-bootstrap.service"
+                  ).replace("\n", " "))
+                  assert int(machine.succeed(
+                      "systemctl show -p NRestarts --value holochain-bootstrap.service"
+                  )) > 1
+                  assert listed_down(FAILED)
+                  assert tile() == TILE_SERVICE_DOWN, tile()
+                  machine.log("restarting at every failure: Failed")
             '';
           };
       in {
@@ -1983,7 +2009,7 @@
               }
               node_words = {
                   "0": ("Unreachable", "red"), "1": ("Holochain not answering", "red"),
-                  "2": ("No fresh readings", "orange"), "3": ("A service is down", "red"),
+                  "2": ("A service is down", "red"), "3": ("No fresh readings", "orange"),
                   "4": ("Running", "green"), "5": ("No Holochain here", grey),
               }
               service_words = {
@@ -2003,7 +2029,7 @@
               }
               assert words(panel("holochain-fleet", "Node status over time")["fieldConfig"]["defaults"]["mappings"]) == node_words
               # Both service tables read their states in the same words.
-              for uid, title in [("holochain-fleet", "Which watched services are down?"), ("holochain-node", "Services on this node")]:
+              for uid, title in [("holochain-fleet", "Which services are not running?"), ("holochain-node", "Is each service on this machine running?")]:
                   assert words(override(panel(uid, title), "State", "mappings")) == service_words, (uid, title)
 
               # ---- node names and the recording rules, over three conductors ----
@@ -2077,7 +2103,7 @@
               # overviewUnits adds to the watched services, has failed: the
               # node reads A service is down, and the dead target reads
               # Unreachable, each by its name.
-              wait_values("holochain:node_state", "q-node-state", {"machine": "3", "unplugged": "0"}, "node")
+              wait_values("holochain:node_state", "q-node-state", {"machine": "2", "unplugged": "0"}, "node")
               wait_values('max by (conductor) (holochain:conductor_state)', "q-conductor-state",
                           {"Holochain": "3", "Workshop": "3", "Moss": "3"}, "conductor")
 
@@ -2085,12 +2111,13 @@
               # its modules installed, as the machine lists them, the two
               # overviewUnits adds, by their unit names, and the two fixture
               # conductors that no unit on the machine claims, the Moss one as
-              # "Moss node". The live conductor is claimed by its unit.
+              # "Holochain conductor (Moss)". The live conductor is claimed by
+              # its unit.
               wait_values('max by (service) (holochain:service_state{node="machine"})', "q-services", {
                   "Holochain conductor": "6", "App installer": "6", "Holochain readings (timer)": "6",
                   "Metrics database": "6", "Dashboards": "6", "Machine readings": "6", "Nix": "6",
                   "systemd-journald.service": "6", "always-fails.service": "0",
-                  "Moss node": "6", "Workshop node": "6",
+                  "Holochain conductor (Moss)": "6", "Holochain conductor (Workshop)": "6",
               }, "service")
 
               # The Moss node's shape: the connected chat and the group in step,

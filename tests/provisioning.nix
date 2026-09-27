@@ -110,11 +110,23 @@
     ];
   withBootstrap = everything true;
   withoutBootstrap = everything false;
+  # sshd started from its socket, which defines no sshd.service; and a unit
+  # listed that nothing defines, which would have no row on the pages.
+  socketSsh = monitor [
+    {
+      services.openssh = {
+        enable = true;
+        startWhenNeeded = true;
+      };
+    }
+  ];
+  ghost = monitor [{services.holochain-services.units."ghost.service" = "Ghost";}];
   servicesOf = config: {
     inherit (config.services.holochain-services) units healthChecks textfileDirectory;
     # The health timer, when there is one to run.
     healthTimer = config.systemd.timers ? holochain-service-health;
     flags = config.services.prometheus.exporters.node.extraFlags;
+    warnings = lib.filter (lib.hasPrefix "services.holochain-services") config.warnings;
   };
 
   scrape = config: (lib.findFirst (c: c.job_name == "holochain-nodes") null config.services.prometheus.scrapeConfigs).static_configs;
@@ -154,6 +166,8 @@
       monitor = servicesOf list;
       withBootstrap = servicesOf withBootstrap;
       withoutBootstrap = servicesOf withoutBootstrap;
+      socketSsh = servicesOf socketSsh;
+      ghost = servicesOf ghost;
     };
     restated.dashboards = dashboardsOf restated;
   });
@@ -207,7 +221,7 @@ in
     # readings' conductor, and the bootstrap server gets a health check on the
     # address it listens on.
     check '.services.withBootstrap.units | map_values(.name) == {
-      "holochain-conductor.service": "Holochain conductor",
+      "holochain-conductor.service": "Holochain conductor (Workshop)",
       "holochain-conductor-metrics.timer": "Holochain readings (timer)",
       "holochain-http-gateway.service": "HTTP gateway",
       "holochain-bootstrap.service": "Local bootstrap and relay",
@@ -225,6 +239,17 @@ in
     check '(.services.withoutBootstrap.units | has("holochain-bootstrap.service") | not)
       and (.services.withoutBootstrap.units | has("holochain-http-gateway.service"))
       and .services.withoutBootstrap.healthChecks == {} and .services.withoutBootstrap.healthTimer == false'
+    # node_exporter counts restarts on every machine, so a service that keeps
+    # failing while systemd restarts it reads Failed, not Starting.
+    check 'all(.services.monitor, .services.withBootstrap; .flags | index("--collector.systemd.enable-restarts-metrics") != null)'
+    # Every unit the modules list is one the configuration defines, so none
+    # is warned about; sshd started from its socket is listed as the socket.
+    check 'all(.services.monitor, .services.withBootstrap, .services.withoutBootstrap, .services.socketSsh; .warnings == [])'
+    check '(.services.socketSsh.units | has("sshd.socket")) and (.services.socketSsh.units | has("sshd.service") | not)
+      and .services.socketSsh.units["sshd.socket"].name == "Remote login"'
+    check '.services.withBootstrap.units | has("sshd.service")'
+    # A unit listed that nothing defines is warned about by name.
+    check '.services.ghost.warnings | length == 1 and (.[0] | contains("\"ghost.service\""))'
 
     # Grafana's home page is the shipped room screen, as provisioned (so with
     # its room constants); a dashboards directory without one gets a copy of

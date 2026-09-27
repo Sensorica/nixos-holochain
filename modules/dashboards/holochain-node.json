@@ -1333,8 +1333,8 @@
     {
       "id": 25,
       "type": "table",
-      "title": "Services on this node",
-      "description": "Every service this machine runs for Holochain and beside it, one row each, by name, worst first. The machine lists them itself, from the nixos-holochain modules enabled on it (services.holochain-services.units), and the monitor's services.holochain-grafana.overviewUnits may add more. A Holochain conductor another program runs here, such as a Moss node, has a row of its own. Failed, Stopped and Not answering are down, and turn this machine's tile on the room screen to A service is down. Not answering means systemd says the service is running, but it does not answer its health check or, for a conductor, its admin interface; No fresh readings means nobody has checked it lately.",
+      "title": "Is each service on this machine running?",
+      "description": "Every service this machine runs for Holochain and beside it, one row each, by name, worst first. The machine lists them itself, from the nixos-holochain modules enabled on it (services.holochain-services.units), and the monitor's services.holochain-grafana.overviewUnits may add more. A Holochain conductor another program runs here, such as a Moss node, has a row of its own, \"Holochain conductor (Moss)\". Failed, Stopped and Not answering are down, and turn this machine's tile on the room screen to A service is down; Failed includes a service that keeps failing while systemd restarts it. Not answering means systemd says the service is running, but it does not answer its health check or, for a conductor, its admin interface; No fresh readings means nobody has checked it lately.",
       "datasource": {
         "type": "prometheus",
         "uid": "holochain-prometheus"

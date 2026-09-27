@@ -23,7 +23,8 @@
 #   Conductor: 1 Holochain not answering, 2 No fresh readings, 3 Running.
 #
 #   Service (a watched unit, or a conductor no unit claims):
-#     0 Failed              systemd says the unit failed
+#     0 Failed              systemd says the unit failed, or it keeps failing
+#                           while systemd keeps restarting it
 #     1 Stopped             the unit is inactive
 #     2 Not answering       active, but its health check fails, or the
 #                           conductor it runs does not answer
@@ -32,10 +33,11 @@
 #     4 Starting, 5 Stopping
 #     6 Running
 #
-#   Node: 0 Unreachable, 1 Holochain not answering, 2 No fresh readings (a
-#   conductor's or a service's), 3 A service is down (failed, stopped or not
-#   answering), 4 Running, 5 No Holochain here: the worst of its conductors
-#   and services, Unreachable over everything.
+#   Node: 0 Unreachable, 1 Holochain not answering, 2 A service is down
+#   (failed, stopped or not answering), 3 No fresh readings (a conductor's or
+#   a service's), 4 Running, 5 No Holochain here: the worst of its conductors
+#   and services, Unreachable over everything. A service that is down is
+#   fresh news from systemd, so it ranks above a reading that is only old.
 #
 # Data series carry machine keys only. Names come from holochain_dht_info,
 # joined on the full key of a DHT: instance, conductor, app_id, role and dna.
@@ -109,6 +111,17 @@
   # a condition holds on the unit or on the conductor it runs.
   watched = "holochain:service_watched";
   unitIs = state: ''(node_systemd_unit_state{state="${state}"} == 1)'';
+  # A unit that keeps failing while systemd restarts it (Restart= with a
+  # RestartSec): between two tries systemd reports it as activating, so it
+  # would otherwise read Starting for as long as the loop lasts. Restarted by
+  # systemd in two scrapes within staleAfterSeconds, or in one and not back
+  # up yet. Reads node_exporter's --collector.systemd.enable-restarts-metrics,
+  # which the edgenode and grafana modules turn on; without it this matches
+  # nothing.
+  restarts = "changes(node_systemd_service_restart_total[${stale}s])";
+  restartLoop = ''
+    (${restarts} > 1
+      or (${restarts} > 0 and on (instance, name) ${unitIs "activating"}))'';
   serviceWhen = on: cond: code: "(${watched} and on (${on}) ${cond}) * 0 + ${toString code}";
 
   # One sentence per failed unit, watched or not: a failed unit the
@@ -120,6 +133,14 @@
       "problem", "$1 has failed", "service", "(.*)")
     or on (instance, name)
     label_replace(node_systemd_unit_state{state="failed"} > 0, "problem", "$1 has failed", "name", "(.*)")'';
+  # The same for a unit that keeps failing and restarting, which systemd
+  # does not report as failed.
+  loopingUnits = ''
+    label_replace(
+      ${restartLoop} * on (instance, name) group_left (service) ${watched},
+      "problem", "$1 failed and systemd is restarting it", "service", "(.*)")
+    or on (instance, name)
+    label_replace(${restartLoop}, "problem", "$1 failed and systemd is restarting it", "name", "(.*)")'';
   # A watched service that is down without having failed. Services that run a
   # conductor are left to the conductor's own sentences.
   serviceProblem = code: text: ''
@@ -282,11 +303,16 @@ in {
         # The service ladder: the first branch that matches wins. The unit's
         # own state first, then whether it answers, then whether anyone has
         # looked lately. A conductor that no watched unit claims (a Moss node
-        # run by another program) is a service of its own, "<conductor> node".
+        # run by another program) is a service of its own, named as the
+        # edgenode names the unit that runs one: "Holochain conductor (Moss)",
+        # or "Holochain conductor" under the default conductor name, so the
+        # row reads like the problem sentence "Holochain (Moss) ..." and the
+        # Conductors stat's "Moss".
         {
           record = "holochain:service_state";
           expr = ''
               ${serviceWhen "instance, name" (unitIs "failed") 0}
+            or ${serviceWhen "instance, name" restartLoop 0}
             or ${serviceWhen "instance, name" (unitIs "inactive") 1}
             or ${serviceWhen "instance, name" (unitIs "activating") 4}
             or ${serviceWhen "instance, name" (unitIs "deactivating") 5}
@@ -295,27 +321,29 @@ in {
             or ${serviceWhen "instance, name" "((time() - holochain_service_health_timestamp_seconds) > ${stale})" 3}
             or ${serviceWhen "instance, conductor" "(holochain:conductor_state == 2)" 3}
             or ${serviceWhen "instance, name" (unitIs "active") 6}
-            or label_replace(
+            or label_replace(label_replace(
                  (   (holochain:conductor_state == 1) * 0 + 2
                   or (holochain:conductor_state == 2) * 0 + 3
                   or (holochain:conductor_state == 3) * 0 + 6)
                  unless on (instance, conductor) ${watched},
-                 "service", "$1 node", "conductor", "(.+)")'';
+                 "service", "Holochain conductor ($1)", "conductor", "(.+)"),
+                 "service", "Holochain conductor", "conductor", "Holochain")'';
         }
 
         # A node's state: unreachable wins over everything, then the worst of
         # its conductors and services, so one silent conductor or stopped
-        # service cannot hide behind healthy ones. A conductor's own codes are
-        # the node's, but Running, which moves up one for A service is down.
+        # service cannot hide behind healthy ones, nor behind a reading that is
+        # only old.
         {
           record = "holochain:node_state";
           expr = ''
               (max by (instance, job, node, site) (up{job="holochain-nodes"}) == 0)
             or on (instance) min by (instance, job, node, site) (
-                 (holochain:conductor_state < 3)
-              or (holochain:conductor_state == 3) + 1
-              or (holochain:service_state == 3) * 0 + 2
-              or (holochain:service_state <= 2) * 0 + 3)
+                 (holochain:conductor_state == 1) * 0 + 1
+              or (holochain:conductor_state == 2) * 0 + 3
+              or (holochain:conductor_state == 3) * 0 + 4
+              or (holochain:service_state <= 2) * 0 + 2
+              or (holochain:service_state == 3) * 0 + 3)
             or on (instance) (max by (instance, job, node, site) (up{job="holochain-nodes"}) * 0 + 5)'';
         }
 
@@ -334,8 +362,10 @@ in {
           record = "holochain:node_problem";
           expr = ''
               max by (instance, node, site, problem) (${failedUnits})
+            or max by (instance, node, site, problem) (${loopingUnits})
             or ${serviceProblem 1 "is stopped"}
             or ${serviceProblem 2 "is not answering"}
+            or ${serviceProblem 3 "readings are over ${stale} s old"}
             or ${problem "A disk is over 90% full" "max by (instance, node, site) (1 - node_filesystem_avail_bytes{${virtualFs}} / node_filesystem_size_bytes{${virtualFs}}) > 0.9"}
             or ${problem "Memory is over 90% used" "max by (instance, node, site) (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.9"}
             or ${problem "Running hot (over 85 °C)" "max by (instance, node, site) (node_hwmon_temp_celsius) > 85"}

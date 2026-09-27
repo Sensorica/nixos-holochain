@@ -723,10 +723,17 @@ in {
     # What the dashboards list among this node's services. The conductor
     # names its readings' conductor label, so it reads Not answering when the
     # conductor stops answering although systemd says the unit is active.
+    # Its name carries the conductor's, as the problem sentences ("Holochain
+    # (Workshop) is not answering") and the node page's Conductors stat do, so
+    # the three read as one thing; under the default name it is just
+    # "Holochain conductor".
     services.holochain-services = {
       units = {
         "holochain-conductor.service" = {
-          name = "Holochain conductor";
+          name =
+            if cfg.conductorMetrics.enable && cfg.conductorMetrics.name != "Holochain"
+            then "Holochain conductor (${cfg.conductorMetrics.name})"
+            else "Holochain conductor";
           conductor =
             if cfg.conductorMetrics.enable
             then cfg.conductorMetrics.name
@@ -752,6 +759,9 @@ in {
         # the same flag at mkDefault for a monitor that is not an edgenode:
         # node_exporter refuses to start when the flag is given twice.
         "--collector.systemd.unit-exclude=${systemdUnitExclude}"
+        # How often systemd restarted each service on its own, so a service
+        # that keeps failing and restarting reads Failed, not Starting.
+        "--collector.systemd.enable-restarts-metrics"
       ];
     };
 

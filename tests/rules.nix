@@ -415,7 +415,7 @@
             1)
         ])
         (expect "max by (conductor) (holochain:conductor_state)" "30m" [(sample {conductor = "Workshop";} 2)])
-        (expect nodeStates "30m" [(sample {node = "lab-1";} 2)])
+        (expect nodeStates "30m" [(sample {node = "lab-1";} 3)])
         (expect "holochain:node_problem" "30m" [
           (recorded "holochain:node_problem" {
               instance = "lab-1:9100";
@@ -674,6 +674,14 @@
           (serviceInfo at "holochain-conductor.service" "Holochain conductor" {})
           (serviceInfo at "docker-wind-tunnel-runner.service" "Wind Tunnel runner" {})
         ]
+        # Readings that stopped as well: two services down still win, since
+        # systemd's word on them is fresh.
+        ++ conductor {
+          node = "lab-1";
+          stamp = hold 0;
+        }
+        ++ [
+        ]
         ++ disk at "sda1" "ext4" "/" 5
         ++ [
           (series "node_memory_MemAvailable_bytes" at (hold 5))
@@ -695,10 +703,11 @@
           "Memory is over 90% used"
           "Running hot (over 85 °C)"
           "A metrics file could not be read (see the node_exporter log)"
+          "Holochain (Workshop) readings are over 90 s old"
         ]))
-        # No conductor, but two watched services failed: the machine is not
-        # "No Holochain here", it has a service down.
-        (expect nodeStates "30m" [(sample {node = "lab-1";} 3)])
+        # Two watched services failed and the conductor's readings are old:
+        # the machine has a service down, which ranks above No fresh readings.
+        (expect nodeStates "30m" [(sample {node = "lab-1";} 2)])
       ];
     }
 
@@ -709,7 +718,7 @@
         # A conductor the node lists as the unit that runs it.
         claimed = {conductor = "Workshop";};
       in
-        map (node: up node 1) ["lab-1" "lab-2" "lab-3" "lab-4" "lab-5" "lab-6"]
+        map (node: up node 1) ["lab-1" "lab-2" "lab-3" "lab-4" "lab-5" "lab-6" "lab-7" "lab-8"]
         # lab-1: one service in each state of the ladder, a conductor unit
         # active while its conductor does not answer, and a Moss conductor
         # that no unit claims.
@@ -739,12 +748,12 @@
           [(serviceInfo (on "lab-1") "g.service" "Golf" {})]
           (unitIn (on "lab-1") "g.service" "active")
           (health (on "lab-1") "g.service" 1 fresh)
-          [(serviceInfo (on "lab-1") "holochain-conductor.service" "Holochain conductor" claimed)]
+          [(serviceInfo (on "lab-1") "holochain-conductor.service" "Holochain conductor (Workshop)" claimed)]
           (unitIn (on "lab-1") "holochain-conductor.service" "active")
         ]
         # lab-2: Holochain answers, and one service is stopped.
         ++ conductor {node = "lab-2";}
-        ++ [(serviceInfo (on "lab-2") "holochain-conductor.service" "Holochain conductor" claimed)]
+        ++ [(serviceInfo (on "lab-2") "holochain-conductor.service" "Holochain conductor (Workshop)" claimed)]
         ++ unitIn (on "lab-2") "holochain-conductor.service" "active"
         ++ [(serviceInfo (on "lab-2") "b.service" "Bravo" {})]
         ++ unitIn (on "lab-2") "b.service" "inactive"
@@ -765,6 +774,24 @@
           node = "lab-6";
           name = "Moss";
           isUp = 0;
+        }
+        # lab-7: both conductors' readings are old, the one a unit claims and
+        # the Moss one no unit claims; systemd says the unit is active.
+        ++ conductor {
+          node = "lab-7";
+          stamp = hold 0;
+        }
+        ++ conductor {
+          node = "lab-7";
+          name = "Moss";
+          stamp = hold 0;
+        }
+        ++ [(serviceInfo (on "lab-7") "holochain-conductor.service" "Holochain conductor (Workshop)" claimed)]
+        ++ unitIn (on "lab-7") "holochain-conductor.service" "active"
+        # lab-8: a conductor under the default name that no unit claims.
+        ++ conductor {
+          node = "lab-8";
+          name = "Holochain";
         };
       promql_expr_test = [
         (expect ''max by (service) (holochain:service_state{node="lab-1"})'' "30m" (lib.mapAttrsToList (service: sample {inherit service;}) {
@@ -775,26 +802,34 @@
           "Echo" = 4;
           "Foxtrot" = 5;
           "Golf" = 6;
-          "Holochain conductor" = 2;
-          "Moss node" = 6;
+          "Holochain conductor (Workshop)" = 2;
+          "Holochain conductor (Moss)" = 6;
         }))
         # The conductor a unit claims is not listed a second time.
         (expect ''max by (service) (holochain:service_state{node="lab-2"})'' "30m" [
-          (sample {service = "Holochain conductor";} 6)
+          (sample {service = "Holochain conductor (Workshop)";} 6)
           (sample {service = "Bravo";} 1)
         ])
-        (expect ''max by (service) (holochain:service_state{node="lab-6"})'' "30m" [(sample {service = "Moss node";} 2)])
+        (expect ''max by (service) (holochain:service_state{node="lab-6"})'' "30m" [(sample {service = "Holochain conductor (Moss)";} 2)])
+        # Old readings, claimed or not: No fresh readings.
+        (expect ''max by (service) (holochain:service_state{node="lab-7"})'' "30m" [
+          (sample {service = "Holochain conductor (Workshop)";} 3)
+          (sample {service = "Holochain conductor (Moss)";} 3)
+        ])
+        (expect ''max by (service) (holochain:service_state{node="lab-8"})'' "30m" [(sample {service = "Holochain conductor";} 6)])
         (expect nodeStates "30m" (lib.mapAttrsToList (node: sample {inherit node;}) {
           "lab-1" = 1;
-          "lab-2" = 3;
-          "lab-3" = 2;
+          "lab-2" = 2;
+          "lab-3" = 3;
           "lab-4" = 4;
           "lab-5" = 5;
           "lab-6" = 1;
+          "lab-7" = 3;
+          "lab-8" = 4;
         }))
-        # Failed, stopped and not answering in words; a conductor's service
-        # is left to the conductor's own sentence.
-        (expect ''count by (node, problem) (holochain:node_problem{node=~"lab-[12]"})'' "30m" (map (p: sample p 1) [
+        # Failed, stopped, not answering and old readings in words; a
+        # conductor's service is left to the conductor's own sentences.
+        (expect ''count by (node, problem) (holochain:node_problem{node=~"lab-[1237]"})'' "30m" (map (p: sample p 1) [
           {
             node = "lab-1";
             problem = "Alpha has failed";
@@ -809,12 +844,87 @@
           }
           {
             node = "lab-1";
+            problem = "Delta readings are over 90 s old";
+          }
+          {
+            node = "lab-1";
             problem = "Holochain (Workshop) is not answering";
           }
           {
             node = "lab-2";
             problem = "Bravo is stopped";
           }
+          {
+            node = "lab-3";
+            problem = "Local bootstrap and relay readings are over 90 s old";
+          }
+          {
+            node = "lab-7";
+            problem = "Holochain (Workshop) readings are over 90 s old";
+          }
+          {
+            node = "lab-7";
+            problem = "Holochain (Moss) readings are over 90 s old";
+          }
+        ]))
+      ];
+    }
+
+    {
+      # Scraped every 15 s, as a node is, so that a counter can change more
+      # than once inside staleAfterSeconds.
+      name = "services that keep failing while systemd restarts them: Failed";
+      interval = "15s";
+      input_series = let
+        at = target "lab-1";
+        restarts = name: values: series "node_systemd_service_restart_total" (at // {inherit name;}) values;
+        # Restarted by systemd at every scrape, and once, at 9m15s.
+        looping = "0+1x60";
+        once = "0x36 1x24";
+      in
+        [(up "lab-1" 1)]
+        ++ conductor {node = "lab-1";}
+        ++ lib.concatLists [
+          # Between two tries systemd says activating, and the health check
+          # finds nobody.
+          [(serviceInfo at "holochain-bootstrap.service" "Local bootstrap and relay" {})]
+          (unitIn at "holochain-bootstrap.service" "activating")
+          (health at "holochain-bootstrap.service" 0 fresh)
+          [(restarts "holochain-bootstrap.service" looping)]
+          # The same loop, caught in the moment it is up.
+          [(serviceInfo at "a.service" "Alpha" {})]
+          (unitIn at "a.service" "active")
+          [(restarts "a.service" looping)]
+          # Restarted once, and not up yet.
+          [(serviceInfo at "b.service" "Bravo" {})]
+          (unitIn at "b.service" "activating")
+          [(restarts "b.service" once)]
+          # Restarted once, and up again.
+          [(serviceInfo at "c.service" "Charlie" {})]
+          (unitIn at "c.service" "active")
+          [(restarts "c.service" once)]
+          # Starting, and never restarted.
+          [(serviceInfo at "d.service" "Delta" {})]
+          (unitIn at "d.service" "activating")
+          [(restarts "d.service" (hold 3))]
+          # A loop in a unit nobody watches.
+          (unitIn at "z.service" "activating")
+          [(restarts "z.service" looping)]
+        ];
+      promql_expr_test = [
+        (expect ''max by (service) (holochain:service_state{conductor=""})'' "10m" (lib.mapAttrsToList (service: sample {inherit service;}) {
+          "Local bootstrap and relay" = 0;
+          "Alpha" = 0;
+          "Bravo" = 0;
+          "Charlie" = 6;
+          "Delta" = 4;
+        }))
+        (expect nodeStates "10m" [(sample {node = "lab-1";} 2)])
+        (expect "count by (problem) (holochain:node_problem)" "10m" (map (problem: sample {inherit problem;} 1) [
+          "Local bootstrap and relay failed and systemd is restarting it"
+          "Alpha failed and systemd is restarting it"
+          "Bravo failed and systemd is restarting it"
+          "z.service failed and systemd is restarting it"
         ]))
       ];
     }
@@ -906,7 +1016,7 @@
           }
           1) ["Backups has failed" "Web server is stopped"]))
         (expect nodeStates "30m" [
-          (sample {node = "lab-1";} 3)
+          (sample {node = "lab-1";} 2)
           (sample {node = "lab-2";} 5)
         ])
       ];

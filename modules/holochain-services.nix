@@ -94,8 +94,10 @@ in {
               conductor does not answer its admin interface, and No fresh
               readings when its readings are old, although systemd says the
               unit is active. A conductor that no listed unit claims is shown
-              as a service of its own, "<conductor> node" (a Moss node reads
-              "Moss node").
+              as a service of its own, "Holochain conductor (<conductor>)", as
+              the edgenode names the unit that runs a conductor under a name
+              other than the default: a Moss node whose readings carry
+              `conductor="Moss"` reads "Holochain conductor (Moss)".
             '';
           };
         };
@@ -124,10 +126,13 @@ in {
         on that one attribute.
 
         Published as `holochain_service_info` through node_exporter's textfile
-        collector when `textfileDirectory` is set. The node page's "Services on
-        this node" lists each of them with its state, the fleet page lists the
-        ones that are not running, and the room screen's machine tile reads
-        "A service is down" while one has failed, stopped or does not answer.
+        collector when `textfileDirectory` is set. The node page's "Is each
+        service on this machine running?" lists each of them with its state,
+        the fleet page lists the ones that are not running, and the room
+        screen's machine tile reads "A service is down" while one has failed,
+        keeps failing and restarting, has stopped or does not answer. A unit
+        systemd does not run has no row; evaluation warns about a listed unit
+        this configuration does not define.
         `services.holochain-grafana.overviewUnits`, on the monitor, adds units
         to watch on every node on top of these.
       '';
@@ -191,12 +196,39 @@ in {
     {
       services.holochain-services.units = lib.mkIf anyEnabled (lib.mkMerge [
         (lib.mkIf config.services.prometheus.exporters.node.enable {"prometheus-node-exporter.service" = "Machine readings";})
-        (lib.mkIf config.services.openssh.enable {"sshd.service" = "Remote login";})
+        # With startWhenNeeded, NixOS runs sshd from a socket and defines no
+        # sshd.service, only sshd.socket and one sshd@ instance per login.
+        (lib.mkIf config.services.openssh.enable (
+          if config.services.openssh.startWhenNeeded
+          then {"sshd.socket" = "Remote login";}
+          else {"sshd.service" = "Remote login";}
+        ))
         (lib.mkIf config.services.tailscale.enable {"tailscaled.service" = "Private network (Tailscale)";})
         # NixOS starts nix-daemon.service on demand, so the service is inactive
         # on an idle node that is perfectly healthy; its socket is not.
         (lib.mkIf config.nix.enable {"nix-daemon.socket" = "Nix";})
       ]);
+
+      # A listed unit systemd does not run has no node_systemd_unit_state
+      # series, so it has no row at all on the pages, rather than a row that
+      # says something is wrong. Only units this configuration declares as
+      # services, sockets or timers are checked; one that a package ships and
+      # the configuration never mentions may be warned about wrongly.
+      warnings = let
+        tables = {
+          service = "services";
+          socket = "sockets";
+          timer = "timers";
+        };
+        declared = unit: let
+          parts = builtins.match "(.+)[.](service|socket|timer)" unit;
+        in
+          parts == null || config.systemd.${tables.${builtins.elemAt parts 1}} ? ${builtins.head parts};
+        missing = builtins.filter (unit: !declared unit) (builtins.attrNames cfg.units);
+      in
+        lib.optional (anyEnabled && missing != []) ''
+          services.holochain-services.units lists ${lib.concatMapStringsSep ", " (unit: "\"${unit}\"") missing}, which this configuration does not define as a systemd unit. A unit systemd does not run has no row on the Holochain dashboards, so it would be missing without a word. Remove it, or list the unit that actually runs.
+        '';
     }
 
     (lib.mkIf (anyEnabled && cfg.textfileDirectory != null) {

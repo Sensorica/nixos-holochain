@@ -509,9 +509,9 @@ in {
         lists itself keeps the name the node gives it.
 
         The watched units reach the recording rules (`holochain:service_watched`
-        and `holochain:service_state`), which the node page's "Services on
-        this node", the fleet page's "Which watched services are down?" and
-        the room screen's machine tiles read. For a dashboard of your own, the
+        and `holochain:service_state`), which the node page's "Is each
+        service on this machine running?", the fleet page's "Which services
+        are not running?" and the room screen's machine tiles read. For a dashboard of your own, the
         keys are also joined with `|` into the default of any `units` textbox
         variable, and every field override matched by name to `name` (the
         unit label of `node_systemd_unit_state`) gets one regex value mapping
@@ -718,6 +718,9 @@ in {
       extraFlags = lib.mkDefault [
         "--collector.systemd.unit-exclude=.+[.](device|scope|slice)"
         "--collector.textfile.directory=${defaultTextfileDirectory}"
+        # Restart counts, so a service that keeps failing and restarting
+        # reads Failed rather than Starting.
+        "--collector.systemd.enable-restarts-metrics"
       ];
     };
 

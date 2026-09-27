@@ -169,7 +169,7 @@
       "id": 1,
       "type": "stat",
       "title": "Are these readings current?",
-      "description": "How old the oldest Holochain reading on this page is. Each conductor's exporter writes every 30 s and Prometheus collects every 15 s, so up to about 45 s is normal. If this is not green, nothing below is current.",
+      "description": "How old the oldest reading on this page is: each Holochain conductor's, and each service health check's. Each is written every 30 s and Prometheus collects every 15 s, so up to about 45 s is normal. If this is not green, nothing below is current.",
       "datasource": {
         "type": "prometheus",
         "uid": "holochain-prometheus"
@@ -187,7 +187,7 @@
             "type": "prometheus",
             "uid": "holochain-prometheus"
           },
-          "expr": "max(time() - holochain_conductor_metrics_scrape_timestamp_seconds{site=~\"$site\", conductor=~\"$conductor\"}) or vector(1e9)",
+          "expr": "max(time() - holochain_conductor_metrics_scrape_timestamp_seconds{site=~\"$site\", conductor=~\"$conductor\"} or time() - holochain_service_health_timestamp_seconds{site=~\"$site\"}) or vector(1e9)",
           "legendFormat": "Oldest reading",
           "instant": true,
           "range": false
@@ -256,7 +256,7 @@
       "id": 2,
       "type": "stat",
       "title": "Which machines are on?",
-      "description": "One tile per machine this Grafana watches, by its name. Running means Holochain answers with fresh readings and every service the machine runs is up; Holochain not answering and No fresh readings name the worst conductor on the machine, so one silent conductor cannot hide behind a healthy one; A service is down means one of the machine's services has failed, stopped or does not answer (its node page says which); Unreachable means the machine itself did not answer.",
+      "description": "One tile per machine this Grafana watches, by its name. Running means Holochain answers with fresh readings and every service the machine runs is up. Holochain not answering names the worst conductor on the machine, so one silent conductor cannot hide behind a healthy one. A service is down means one of the machine's services has failed, keeps failing and restarting, has stopped or does not answer. No fresh readings means a conductor's readings or a service's health check are more than 90 seconds old. The problem list on the fleet page and the machine's own page say which. Unreachable means the machine itself did not answer.",
       "datasource": {
         "type": "prometheus",
         "uid": "holochain-prometheus"
@@ -309,13 +309,13 @@
                   "index": 1
                 },
                 "2": {
-                  "text": "No fresh readings",
-                  "color": "orange",
+                  "text": "A service is down",
+                  "color": "red",
                   "index": 2
                 },
                 "3": {
-                  "text": "A service is down",
-                  "color": "red",
+                  "text": "No fresh readings",
+                  "color": "orange",
                   "index": 3
                 },
                 "4": {
