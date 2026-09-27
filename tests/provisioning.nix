@@ -55,6 +55,14 @@
     }
   ];
   noRoom = monitor [{services.holochain-grafana.dashboards = fixtures;}];
+  # A dashboards directory inside a package whose build always fails. Choosing
+  # the home page must not build it, or a system whose dashboards come from a
+  # package would not evaluate where import-from-derivation is off.
+  unbuilt = monitor [
+    {
+      services.holochain-grafana.dashboards = "${pkgs.runCommand "dashboards-never-built" {} "exit 1"}/dashboards";
+    }
+  ];
 
   scrape = config: (lib.findFirst (c: c.job_name == "holochain-nodes") null config.services.prometheus.scrapeConfigs).static_configs;
   # This module's failed assertions; a bare evaluated system fails others
@@ -85,7 +93,10 @@
       units = named.services.holochain-grafana.overviewUnits;
       ruleFiles = map toString named.services.prometheus.ruleFiles;
       home = homeOf named;
+      grafanaHome = "${named.services.grafana.package}/share/grafana/public/dashboards/home.json";
     };
+    # Its string alone: with its context, this check would build the package.
+    unbuilt.home = builtins.unsafeDiscardStringContext (homeOf unbuilt);
   });
 in
   pkgs.runCommand "grafana-provisioning" {
@@ -125,11 +136,14 @@ in
       and .named.units["restic-backups-.*"] == "Backups"'
 
     # Grafana's home page is the shipped room screen, as provisioned (so with
-    # its room constants); a dashboards directory without one keeps
-    # Grafana's own home.
-    check '.list.home == .list.dashboards + "/holochain-now.json"'
-    check '.named.home == null'
+    # its room constants); a dashboards directory without one gets a copy of
+    # Grafana's own home page. Making that choice builds nothing while
+    # evaluating: a package's directory that cannot be built still yields a
+    # home path.
+    cmp "$(jq -r .list.home ${facts})" "$(jq -r .list.dashboards ${facts})/holochain-now.json"
     jq -e '.uid == "holochain-now"' "$(jq -r .list.home ${facts})"
+    cmp "$(jq -r .named.home ${facts})" "$(jq -r .named.grafanaHome ${facts})"
+    check '.unbuilt.home | type == "string" and endswith("-holochain-grafana-home.json")'
 
     # The rule file: evaluated every scrape, with the states given.
     rules=$(jq -r '.named.ruleFiles[0]' ${facts})

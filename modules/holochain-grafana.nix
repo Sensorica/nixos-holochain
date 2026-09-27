@@ -95,12 +95,23 @@
       ''
     else cfg.dashboards;
 
-  # Grafana's home page is the room screen, read from the provisioned copy so
-  # it carries the room constants. Grafana answers the home page with an
-  # error when the file is missing, so a dashboards directory without it
-  # keeps Grafana's own home.
-  homeDashboard = "${provisionedDashboards}/holochain-now.json";
-  hasHomeDashboard = dashboardsInStore && builtins.pathExists "${toString cfg.dashboards}/holochain-now.json";
+  # Grafana's home page is the room screen, copied from the provisioned
+  # dashboards so it carries the room constants. Grafana answers a home path
+  # that does not exist with an error, so a directory without the room screen
+  # gets a copy of Grafana's own home page instead. The choice is made while
+  # building, not by looking into the directory while evaluating: a directory
+  # inside a package would otherwise be built during evaluation, which fails
+  # where import-from-derivation is disabled.
+  homeDashboard =
+    pkgs.runCommand "holochain-grafana-home.json" {
+      grafanaHome = "${config.services.grafana.package}/share/grafana/public/dashboards/home.json";
+    } ''
+      if [ -e ${provisionedDashboards}/holochain-now.json ]; then
+        cp ${provisionedDashboards}/holochain-now.json $out
+      else
+        cp "$grafanaHome" $out
+      fi
+    '';
 
   # The dashboard JSON refers to its data source by this uid rather than by
   # name, so the file stays valid whatever the datasource is called.
@@ -381,9 +392,12 @@ in {
         app network across every machine. They read the recording rules of
         holochain-rules.nix, so they agree on every state.
 
-        When the directory holds a `holochain-now.json`, the module makes it
-        Grafana's home page (`services.grafana.settings.dashboards.default_home_dashboard_path`,
-        at default priority, so a definition of your own wins).
+        For a directory in the Nix store, the module sets Grafana's home page
+        (`services.grafana.settings.dashboards.default_home_dashboard_path`,
+        at default priority, so a definition of your own wins): its
+        `holochain-now.json` when it has one, otherwise a copy of Grafana's
+        own home page. The choice is made while building, so a directory
+        inside a package is not built during evaluation.
 
         A directory in the Nix store (a path in your flake, or a directory
         inside a flake input or package such as `"''${inputs.x}/dashboards"`)
@@ -541,7 +555,7 @@ in {
           secret_key = secretKeyPath;
         };
         analytics.reporting_enabled = false;
-        dashboards.default_home_dashboard_path = lib.mkIf hasHomeDashboard (lib.mkDefault homeDashboard);
+        dashboards.default_home_dashboard_path = lib.mkIf dashboardsInStore (lib.mkDefault "${homeDashboard}");
       };
 
       provision = {
