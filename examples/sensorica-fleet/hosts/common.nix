@@ -1,5 +1,5 @@
 # Shared by every fleet host. Per-machine files set the hostname, import
-# their hardware-configuration.nix and add roles (edgenode-01 adds Grafana).
+# their hardware-configuration.nix and add roles (sensorica-holoport-01 adds Grafana).
 {pkgs, ...}: let
   # Pasted once, used for the sensorica account and for root below.
   operatorKeys = [

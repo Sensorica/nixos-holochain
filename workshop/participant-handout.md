@@ -20,7 +20,7 @@ By the end of this session you will have:
 ```
 Edit configuration.nix in Kate
         ↓
-sudo nixos-rebuild switch --flake .#edgenode-0X
+sudo nixos-rebuild switch --flake .#sensorica-holoport-0X
         ↓
 systemctl status holochain-conductor
         ↓
@@ -40,7 +40,7 @@ nixos-holochain/
 ├── modules/holochain-edgenode.nix     # The module you are using
 └── examples/sensorica-fleet/
     ├── flake.nix                      # The fleet: five machines and the ISO
-    └── hosts/edgenode-0X/configuration.nix  # Your machine's config, edit this
+    └── hosts/sensorica-holoport-0X/configuration.nix  # Your machine's config, edit this
 ```
 
 ---
@@ -49,7 +49,7 @@ nixos-holochain/
 
 | Command | What it does |
 |---------|-------------|
-| `nixos-rebuild switch --flake .#edgenode-01` | Rebuild and switch to new config |
+| `nixos-rebuild switch --flake .#sensorica-holoport-01` | Rebuild and switch to new config |
 | `nixos-rebuild --rollback` | Roll back to previous generation |
 | `systemctl status holochain-conductor` | Check conductor health |
 | `journalctl -u holochain-conductor -f` | Follow conductor logs |

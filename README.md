@@ -117,7 +117,7 @@ nixos-holochain/
 │   └── sensorica-fleet/               # The Sensorica Lab fleet: its own flake, five hosts, ISO, colmena hive
 │       ├── flake.nix
 │       ├── hosts/common.nix           # shared host config, operator SSH keys
-│       ├── hosts/edgenode-01..05/     # configuration.nix + hardware-configuration.nix per machine
+│       ├── hosts/sensorica-holoport-01..05/     # configuration.nix + hardware-configuration.nix per machine
 │       ├── hosts/workshop-iso/        # Live ISO for participants
 │       └── README.md
 ├── happs/                             # .happ bundles (not committed, see happs/README.md)

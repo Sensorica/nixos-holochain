@@ -46,7 +46,7 @@ jobs:
       - name: Example fleet against this checkout
         working-directory: examples/sensorica-fleet
         run: |
-          for host in edgenode-01 edgenode-02 edgenode-03 edgenode-04 edgenode-05 workshop-iso; do
+          for host in sensorica-holoport-01 sensorica-holoport-02 sensorica-holoport-03 sensorica-holoport-04 sensorica-holoport-05 workshop-iso; do
             echo "Evaluating $host..."
             nix eval --override-input nixos-holochain "$GITHUB_WORKSPACE" \
               ".#nixosConfigurations.$host.config.system.build.toplevel.drvPath"

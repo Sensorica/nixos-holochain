@@ -18,7 +18,7 @@
 
   list = monitor [
     {
-      services.holochain-grafana.scrapeTargets = ["127.0.0.1:9100" "edgenode-02:9100" "10.0.0.3:9100" "[fd00::7]:9100"];
+      services.holochain-grafana.scrapeTargets = ["127.0.0.1:9100" "sensorica-holoport-02:9100" "10.0.0.3:9100" "[fd00::7]:9100"];
     }
   ];
   # Two loopback ports in list form both take the host name.
@@ -32,7 +32,7 @@
       services.holochain-grafana = {
         scrapeTargets = {
           lab-1 = {
-            address = "edgenode-01:9100";
+            address = "sensorica-holoport-01:9100";
             site = "Sensorica lab";
           };
           homelab.address = "127.0.0.1:9100";
@@ -187,7 +187,7 @@ in
     # A list names each node after its host, a loopback after this machine.
     check '.list.scrape == [
       {targets: ["127.0.0.1:9100"], labels: {node: "monitor"}},
-      {targets: ["edgenode-02:9100"], labels: {node: "edgenode-02"}},
+      {targets: ["sensorica-holoport-02:9100"], labels: {node: "sensorica-holoport-02"}},
       {targets: ["10.0.0.3:9100"], labels: {node: "10.0.0.3"}},
       {targets: ["[fd00::7]:9100"], labels: {node: "[fd00::7]"}}]'
     check '.list.failed == []'
@@ -201,7 +201,7 @@ in
     # An attrset names each node by its key, with its site when given.
     check '.named.scrape | sort_by(.labels.node) == [
       {targets: ["127.0.0.1:9100"], labels: {node: "homelab"}},
-      {targets: ["edgenode-01:9100"], labels: {node: "lab-1", site: "Sensorica lab"}}]'
+      {targets: ["sensorica-holoport-01:9100"], labels: {node: "lab-1", site: "Sensorica lab"}}]'
     check '.named.failed == []'
     check '.named.warnings == []'
     # List and attrset definitions merge into the default, which is empty:

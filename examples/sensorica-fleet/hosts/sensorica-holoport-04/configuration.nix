@@ -4,5 +4,5 @@
     ./hardware-configuration.nix
   ];
 
-  networking.hostName = "edgenode-03";
+  networking.hostName = "sensorica-holoport-04";
 }

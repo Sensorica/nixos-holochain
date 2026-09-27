@@ -43,11 +43,11 @@ holochain-nixos/
 │   └── default.nix                    # Module aggregator
 │
 ├── hosts/
-│   ├── edgenode-01/configuration.nix  # Fleet member 1
-│   ├── edgenode-02/configuration.nix
-│   ├── edgenode-03/configuration.nix
-│   ├── edgenode-04/configuration.nix
-│   ├── edgenode-05/configuration.nix
+│   ├── sensorica-holoport-01/configuration.nix  # Fleet member 1
+│   ├── sensorica-holoport-02/configuration.nix
+│   ├── sensorica-holoport-03/configuration.nix
+│   ├── sensorica-holoport-04/configuration.nix
+│   ├── sensorica-holoport-05/configuration.nix
 │   └── workshop-iso/configuration.nix # Live ISO for participants
 │
 ├── happs/
@@ -115,11 +115,11 @@ holochain-nixos/
             specialArgs = { inherit inputs; };
           };
         in {
-          edgenode-01 = mkEdgenode "edgenode-01";
-          edgenode-02 = mkEdgenode "edgenode-02";
-          edgenode-03 = mkEdgenode "edgenode-03";
-          edgenode-04 = mkEdgenode "edgenode-04";
-          edgenode-05 = mkEdgenode "edgenode-05";
+          sensorica-holoport-01 = mkEdgenode "sensorica-holoport-01";
+          sensorica-holoport-02 = mkEdgenode "sensorica-holoport-02";
+          sensorica-holoport-03 = mkEdgenode "sensorica-holoport-03";
+          sensorica-holoport-04 = mkEdgenode "sensorica-holoport-04";
+          sensorica-holoport-05 = mkEdgenode "sensorica-holoport-05";
 
           # Bootable ISO for workshop participants
           workshop-iso = nixpkgs.lib.nixosSystem {
@@ -137,11 +137,11 @@ holochain-nixos/
             nixpkgs = import nixpkgs { system = "x86_64-linux"; };
             specialArgs = { inherit inputs; };
           };
-          edgenode-01 = { ... }: { imports = [ ./hosts/edgenode-01/configuration.nix ]; };
-          edgenode-02 = { ... }: { imports = [ ./hosts/edgenode-02/configuration.nix ]; };
-          edgenode-03 = { ... }: { imports = [ ./hosts/edgenode-03/configuration.nix ]; };
-          edgenode-04 = { ... }: { imports = [ ./hosts/edgenode-04/configuration.nix ]; };
-          edgenode-05 = { ... }: { imports = [ ./hosts/edgenode-05/configuration.nix ]; };
+          sensorica-holoport-01 = { ... }: { imports = [ ./hosts/sensorica-holoport-01/configuration.nix ]; };
+          sensorica-holoport-02 = { ... }: { imports = [ ./hosts/sensorica-holoport-02/configuration.nix ]; };
+          sensorica-holoport-03 = { ... }: { imports = [ ./hosts/sensorica-holoport-03/configuration.nix ]; };
+          sensorica-holoport-04 = { ... }: { imports = [ ./hosts/sensorica-holoport-04/configuration.nix ]; };
+          sensorica-holoport-05 = { ... }: { imports = [ ./hosts/sensorica-holoport-05/configuration.nix ]; };
         };
       };
 
@@ -472,7 +472,7 @@ Recommended: **`nixos-holochain`** to match community naming conventions and sig
 
 ---
 
-## Appendix A: Minimal `hosts/edgenode-01/configuration.nix`
+## Appendix A: Minimal `hosts/sensorica-holoport-01/configuration.nix`
 
 ```nix
 { config, pkgs, ... }:
@@ -480,7 +480,7 @@ Recommended: **`nixos-holochain`** to match community naming conventions and sig
 {
   imports = [ ./hardware-configuration.nix ];
 
-  networking.hostName = "edgenode-01";
+  networking.hostName = "sensorica-holoport-01";
   time.timeZone = "America/Montreal";
 
   services.openssh.enable = true;
@@ -521,7 +521,7 @@ Recommended: **`nixos-holochain`** to match community naming conventions and sig
 sudo nixos-generate-config --root /mnt
 git clone https://github.com/Sensorica/nixos-holochain
 cd nixos-holochain
-sudo nixos-install --flake .#edgenode-01
+sudo nixos-install --flake .#sensorica-holoport-01
 
 # Reboot, log in, verify
 systemctl status holochain-conductor

@@ -1186,7 +1186,7 @@
             # The line, hApps and seed, from the same export the fleet's
             # `fleetModules` import (#33).
             self.nixosModules.sensorica-event-node
-            ./examples/sensorica-fleet/hosts/edgenode-01/configuration.nix
+            ./examples/sensorica-fleet/hosts/sensorica-holoport-01/configuration.nix
             "${inputs.nixpkgs}/nixos/modules/testing/test-instrumentation.nix"
           ];
         };
@@ -2830,7 +2830,7 @@
                       got = installer.succeed(f"blkid -o value -s TYPE {dev}").strip()
                       assert got == fstype, f"{dev}: type {got!r}, expected {fstype!r}"
 
-              # docs/deployment.md: edgenode-01's Grafana password file is
+              # docs/deployment.md: sensorica-holoport-01's Grafana password file is
               # written under /mnt before the first boot.
               installer.succeed(
                   "install -d -m 0700 /mnt/var/lib/secrets",
@@ -2852,7 +2852,7 @@
                   target.wait_for_unit("multi-user.target")
 
               with subtest("the installed system, not a test fixture"):
-                  assert target.succeed("hostname").strip() == "edgenode-01"
+                  assert target.succeed("hostname").strip() == "sensorica-holoport-01"
                   assert target.succeed("findmnt -no SOURCE /").strip() == "/dev/sda3"
                   assert target.succeed("readlink -f /run/booted-system").strip() == SYSTEM
                   target.succeed("test -d /boot/grub/i386-pc")

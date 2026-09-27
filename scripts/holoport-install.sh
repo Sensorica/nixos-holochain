@@ -19,7 +19,7 @@ Usage: holoport-install DISK SOURCE
   SOURCE  what to install, either
             a flake reference ending in #<host>, built on this machine with
             the Holochain binary cache, for example
-            github:Sensorica/nixos-holochain?dir=examples/sensorica-fleet#edgenode-01
+            github:Sensorica/nixos-holochain?dir=examples/sensorica-fleet#sensorica-holoport-01
           or
             a /nix/store/...-nixos-system-* path built elsewhere. If it is not
             in this machine's store, the script prints the `nix copy` command

@@ -47,7 +47,7 @@ cd examples/sensorica-fleet
 colmena apply --impure --on @all
 
 # Deploy to a single node
-colmena apply --impure --on edgenode-01
+colmena apply --impure --on sensorica-holoport-01
 
 # Dry-run (shows what would change)
 colmena apply --impure --dry-run
@@ -100,7 +100,7 @@ Nearly everything is downloaded rather than built: packages come from cache.nixo
 git clone https://github.com/Sensorica/nixos-holochain /root/nixos-holochain
 cd /root/nixos-holochain
 nano examples/sensorica-fleet/hosts/common.nix
-nix --extra-experimental-features 'nix-command flakes' run --accept-flake-config .#holoport-install -- /dev/sda ./examples/sensorica-fleet#edgenode-01
+nix --extra-experimental-features 'nix-command flakes' run --accept-flake-config .#holoport-install -- /dev/sda ./examples/sensorica-fleet#sensorica-holoport-01
 ```
 
 Type `/dev/sda` when it asks. It asks once more at the end, for a root password for the console. On the base HoloPort, with its slow disk and two cores, expect this to take a while; path 2b moves the work to a laptop.
@@ -112,7 +112,7 @@ The laptop builds the system and copies it straight onto the Holoport's new root
 On the laptop, from a checkout with your key already in `operatorKeys`:
 
 ```bash
-nix build ./examples/sensorica-fleet#nixosConfigurations.edgenode-01.config.system.build.toplevel --out-link edgenode-01-system
+nix build ./examples/sensorica-fleet#nixosConfigurations.sensorica-holoport-01.config.system.build.toplevel --out-link sensorica-holoport-01-system
 ```
 
 On the Holoport, give root a password for the installer session and start its SSH server (the installer ships one but does not start it):
@@ -126,20 +126,20 @@ Back on the laptop, with `HOLOPORT_IP` being the address from step 1, send your 
 
 ```bash
 ssh-copy-id root@HOLOPORT_IP
-ssh -t root@HOLOPORT_IP "nix --extra-experimental-features 'nix-command flakes' run --accept-flake-config github:Sensorica/nixos-holochain#holoport-install -- /dev/sda $(readlink -f edgenode-01-system)"
+ssh -t root@HOLOPORT_IP "nix --extra-experimental-features 'nix-command flakes' run --accept-flake-config github:Sensorica/nixos-holochain#holoport-install -- /dev/sda $(readlink -f sensorica-holoport-01-system)"
 ```
 
 The script partitions the disk, sees that the system is not on the Holoport yet, prints the exact `nix copy` command and waits. Run it in a second terminal on the laptop; it has this shape:
 
 ```bash
-nix copy --to "ssh://root@HOLOPORT_IP?remote-store=/mnt" "$(readlink -f edgenode-01-system)"
+nix copy --to "ssh://root@HOLOPORT_IP?remote-store=/mnt" "$(readlink -f sensorica-holoport-01-system)"
 ```
 
 `remote-store=/mnt` writes into the new root partition rather than the installer's own store, which lives in RAM and is too small for the event node's closure (about 10 GiB, most of it the desktop). The script carries on by itself once the copy lands.
 
 ### 3. Before the first boot
 
-`/mnt` is still mounted when the script ends. edgenode-01 runs Grafana with its admin password read from a file, which has to exist before Grafana first starts; `NEW_PASSWORD` is the one you choose:
+`/mnt` is still mounted when the script ends. sensorica-holoport-01 runs Grafana with its admin password read from a file, which has to exist before Grafana first starts; `NEW_PASSWORD` is the one you choose:
 
 ```bash
 install -d -m 0700 /mnt/var/lib/secrets

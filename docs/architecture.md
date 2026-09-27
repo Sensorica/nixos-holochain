@@ -380,7 +380,7 @@ Every node goes by a name, which Prometheus attaches to every series it scrapes 
 ```nix
 scrapeTargets = {
   homelab = { address = "127.0.0.1:9100"; site = "Soushi home"; };
-  lab-1 = { address = "edgenode-01:9100"; site = "Sensorica lab"; };
+  lab-1 = { address = "sensorica-holoport-01:9100"; site = "Sensorica lab"; };
 };
 ```
 
@@ -458,11 +458,11 @@ A fleet is the monitor node naming its peers and every node exporting:
 services.holochain-grafana = {
   enable = true;
   openFirewall = true;
-  # named edgenode-01 to edgenode-05 after their hosts; an attribute set
+  # named sensorica-holoport-01 to sensorica-holoport-05 after their hosts; an attribute set
   # names them otherwise and gives each a site
   scrapeTargets = [
-    "edgenode-01:9100" "edgenode-02:9100" "edgenode-03:9100"
-    "edgenode-04:9100" "edgenode-05:9100"
+    "sensorica-holoport-01:9100" "sensorica-holoport-02:9100" "sensorica-holoport-03:9100"
+    "sensorica-holoport-04:9100" "sensorica-holoport-05:9100"
   ];
 };
 

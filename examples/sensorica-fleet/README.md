@@ -1,6 +1,6 @@
 # Sensorica Lab fleet
 
-The worked example behind the `nixos-holochain` modules: five Holochain edgenodes for the Sensorica Lab workshop, `edgenode-01` doubling as the Grafana monitor node, plus the live ISO participants boot from. It is its own flake so that evaluating the module repository never evaluates Sensorica's machines; copy this directory to start your own fleet.
+The worked example behind the `nixos-holochain` modules: five Holochain edgenodes for the Sensorica Lab workshop, `sensorica-holoport-01` doubling as the Grafana monitor node, plus the live ISO participants boot from. It is its own flake so that evaluating the module repository never evaluates Sensorica's machines; copy this directory to start your own fleet.
 
 ## Layout
 
@@ -9,17 +9,17 @@ examples/sensorica-fleet/
 ├── flake.nix                      # inputs, the five nixosConfigurations, the ISO, the colmena hive, the parity check
 ├── hosts/
 │   ├── common.nix                 # shared by every host: user, SSH keys, desktop, edgenode service
-│   ├── edgenode-01/
+│   ├── sensorica-holoport-01/
 │   │   ├── configuration.nix      # monitor node: adds Grafana/Prometheus
 │   │   └── hardware-configuration.nix   # placeholder, replace per machine (below)
-│   ├── edgenode-02 … 05/          # peer nodes: hostname + hardware only
+│   ├── sensorica-holoport-02 … 05/          # peer nodes: hostname + hardware only
 │   └── workshop-iso/configuration.nix   # KDE Plasma live ISO with the repo cloned on boot
 └── README.md
 ```
 
 ## Holochain line and hApps
 
-The fleet runs **Holochain 0.6.3** (ADR-015) and the three workshop hApps below, all from `nixos-holochain.nixosModules.sensorica-event-node` (#33): the module repository's own event profile, layered onto `holochain-edgenode` by every host in `flake.nix`'s `fleetModules`. It is the same export any other host rehearsing the workshop imports, so this fleet and that host cannot drift apart on the package, the hApp set or the seed; `checks.eventProfileParity` in `flake.nix` fails evaluation if `edgenode-01` ever overrides one of these away from the module's defaults.
+The fleet runs **Holochain 0.6.3** (ADR-015) and the three workshop hApps below, all from `nixos-holochain.nixosModules.sensorica-event-node` (#33): the module repository's own event profile, layered onto `holochain-edgenode` by every host in `flake.nix`'s `fleetModules`. It is the same export any other host rehearsing the workshop imports, so this fleet and that host cannot drift apart on the package, the hApp set or the seed; `checks.eventProfileParity` in `flake.nix` fails evaluation if `sensorica-holoport-01` ever overrides one of these away from the module's defaults.
 
 The line is not a preference: each of the three hApps below has a 0.6 release and none has a 0.7 one. The maintainers re-evaluate this seven days before the workshop date.
 
@@ -51,7 +51,7 @@ That is the whole profile: package, the three hApps, the network seed, the insta
 ```bash
 cd examples/sensorica-fleet
 nix flake check --no-build
-nix eval .#nixosConfigurations.edgenode-01.config.system.build.toplevel.drvPath
+nix eval .#nixosConfigurations.sensorica-holoport-01.config.system.build.toplevel.drvPath
 ```
 
 The `nixos-holochain` input points at `github:Sensorica/nixos-holochain`, which is what a downstream fleet writes. From a checkout of this repository, evaluate against the checkout instead so local module changes are what gets tested:
@@ -69,7 +69,7 @@ GPT with a 1 MiB `bios_grub` partition *and* a vfat ESP labelled `boot`, an ext4
 Once a machine exists, generate its real hardware configuration on it and commit that over the placeholder. Nothing needs keeping: the GRUB block lives in `hosts/common.nix`, because `nixos-generate-config --show-hardware-config` writes filesystems and kernel modules, never a boot loader.
 
 ```bash
-sudo nixos-generate-config --show-hardware-config > hosts/edgenode-01/hardware-configuration.nix
+sudo nixos-generate-config --show-hardware-config > hosts/sensorica-holoport-01/hardware-configuration.nix
 ```
 
 ## Operator SSH keys
@@ -80,16 +80,16 @@ Public keys are not secrets, and a flake only ever sees git-tracked files, so th
 
 ```bash
 # one machine
-sudo nixos-rebuild switch --flake .#edgenode-01
+sudo nixos-rebuild switch --flake .#sensorica-holoport-01
 
 # the whole fleet over SSH, in parallel
 nix develop            # brings colmena into PATH
 colmena apply --impure --on @all
-colmena apply --impure --on edgenode-01
+colmena apply --impure --on sensorica-holoport-01
 colmena apply --impure --dry-run
 
 # inspect the evaluated hive
-colmena eval --impure -E '{nodes, ...}: nodes.edgenode-01.config.services.holochain-edgenode.enable'
+colmena eval --impure -E '{nodes, ...}: nodes.sensorica-holoport-01.config.services.holochain-edgenode.enable'
 ```
 
 `--impure` is required with Colmena 0.4.0 on Nix 2.25: Colmena wraps the flake as an input named `hive`, and pure mode refuses to lock it ("cannot update unlocked flake input 'hive' in pure mode"). Colmena resolves `nixos-holochain` from this directory's `flake.lock`, so `--override-input` does not reach it; bump the lock (`nix flake update nixos-holochain`) to deploy modules newer than the locked revision.

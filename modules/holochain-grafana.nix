@@ -247,7 +247,7 @@ in {
         options = {
           address = lib.mkOption {
             type = lib.types.str;
-            example = "edgenode-01:9100";
+            example = "sensorica-holoport-01:9100";
             description = "The node's node_exporter, as host:port.";
           };
           site = lib.mkOption {
@@ -281,8 +281,8 @@ in {
       '';
       example = lib.literalExpression ''
         {
-          lab-1 = { address = "edgenode-01:9100"; site = "Sensorica lab"; };
-          lab-2 = { address = "edgenode-02:9100"; site = "Sensorica lab"; };
+          lab-1 = { address = "sensorica-holoport-01:9100"; site = "Sensorica lab"; };
+          lab-2 = { address = "sensorica-holoport-02:9100"; site = "Sensorica lab"; };
           homelab.address = "100.64.0.7:9100";
         }
       '';
