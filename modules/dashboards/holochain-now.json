@@ -1,0 +1,785 @@
+{
+  "uid": "holochain-now",
+  "title": "Is the Holochain network working?",
+  "description": "The room screen, and Grafana's home page: are the machines on, is each app connected on each machine, and did the latest write reach everyone. Open it with ?kiosk for a shared screen.",
+  "tags": [
+    "holochain",
+    "nixos-holochain"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "annotations": {
+    "list": []
+  },
+  "links": [
+    {
+      "type": "link",
+      "title": "Which node needs attention?",
+      "url": "/d/holochain-fleet/holochain-fleet",
+      "asDropdown": false,
+      "includeVars": false,
+      "keepTime": true,
+      "targetBlank": false,
+      "icon": "dashboard",
+      "tags": [],
+      "tooltip": ""
+    },
+    {
+      "type": "dashboards",
+      "tags": [
+        "holochain"
+      ],
+      "asDropdown": true,
+      "title": "Holochain dashboards",
+      "includeVars": false,
+      "keepTime": true,
+      "targetBlank": false,
+      "icon": "external link",
+      "tooltip": "",
+      "url": ""
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "site",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "holochain-prometheus"
+        },
+        "definition": "label_values(up{job=\"holochain-nodes\"}, site)",
+        "query": {
+          "query": "label_values(up{job=\"holochain-nodes\"}, site)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "hide": 2,
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": [],
+        "allValue": ".*",
+        "label": "Site"
+      },
+      {
+        "name": "conductor",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "holochain-prometheus"
+        },
+        "definition": "label_values(holochain_conductor_up, conductor)",
+        "query": {
+          "query": "label_values(holochain_conductor_up, conductor)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "hide": 2,
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": [],
+        "allValue": ".*",
+        "label": "Conductor"
+      },
+      {
+        "name": "room_app",
+        "type": "constant",
+        "hide": 2,
+        "query": "",
+        "current": {
+          "text": "",
+          "value": ""
+        },
+        "options": [
+          {
+            "selected": true,
+            "text": "",
+            "value": ""
+          }
+        ]
+      },
+      {
+        "name": "room_part",
+        "type": "constant",
+        "hide": 2,
+        "query": "",
+        "current": {
+          "text": "",
+          "value": ""
+        },
+        "options": [
+          {
+            "selected": true,
+            "text": "",
+            "value": ""
+          }
+        ]
+      },
+      {
+        "name": "room_label",
+        "type": "constant",
+        "hide": 2,
+        "query": "the room's app",
+        "current": {
+          "text": "the room's app",
+          "value": "the room's app"
+        },
+        "options": [
+          {
+            "selected": true,
+            "text": "the room's app",
+            "value": "the room's app"
+          }
+        ]
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Are these readings current?",
+      "description": "How old the oldest Holochain reading on this page is. Each conductor's exporter writes every 30 s and Prometheus collects every 15 s, so up to about 45 s is normal. If this is not green, nothing below is current.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "max(time() - holochain_conductor_metrics_scrape_timestamp_seconds{site=~\"$site\", conductor=~\"$conductor\"}) or vector(1e9)",
+          "legendFormat": "Oldest reading",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 90
+              },
+              {
+                "color": "red",
+                "value": 300
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "range",
+              "options": {
+                "from": 100000000.0,
+                "to": null,
+                "result": {
+                  "text": "No readings",
+                  "color": "red",
+                  "index": 0
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "value",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Which machines are on?",
+      "description": "One tile per machine this Grafana watches, by its name. Running means Holochain answers with fresh readings; Holochain not answering and No fresh readings name the worst conductor on the machine, so one silent conductor cannot hide behind a healthy one; Unreachable means the machine itself did not answer.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 0,
+        "w": 20,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "holochain:node_state{site=~\"$site\"}",
+          "legendFormat": "{{node}}",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#8e8e8e",
+                "value": null
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Unreachable",
+                  "color": "red",
+                  "index": 0
+                },
+                "1": {
+                  "text": "Holochain not answering",
+                  "color": "red",
+                  "index": 1
+                },
+                "2": {
+                  "text": "No fresh readings",
+                  "color": "orange",
+                  "index": 2
+                },
+                "3": {
+                  "text": "Running",
+                  "color": "green",
+                  "index": 3
+                },
+                "4": {
+                  "text": "No Holochain here",
+                  "color": "#8e8e8e",
+                  "index": 4
+                }
+              }
+            }
+          ],
+          "noValue": "No machine is watched yet"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "value_and_name",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "id": 3,
+      "type": "table",
+      "title": "Is each app working on each node?",
+      "description": "One row per app, one column per machine, each cell the worst state of the app's parts on that machine. The colours are explained at the bottom of the page. A dash means the app is not on that machine. Click a cell to open that machine's page.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "min by (node, app_name) (holochain:app_state:named{site=~\"$site\", conductor=~\"$conductor\"})",
+          "format": "table",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "transformations": [
+        {
+          "id": "groupingToMatrix",
+          "options": {
+            "columnField": "node",
+            "rowField": "app_name",
+            "valueField": "Value",
+            "emptyValue": "null"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "center",
+            "cellOptions": {
+              "type": "color-background",
+              "mode": "basic"
+            }
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Not running",
+                  "color": "red",
+                  "index": 0
+                },
+                "1": {
+                  "text": "No fresh readings",
+                  "color": "orange",
+                  "index": 1
+                },
+                "2": {
+                  "text": "Lost contact",
+                  "color": "red",
+                  "index": 2
+                },
+                "3": {
+                  "text": "No one else yet",
+                  "color": "#8e8e8e",
+                  "index": 3
+                },
+                "4": {
+                  "text": "Catching up",
+                  "color": "#EAB839",
+                  "index": 4
+                },
+                "5": {
+                  "text": "In step",
+                  "color": "green",
+                  "index": 5
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#8e8e8e",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "-",
+          "links": [
+            {
+              "title": "Open this machine",
+              "url": "/d/holochain-node/holochain-node?var-node=${__field.name}&${__url_time_range}"
+            }
+          ]
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "app_name\\node"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "App"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "auto"
+                }
+              },
+              {
+                "id": "custom.align",
+                "value": "left"
+              },
+              {
+                "id": "links",
+                "value": []
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "table",
+      "title": "Connected to how many others?",
+      "description": "How many other computers each app sees from each machine, taking the app's least connected part. Participants' laptops count too, so a number above the number of machines is normal.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "min by (node, app_name) (holochain:dht_peers:named{site=~\"$site\", conductor=~\"$conductor\"})",
+          "format": "table",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "transformations": [
+        {
+          "id": "groupingToMatrix",
+          "options": {
+            "columnField": "node",
+            "rowField": "app_name",
+            "valueField": "Value",
+            "emptyValue": "null"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "center",
+            "cellOptions": {
+              "type": "auto"
+            }
+          },
+          "decimals": 0,
+          "noValue": "-",
+          "unit": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "app_name\\node"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "App"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "auto"
+                }
+              },
+              {
+                "id": "custom.align",
+                "value": "left"
+              },
+              {
+                "id": "links",
+                "value": []
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Did the latest write in ${room_label} reach every node?",
+      "description": "One line per machine: how much of this app's data it holds. After someone posts, every line should step up by the same amount; a line that stays flat has not received it yet. Holochain stores each message as several pieces, so watch the steps, not the number. A write shows here within about 45 s (30 s readings plus 15 s collection), and only for machines this Grafana watches, not participants' laptops. The dashed line is the most any machine's best peer has seen.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 11,
+        "w": 16,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "max by (node) (holochain_dht_local_ops{app_id=\"${room_app}\", role=\"${room_part}\", conductor!=\"\"})",
+          "legendFormat": "{{node}}",
+          "instant": false,
+          "range": true
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "max(holochain_dht_peer_ops{app_id=\"${room_app}\", role=\"${room_part}\", conductor!=\"\"})",
+          "legendFormat": "Most any node has seen",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": false,
+            "lineInterpolation": "stepAfter",
+            "axisLabel": "pieces of data"
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "decimals": 0,
+          "unit": "none",
+          "noValue": "Set services.holochain-grafana.room to follow one app's writes here"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#8e8e8e"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "bargauge",
+      "title": "Last heard from others, per app",
+      "description": "For each app, how long since its slowest machine last exchanged data with anyone. Apps nobody else runs yet are left out, so a lone machine shows no bars rather than red ones.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 11,
+        "w": 8,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "max by (app_name) (holochain:dht_heard:named{site=~\"$site\", conductor=~\"$conductor\"} unless on (instance, conductor, app_id, role, dna) (holochain:dht_state == 3))",
+          "legendFormat": "{{app_name}}",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "max": 900,
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 120
+              },
+              {
+                "color": "red",
+                "value": 600
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "range",
+              "options": {
+                "from": 100000000.0,
+                "to": null,
+                "result": {
+                  "text": "never",
+                  "color": "red",
+                  "index": 0
+                }
+              }
+            }
+          ],
+          "noValue": "Nobody else runs these apps yet"
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "valueMode": "color",
+        "namePlacement": "left",
+        "showUnfilled": true,
+        "sizing": "auto",
+        "minVizHeight": 16,
+        "minVizWidth": 8,
+        "maxVizHeight": 300,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "text",
+      "title": "What the colours mean",
+      "description": "The six words every Holochain page uses for an app, from worst to best.",
+      "datasource": null,
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 24,
+        "h": 5
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "- **Not running** (red): The app should be installed here but Holochain does not report it.\n- **No fresh readings** (orange): This node's Holochain figures are more than 90 seconds old, so nothing about it is current.\n- **Lost contact** (red): Nobody is connected, although this node had company in the last 24 hours or another node in this fleet runs the same app; or others are known but nothing was heard from them for 10 minutes.\n- **No one else yet** (grey): Nobody else is connected, nobody was in the last 24 hours, and no other node in this fleet runs the app; normal for a single node or a tool nobody else opened.\n- **Catching up** (amber): Connected, but over the last 10 minutes this node held less than 95% of what its best-informed peer holds.\n- **In step** (green): Connected and holding at least 95% of what its best peer holds."
+      }
+    }
+  ]
+}

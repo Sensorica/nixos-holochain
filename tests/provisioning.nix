@@ -67,12 +67,15 @@
   # This module's warnings.
   warned = config: lib.filter (lib.hasPrefix "services.holochain-grafana") config.warnings;
   dashboardsOf = config: (builtins.head config.services.grafana.provision.dashboards.settings.providers).options.path;
+  homeOf = config: config.services.grafana.settings.dashboards.default_home_dashboard_path or null;
 
   facts = pkgs.writeText "provisioning-facts.json" (builtins.toJSON {
     list = {
       scrape = scrape list;
       failed = failed list;
       warnings = warned list;
+      home = homeOf list;
+      dashboards = dashboardsOf list;
     };
     shared.failed = failed shared;
     named = {
@@ -81,6 +84,7 @@
       warnings = warned named;
       units = named.services.holochain-grafana.overviewUnits;
       ruleFiles = map toString named.services.prometheus.ruleFiles;
+      home = homeOf named;
     };
   });
 in
@@ -119,6 +123,13 @@ in
     check '.named.units["holochain-conductor.service"] == "Holochain conductor"
       and .named.units["caddy.service"] == null
       and .named.units["restic-backups-.*"] == "Backups"'
+
+    # Grafana's home page is the shipped room screen, as provisioned (so with
+    # its room constants); a dashboards directory without one keeps
+    # Grafana's own home.
+    check '.list.home == .list.dashboards + "/holochain-now.json"'
+    check '.named.home == null'
+    jq -e '.uid == "holochain-now"' "$(jq -r .list.home ${facts})"
 
     # The rule file: evaluated every scrape, with the states given.
     rules=$(jq -r '.named.ruleFiles[0]' ${facts})

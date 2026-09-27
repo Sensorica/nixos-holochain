@@ -973,10 +973,18 @@ string
 
 Directory of Grafana dashboard JSON files to provision\. Everything in
 it is loaded at startup and re-read every 30 seconds\. The module ships
-` holochain-fleet.json ` (uid ` holochain-fleet `): an Overview row saying
-per node whether the node, its conductor and its services are up, a
-Holochain row drawn from the edgenode module’s metrics timer, and a
-Host health row drawn from node_exporter\.
+four, each titled with the question it answers and all tagged
+` holochain `: ` holochain-now ` (“Is the Holochain network working?”),
+the room screen and Grafana’s home page; ` holochain-fleet ` (“Which
+Holochain node needs attention?”), for whoever runs the fleet;
+` holochain-node ` (“Is this node working, app by app?”), one machine;
+and ` holochain-network ` (“Is this app in step on every node?”), one
+app network across every machine\. They read the recording rules of
+holochain-rules\.nix, so they agree on every state\.
+
+When the directory holds a ` holochain-now.json `, the module makes it
+Grafana’s home page (` services.grafana.settings.dashboards.default_home_dashboard_path `,
+at default priority, so a definition of your own wins)\.
 
 A directory in the Nix store (a path in your flake, or a directory
 inside a flake input or package such as ` "${inputs.x}/dashboards" `)
@@ -1071,7 +1079,7 @@ services, timers, sockets, and the app installer, a one-shot that
 remains active once it has run\. Two one-shot helpers are left out:
 ` holochain-conductor-metrics.service ` sits idle between runs, so its
 timer is listed instead, and ` grafana-secret-key.service ` runs once at
-boot; if either fails, the Fleet status panel counts it\. The Nix
+boot; if either fails, the fleet page’s problem list names it\. The Nix
 daemon is listed by its socket: NixOS starts ` nix-daemon.service ` on
 demand, so the service is inactive on an idle node that is perfectly
 healthy\.
@@ -1080,11 +1088,11 @@ The names reach a dashboard as value mappings: every field override
 matched by name to ` name ` (the unit label) in a provisioned dashboard
 gets one regex mapping per named unit\.
 
-The fleet dashboard’s Services panel has one row per node and one
-column per unit that some selected node has\. A unit one node runs and
-another does not shows as absent on the second node’s row; a unit no
-selected node runs has no column at all, so one set serves a whole
-fleet whose machines run different things\.
+The fleet page’s “Which watched services are down?” and the node
+page’s Background jobs list the watched units that are not active, one
+row per unit and machine, and nothing else: a unit a machine does not
+run is not listed, so one set serves a whole fleet whose machines run
+different things\.
 
 Each key is a regular expression Prometheus matches against the whole
 unit name, suffix included, so ` restic-backups-.* ` works, and its name
@@ -1100,12 +1108,12 @@ default instead of overriding it:
 (a list, ` lib.mkOptionDefault [ "caddy.service" ] `, merges the same
 way)\.
 
-This only picks what the Services panel draws\. The Fleet status panel
-counts every failed unit on the node whatever is listed here, except
-device, scope and slice units, which the node_exporter flags these
-modules set leave out, and the ` holochain:node_problem ` rule gives
-each failed unit a sentence of its own, naming it by its name here or,
-when it has none or is not listed, by its unit name\.
+This only picks what those two tables list\. The
+` holochain:node_problem ` rule, which the problem lists read, gives
+every failed unit on the node a sentence of its own whatever is listed
+here, except device, scope and slice units, which the node_exporter
+flags these modules set leave out, naming it by its name here or, when
+it has none or is not listed, by its unit name\.
 
 
 
