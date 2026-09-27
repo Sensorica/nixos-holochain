@@ -123,7 +123,7 @@ Four dashboards ship, all tagged `holochain`, each titled with the one question 
 
 Every app part reads one of six words, worst first: **Not running**, **No fresh readings**, **Lost contact**, **No one else yet** (grey, and normal for a machine alone), **Catching up** and **In step**. The room and fleet pages explain each in a sentence at the bottom. They are computed once, by the recording rules of `modules/holochain-rules.nix`, so no two pages can disagree; a machine reads by its worst conductor, and an app by its worst part. No page shows a hash, an installed app id or a scrape address, except the collapsed "For bug reports" row of the network page, which exists to be pasted into an issue.
 
-Each machine lists the services it runs, from the modules enabled on it: the conductor, the app installer, the readings timer, the HTTP gateway, the local bootstrap and relay, the Wind Tunnel runner, Prometheus and Grafana on the monitor, and beside them node_exporter, sshd, Tailscale and the Nix daemon when they are enabled. The node page lists them by name with their state; the fleet page lists the ones that are not running; a machine's tile on the room screen reads "A service is down" while one has failed, stopped or does not answer. The table of every service and where its name and state come from is in [architecture.md](architecture.md#services-from-what-each-node-runs). A machine needs node_exporter's textfile collector for its list to reach the pages; an edgenode and a monitor have it already.
+Each machine lists the services it runs, from the modules enabled on it: the conductor, the app installer, the readings timer, the HTTP gateway, the local bootstrap and relay, the Wind Tunnel runner, Prometheus and Grafana on the monitor, and beside them node_exporter, sshd, Tailscale and the Nix daemon when they are enabled. The node page lists them by name with their state; the fleet page lists the ones that are not running; a machine's tile on the room screen reads "A service is down" while one has failed, keeps failing and restarting, has stopped or does not answer. The table of every service and where its name and state come from is in [architecture.md](architecture.md#services-from-what-each-node-runs). A machine needs node_exporter's textfile collector for its list to reach the pages; an edgenode and a monitor have it already.
 
 Two options feed the pages. `overviewUnits`, on the monitor, adds units to watch on every machine that runs them, with the name a person reads for each: `overviewUnits = { "caddy.service" = "Web server"; };` (a list, `[ "caddy.service" ]`, still works and shows the unit name). A service of your own on one machine goes in that machine's own list instead: `services.holochain-services.units."caddy.service" = "Web server";`. `room` (`app`, `part`, `label`) picks the one app part whose writes the room screen follows; left unset, that chart says so. Temperatures are empty in this VM and on any machine without hardware sensors; that is expected.
 
@@ -184,7 +184,7 @@ curl -s localhost:9090/api/v1/targets | jq '.data.activeTargets[] | {scrapeUrl, 
 # default it is the workshop password
 curl -s -u "admin:$GRAFANA_ADMIN_PASSWORD" 'localhost:3000/api/search?tag=holochain' | jq -r '.[].uid'
 
-# every node by name, with its state (4 is Running, 3 A service is down)
+# every node by name, with its state (4 is Running, 2 A service is down)
 curl -s --get localhost:9090/api/v1/query \
   --data-urlencode 'query=holochain:node_state' \
   | jq '.data.result[] | {node: .metric.node, state: .value[1]}'

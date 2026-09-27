@@ -1607,9 +1607,9 @@ serves a fleet whose machines run different things\. A unit a node
 lists itself keeps the name the node gives it\.
 
 The watched units reach the recording rules (` holochain:service_watched `
-and ` holochain:service_state `), which the node page’s “Services on
-this node”, the fleet page’s “Which watched services are down?” and
-the room screen’s machine tiles read\. For a dashboard of your own, the
+and ` holochain:service_state `), which the node page’s “Is each
+service on this machine running?”, the fleet page’s “Which services
+are not running?” and the room screen’s machine tiles read\. For a dashboard of your own, the
 keys are also joined with ` | ` into the default of any ` units ` textbox
 variable, and every field override matched by name to ` name ` (the
 unit label of ` node_systemd_unit_state `) gets one regex value mapping
@@ -2519,10 +2519,13 @@ any attribute set option merges; override a name with ` lib.mkForce `
 on that one attribute\.
 
 Published as ` holochain_service_info ` through node_exporter’s textfile
-collector when ` textfileDirectory ` is set\. The node page’s “Services on
-this node” lists each of them with its state, the fleet page lists the
-ones that are not running, and the room screen’s machine tile reads
-“A service is down” while one has failed, stopped or does not answer\.
+collector when ` textfileDirectory ` is set\. The node page’s “Is each
+service on this machine running?” lists each of them with its state,
+the fleet page lists the ones that are not running, and the room
+screen’s machine tile reads “A service is down” while one has failed,
+keeps failing and restarting, has stopped or does not answer\. A unit
+systemd does not run has no row; evaluation warns about a listed unit
+this configuration does not define\.
 ` services.holochain-grafana.overviewUnits `, on the monitor, adds units
 to watch on every node on top of these\.
 
@@ -2566,8 +2569,10 @@ for an edgenode)\. The service then reads Not answering when the
 conductor does not answer its admin interface, and No fresh
 readings when its readings are old, although systemd says the
 unit is active\. A conductor that no listed unit claims is shown
-as a service of its own, “\<conductor> node” (a Moss node reads
-“Moss node”)\.
+as a service of its own, “Holochain conductor (\<conductor>)”, as
+the edgenode names the unit that runs a conductor under a name
+other than the default: a Moss node whose readings carry
+` conductor="Moss" ` reads “Holochain conductor (Moss)”\.
 
 
 
