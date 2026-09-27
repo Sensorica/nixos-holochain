@@ -1,36 +1,273 @@
 {
   "uid": "holochain-fleet",
   "title": "Holochain Fleet",
+  "description": "Every node the monitor scrapes: whether it and its services are up, how the machine is doing, and what its Holochain conductor is doing.",
   "tags": ["holochain", "nixos-holochain"],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "editable": true,
   "refresh": "10s",
   "time": { "from": "now-15m", "to": "now" },
-  "templating": { "list": [] },
+  "templating": {
+    "list": [
+      {
+        "name": "instance",
+        "label": "Instance",
+        "description": "The scrape targets of the holochain-nodes job. All includes nodes that appear after the page was loaded.",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+        "definition": "label_values(up{job=\"holochain-nodes\"}, instance)",
+        "query": {
+          "query": "label_values(up{job=\"holochain-nodes\"}, instance)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": { "selected": true, "text": ["All"], "value": ["$__all"] },
+        "options": [],
+        "regex": "",
+        "hide": 0
+      },
+      {
+        "name": "units",
+        "label": "Units (regex)",
+        "description": "systemd units the Services panel shows, as one regular expression Prometheus matches against the whole unit name. The default comes from services.holochain-grafana.overviewUnits; a regex typed here lives in the page URL and is never saved to the dashboard.",
+        "type": "textbox",
+        "query": "holochain-conductor.service|holochain-happ-installer.service|holochain-conductor-metrics.timer|holochain-http-gateway.service|podman-wind-tunnel-runner.service|prometheus.service|prometheus-node-exporter.service|grafana.service|sshd.service|tailscaled.service|nix-daemon.socket",
+        "current": {
+          "text": "holochain-conductor.service|holochain-happ-installer.service|holochain-conductor-metrics.timer|holochain-http-gateway.service|podman-wind-tunnel-runner.service|prometheus.service|prometheus-node-exporter.service|grafana.service|sshd.service|tailscaled.service|nix-daemon.socket",
+          "value": "holochain-conductor.service|holochain-happ-installer.service|holochain-conductor-metrics.timer|holochain-http-gateway.service|podman-wind-tunnel-runner.service|prometheus.service|prometheus-node-exporter.service|grafana.service|sshd.service|tailscaled.service|nix-daemon.socket"
+        },
+        "options": [],
+        "hide": 0
+      }
+    ]
+  },
   "annotations": { "list": [] },
   "panels": [
     {
       "id": 1,
       "type": "row",
-      "title": "Conductor",
+      "title": "Overview",
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
       "collapsed": false,
       "panels": []
     },
     {
       "id": 2,
-      "type": "stat",
-      "title": "Conductors up",
-      "description": "holochain_conductor_up, written by the holochain-conductor-metrics timer from dump-network-stats. 0 means the node is reporting but its conductor did not answer.",
-      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 1 },
+      "type": "table",
+      "title": "Fleet status",
+      "description": "One row per node. Node is Prometheus's own up series for the scrape target. Conductor is holochain_conductor_up. Failed units counts every systemd unit in the failed state, not only the ones listed under Services. Metrics age is how long ago the conductor metrics timer last wrote its textfile; it grows only when the timer stops running, since a down conductor still gets a file saying so. A node that does not answer the scrape keeps its row with Node down and the other cells empty.",
+      "gridPos": { "h": 13, "w": 11, "x": 0, "y": 1 },
       "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
       "targets": [
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
-          "expr": "holochain_conductor_up",
+          "expr": "max by (instance) (up{job=\"holochain-nodes\", instance=~\"$instance\"})",
+          "format": "table",
+          "instant": true,
+          "range": false
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+          "expr": "max by (instance) (time() - node_boot_time_seconds{instance=~\"$instance\"})",
+          "format": "table",
+          "instant": true,
+          "range": false
+        },
+        {
+          "refId": "C",
+          "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+          "expr": "max by (instance) (holochain_conductor_up{instance=~\"$instance\"})",
+          "format": "table",
+          "instant": true,
+          "range": false
+        },
+        {
+          "refId": "D",
+          "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+          "expr": "sum by (instance) (node_systemd_unit_state{instance=~\"$instance\", state=\"failed\"})",
+          "format": "table",
+          "instant": true,
+          "range": false
+        },
+        {
+          "refId": "E",
+          "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+          "expr": "max by (instance) (time() - holochain_conductor_metrics_scrape_timestamp_seconds{instance=~\"$instance\"})",
+          "format": "table",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "transformations": [
+        { "id": "merge", "options": {} },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true },
+            "indexByName": { "instance": 0, "Value #A": 1, "Value #C": 2, "Value #D": 3, "Value #B": 4, "Value #E": 5 },
+            "renameByName": {
+              "instance": "Instance",
+              "Value #A": "Node",
+              "Value #B": "Uptime",
+              "Value #C": "Conductor",
+              "Value #D": "Failed units",
+              "Value #E": "Metrics age"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "align": "auto", "minWidth": 70, "cellOptions": { "type": "auto" } },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "text", "value": null }] }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byRegexp", "options": "^(Node|Conductor)$" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "basic" } },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": { "text": "down", "color": "red", "index": 0 },
+                      "1": { "text": "up", "color": "green", "index": 1 }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Failed units" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "basic" } },
+              { "id": "decimals", "value": 0 },
+              {
+                "id": "thresholds",
+                "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] }
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Uptime" },
+            "properties": [{ "id": "unit", "value": "dtdurations" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Metrics age" },
+            "properties": [
+              { "id": "unit", "value": "s" },
+              { "id": "decimals", "value": 0 },
+              { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "basic" } },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 120 }, { "color": "red", "value": 300 }]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": { "show": false, "reducer": ["sum"], "fields": "" },
+        "sortBy": [{ "displayName": "Instance", "desc": false }]
+      }
+    },
+    {
+      "id": 3,
+      "type": "table",
+      "title": "Services",
+      "description": "State of each systemd unit matched by the Units variable, one column per node, from node_exporter's systemd collector (node_systemd_unit_state). A unit a node does not run has no series there and shows as absent. The one-shot metrics service sits idle between runs, so its timer is what is listed.",
+      "gridPos": { "h": 13, "w": 13, "x": 11, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+          "expr": "max by (instance, name) (node_systemd_unit_state{instance=~\"$instance\", name=~`${units:raw}`, state=\"active\"} or 2 * node_systemd_unit_state{instance=~\"$instance\", name=~`${units:raw}`, state=~\"activating|deactivating\"} or 3 * node_systemd_unit_state{instance=~\"$instance\", name=~`${units:raw}`, state=\"failed\"})",
+          "format": "table",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "transformations": [
+        {
+          "id": "groupingToMatrix",
+          "options": { "columnField": "instance", "rowField": "name", "valueField": "Value", "emptyValue": "null" }
+        },
+        {
+          "id": "organize",
+          "options": { "renameByName": { "name\\instance": "Unit" } }
+        },
+        {
+          "id": "sortBy",
+          "options": { "sort": [{ "field": "Unit", "desc": false }] }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "align": "center", "minWidth": 70, "cellOptions": { "type": "color-background", "mode": "basic" } },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "transparent", "value": null }] },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "inactive", "color": "orange", "index": 0 },
+                "1": { "text": "active", "color": "green", "index": 1 },
+                "2": { "text": "starting or stopping", "color": "yellow", "index": 2 },
+                "3": { "text": "failed", "color": "red", "index": 3 }
+              }
+            },
+            { "type": "special", "options": { "match": "null", "result": { "text": "absent", "color": "transparent", "index": 4 } } }
+          ]
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Unit" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "auto" } },
+              { "id": "custom.align", "value": "left" },
+              { "id": "mappings", "value": [] }
+            ]
+          }
+        ]
+      },
+      "options": { "showHeader": true, "cellHeight": "sm", "footer": { "show": false, "reducer": ["sum"], "fields": "" } }
+    },
+    {
+      "id": 4,
+      "type": "row",
+      "title": "Holochain",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Conductors up",
+      "description": "holochain_conductor_up, written by the holochain-conductor-metrics timer from dump-network-stats. 0 means the node is reporting but its conductor did not answer.",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 15 },
+      "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+          "expr": "holochain_conductor_up{instance=~\"$instance\"}",
           "legendFormat": "{{instance}}",
           "instant": false
         }
@@ -61,29 +298,29 @@
       }
     },
     {
-      "id": 3,
+      "id": 6,
       "type": "timeseries",
       "title": "Conductor peers",
       "description": "holochain_conductor_peer_urls is how many addresses this conductor can be reached at, which is non-zero as soon as it has a transport. The two connection counts stay at zero until it joins a DHT, which means until a hApp is installed.",
-      "gridPos": { "h": 6, "w": 9, "x": 6, "y": 1 },
+      "gridPos": { "h": 6, "w": 9, "x": 6, "y": 15 },
       "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
       "targets": [
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
-          "expr": "holochain_conductor_peer_urls",
+          "expr": "holochain_conductor_peer_urls{instance=~\"$instance\"}",
           "legendFormat": "{{instance}} peer urls"
         },
         {
           "refId": "B",
           "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
-          "expr": "holochain_conductor_peer_connections",
+          "expr": "holochain_conductor_peer_connections{instance=~\"$instance\"}",
           "legendFormat": "{{instance}} connections"
         },
         {
           "refId": "C",
           "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
-          "expr": "holochain_conductor_direct_peer_connections",
+          "expr": "holochain_conductor_direct_peer_connections{instance=~\"$instance\"}",
           "legendFormat": "{{instance}} direct"
         }
       ],
@@ -101,23 +338,23 @@
       }
     },
     {
-      "id": 4,
+      "id": 7,
       "type": "timeseries",
       "title": "Conductor network throughput",
       "description": "Rate of holochain_conductor_network_sent_bytes_total and _received_bytes_total, summed over the conductor's peer connections.",
-      "gridPos": { "h": 6, "w": 9, "x": 15, "y": 1 },
+      "gridPos": { "h": 6, "w": 9, "x": 15, "y": 15 },
       "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
       "targets": [
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
-          "expr": "rate(holochain_conductor_network_sent_bytes_total[2m])",
+          "expr": "rate(holochain_conductor_network_sent_bytes_total{instance=~\"$instance\"}[2m])",
           "legendFormat": "{{instance}} sent"
         },
         {
           "refId": "B",
           "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
-          "expr": "rate(holochain_conductor_network_received_bytes_total[2m])",
+          "expr": "rate(holochain_conductor_network_received_bytes_total{instance=~\"$instance\"}[2m])",
           "legendFormat": "{{instance}} received"
         }
       ],
@@ -135,25 +372,125 @@
       }
     },
     {
-      "id": 5,
+      "id": 8,
+      "type": "stat",
+      "title": "Conductor metrics age",
+      "description": "Seconds since the holochain-conductor-metrics timer last wrote its textfile (time() minus holochain_conductor_metrics_scrape_timestamp_seconds). It stays under conductorMetrics.interval plus the scrape interval while the timer runs; past two minutes every holochain_* panel is showing old numbers. A down conductor does not raise it: the file is still written, with holochain_conductor_up 0.",
+      "gridPos": { "h": 7, "w": 6, "x": 0, "y": 21 },
+      "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+          "expr": "time() - holochain_conductor_metrics_scrape_timestamp_seconds{instance=~\"$instance\"}",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 120 },
+              { "color": "red", "value": 300 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Conductor messages",
+      "description": "Rate of holochain_conductor_network_sent_messages_total and _received_messages_total, summed over the conductor's current peer connections.",
+      "gridPos": { "h": 7, "w": 9, "x": 6, "y": 21 },
+      "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+          "expr": "rate(holochain_conductor_network_sent_messages_total{instance=~\"$instance\"}[2m])",
+          "legendFormat": "{{instance}} sent"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+          "expr": "rate(holochain_conductor_network_received_messages_total{instance=~\"$instance\"}[2m])",
+          "legendFormat": "{{instance}} received"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "unit": "suffix: msg/s",
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "auto" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Blocked messages",
+      "description": "Messages the conductor refused over the last five minutes, summed over every block reason (increase of holochain_conductor_blocked_messages_total). Anything above zero means peers are sending what this node will not accept.",
+      "gridPos": { "h": 7, "w": 9, "x": 15, "y": 21 },
+      "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+          "expr": "increase(holochain_conductor_blocked_messages_total{instance=~\"$instance\"}[5m])",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "unit": "short",
+          "decimals": 0,
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "auto" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      }
+    },
+    {
+      "id": 11,
       "type": "row",
-      "title": "Hosts",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 7 },
+      "title": "Host health",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 28 },
       "collapsed": false,
       "panels": []
     },
     {
-      "id": 6,
+      "id": 12,
       "type": "timeseries",
       "title": "CPU busy",
       "description": "Percentage of CPU time not spent idle, from node_exporter's cpu collector.",
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 29 },
       "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
       "targets": [
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
-          "expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[2m])) * 100)",
+          "expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{instance=~\"$instance\", mode=\"idle\"}[2m])) * 100)",
           "legendFormat": "{{instance}}"
         }
       ],
@@ -172,17 +509,17 @@
       }
     },
     {
-      "id": 7,
+      "id": 13,
       "type": "timeseries",
       "title": "Memory used",
       "description": "Share of RAM that is not available, from node_exporter's meminfo collector.",
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 29 },
       "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
       "targets": [
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
-          "expr": "100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)",
+          "expr": "100 * (1 - node_memory_MemAvailable_bytes{instance=~\"$instance\"} / node_memory_MemTotal_bytes{instance=~\"$instance\"})",
           "legendFormat": "{{instance}}"
         }
       ],
@@ -201,23 +538,190 @@
       }
     },
     {
-      "id": 8,
+      "id": 14,
       "type": "timeseries",
-      "title": "Host network throughput",
-      "description": "Bytes per second in and out of every interface except loopback, from node_exporter's netdev collector.",
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+      "title": "Load average",
+      "description": "node_load1, node_load5 and node_load15 from node_exporter's loadavg collector. The dashed line is the node's CPU count: a load that stays above it means work is queueing for the processor.",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 29 },
       "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
       "targets": [
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
-          "expr": "sum by (instance) (rate(node_network_receive_bytes_total{device!=\"lo\"}[2m]))",
+          "expr": "node_load1{instance=~\"$instance\"}",
+          "legendFormat": "{{instance}} 1m"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+          "expr": "node_load5{instance=~\"$instance\"}",
+          "legendFormat": "{{instance}} 5m"
+        },
+        {
+          "refId": "C",
+          "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+          "expr": "node_load15{instance=~\"$instance\"}",
+          "legendFormat": "{{instance}} 15m"
+        },
+        {
+          "refId": "D",
+          "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+          "expr": "count by (instance) (node_cpu_seconds_total{instance=~\"$instance\", mode=\"idle\"})",
+          "legendFormat": "{{instance}} CPUs"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "unit": "short",
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "auto" }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byFrameRefID", "options": "D" },
+            "properties": [
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } },
+              { "id": "custom.fillOpacity", "value": 0 },
+              { "id": "custom.lineWidth", "value": 1 }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      }
+    },
+    {
+      "id": 15,
+      "type": "bargauge",
+      "title": "Disk space used",
+      "description": "Share of each mounted filesystem that is used, from node_exporter's filesystem collector. Memory-backed and image filesystems (tmpfs, ramfs, overlay, squashfs) are left out, and so is /nix/store, which NixOS bind-mounts from the filesystem that holds /nix.",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 37 },
+      "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+          "expr": "100 * (1 - node_filesystem_avail_bytes{instance=~\"$instance\", fstype!~\"tmpfs|ramfs|overlay|squashfs\", mountpoint!=\"/nix/store\"} / node_filesystem_size_bytes{instance=~\"$instance\", fstype!~\"tmpfs|ramfs|overlay|squashfs\", mountpoint!=\"/nix/store\"})",
+          "legendFormat": "{{instance}} {{mountpoint}}",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 100,
+          "unit": "percent",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 80 },
+              { "color": "red", "value": 90 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "valueMode": "color",
+        "namePlacement": "left",
+        "sizing": "manual",
+        "minVizHeight": 16,
+        "maxVizHeight": 32,
+        "text": { "titleSize": 12, "valueSize": 12 },
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      }
+    },
+    {
+      "id": 16,
+      "type": "timeseries",
+      "title": "Disk IO",
+      "description": "Bytes per second read (above the axis) and written (below it) per disk, from node_exporter's diskstats collector, which already leaves out partitions and loop devices; optical drives are left out too.",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 37 },
+      "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+          "expr": "rate(node_disk_read_bytes_total{instance=~\"$instance\", device!~\"sr[0-9]+\"}[2m])",
+          "legendFormat": "{{instance}} {{device}} read"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+          "expr": "rate(node_disk_written_bytes_total{instance=~\"$instance\", device!~\"sr[0-9]+\"}[2m])",
+          "legendFormat": "{{instance}} {{device}} written"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "auto" }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byFrameRefID", "options": "B" },
+            "properties": [{ "id": "custom.transform", "value": "negative-Y" }]
+          }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      }
+    },
+    {
+      "id": 17,
+      "type": "timeseries",
+      "title": "Temperatures",
+      "description": "Every temperature sensor node_exporter's hwmon collector finds (node_hwmon_temp_celsius), per chip and sensor; on an Intel machine the coretemp chip's temp1 is the package and the others are cores. A virtual machine usually exposes no sensors, and this panel then says No data.",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 37 },
+      "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+          "expr": "node_hwmon_temp_celsius{instance=~\"$instance\"}",
+          "legendFormat": "{{instance}} {{chip}} {{sensor}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 0, "showPoints": "auto" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      }
+    },
+    {
+      "id": 18,
+      "type": "timeseries",
+      "title": "Host network throughput",
+      "description": "Bytes per second in and out of every interface except loopback, from node_exporter's netdev collector.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 45 },
+      "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+          "expr": "sum by (instance) (rate(node_network_receive_bytes_total{instance=~\"$instance\", device!=\"lo\"}[2m]))",
           "legendFormat": "{{instance}} in"
         },
         {
           "refId": "B",
           "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
-          "expr": "sum by (instance) (rate(node_network_transmit_bytes_total{device!=\"lo\"}[2m]))",
+          "expr": "sum by (instance) (rate(node_network_transmit_bytes_total{instance=~\"$instance\", device!=\"lo\"}[2m]))",
           "legendFormat": "{{instance}} out"
         }
       ],
@@ -225,6 +729,46 @@
         "defaults": {
           "min": 0,
           "unit": "Bps",
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "auto" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      }
+    },
+    {
+      "id": 19,
+      "type": "timeseries",
+      "title": "Pressure",
+      "description": "Share of time some task was stalled waiting for CPU, memory or IO, from the kernel's pressure stall information (node_exporter's pressure collector). Sustained memory or IO pressure is the early sign of a machine that is too small for what it runs.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 45 },
+      "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+          "expr": "100 * rate(node_pressure_cpu_waiting_seconds_total{instance=~\"$instance\"}[2m])",
+          "legendFormat": "{{instance}} cpu"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+          "expr": "100 * rate(node_pressure_memory_waiting_seconds_total{instance=~\"$instance\"}[2m])",
+          "legendFormat": "{{instance}} memory"
+        },
+        {
+          "refId": "C",
+          "datasource": { "type": "prometheus", "uid": "holochain-prometheus" },
+          "expr": "100 * rate(node_pressure_io_waiting_seconds_total{instance=~\"$instance\"}[2m])",
+          "legendFormat": "{{instance}} io"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "unit": "percent",
           "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "auto" }
         },
         "overrides": []

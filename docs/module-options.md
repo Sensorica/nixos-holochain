@@ -851,9 +851,14 @@ string
 
 Directory of Grafana dashboard JSON files to provision\. Everything in
 it is loaded at startup and re-read every 30 seconds\. The module ships
-` holochain-fleet.json ` (uid ` holochain-fleet `), which draws CPU, memory
-and host network from node_exporter and the conductor’s own
-` holochain_* ` series from the edgenode module’s metrics timer\.
+` holochain-fleet.json ` (uid ` holochain-fleet `): an Overview row saying
+per node whether the node, its conductor and its services are up, a
+Holochain row drawn from the edgenode module’s metrics timer, and a
+Host health row drawn from node_exporter\.
+
+A directory in the Nix store (a path in your flake, for instance) has
+every dashboard’s ` units ` textbox variable set from ` overviewUnits ` on
+its way in; a directory outside the store is provisioned as it is\.
 
 
 
@@ -914,6 +919,69 @@ boolean
 
 ```nix
 false
+```
+
+*Declared by:*
+ - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+
+
+
+## services\.holochain-grafana\.overviewUnits
+
+
+
+systemd units the dashboard’s Services panel shows for every node,
+read from node_exporter’s systemd collector (` node_systemd_unit_state `)\.
+The default is every unit the nixos-holochain modules create, plus the
+services a fleet node usually runs beside them\. The Nix daemon is
+listed by its socket: NixOS starts ` nix-daemon.service ` on demand, so
+the service is inactive on an idle node that is perfectly healthy\.
+A unit a node does not
+have is shown as absent on that node, so one list serves a whole
+fleet whose machines run different things\.
+
+Each entry is a regular expression Prometheus matches against the
+whole unit name, suffix included, so ` restic-backups-.* ` works\. The
+entries are joined with ` | ` into the default of the dashboard’s
+` units ` variable; a viewer can type another regex in the browser,
+which lives in that page’s URL and is never saved to the dashboard\.
+
+This list only picks what the Services panel draws\. The Fleet status
+panel counts every failed unit on the node whatever is listed here\.
+
+
+
+*Type:*
+list of string
+
+
+
+*Default:*
+
+```nix
+[
+  "holochain-conductor.service"
+  "holochain-happ-installer.service"
+  "holochain-conductor-metrics.timer"
+  "holochain-http-gateway.service"
+  "podman-wind-tunnel-runner.service"
+  "prometheus.service"
+  "prometheus-node-exporter.service"
+  "grafana.service"
+  "sshd.service"
+  "tailscaled.service"
+  "nix-daemon.socket"
+]
+```
+
+
+
+*Example:*
+
+```nix
+[ "holochain-conductor.service" "holochain-happ-installer.service"
+  "sshd.service" "caddy.service" "restic-backups-.*" ]
+
 ```
 
 *Declared by:*

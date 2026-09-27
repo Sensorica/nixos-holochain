@@ -112,6 +112,16 @@ nix build .#nixosConfigurations.observability-vm.config.system.build.vm
 
 Then open <http://localhost:13000> (admin / workshop2026) and pick the **Holochain Fleet** dashboard; Prometheus itself is on <http://localhost:19090>. Give it a couple of minutes: the conductor needs a minute or more to come up, the metrics timer fires every 10 seconds in this VM, and the panels need a few points before they draw a line.
 
+The dashboard reads top to bottom, from "is anything wrong" to "why":
+
+| Row | Panels | What it answers |
+|---|---|---|
+| Overview | Fleet status, Services | Per node: is the node scraped (`up`), how long since boot, is the conductor answering (`holochain_conductor_up`), how many systemd units have failed, how old the conductor metrics are; and the state of every deployed service on every node, from `node_systemd_unit_state` |
+| Holochain | Conductors up, Conductor peers, Conductor network throughput, Conductor metrics age, Conductor messages, Blocked messages | What each conductor is doing, from the `holochain_*` series the metrics timer writes |
+| Host health | CPU busy, Memory used, Load average, Disk space used, Disk IO, Temperatures, Host network throughput, Pressure | Whether the machine under the conductor is healthy, from node_exporter |
+
+Two variables at the top narrow it down. **Instance** picks nodes (All by default, which also takes in nodes that join later). **Units** is the regular expression the Services panel matches unit names against; its default is `services.holochain-grafana.overviewUnits`, so add a service there to have it on every node's column. A unit a node does not run shows as absent rather than as a failure. Temperatures says No data in this VM, and on any machine without hardware sensors; that is expected.
+
 The dashboard panels are provisioned, not saved by hand. Editing one in the browser will appear to work and will be discarded on the next rebuild; change `modules/dashboards/holochain-fleet.json` instead.
 
 ## First boot sequence
@@ -154,7 +164,19 @@ curl -s localhost:9090/api/v1/targets | jq '.data.activeTargets[] | {scrapeUrl, 
 # export GRAFANA_ADMIN_PASSWORD first; on a node that kept the module
 # default it is the workshop password
 curl -s -u "admin:$GRAFANA_ADMIN_PASSWORD" 'localhost:3000/api/search?query=Holochain'
+
+# the Services panel's raw material: one active series per node for the conductor
+curl -s --get localhost:9090/api/v1/query \
+  --data-urlencode 'query=node_systemd_unit_state{name="holochain-conductor.service",state="active"} == 1' \
+  | jq '.data.result[] | .metric.instance'
+
+# any failed unit, on any node, which the Fleet status panel counts
+curl -s --get localhost:9090/api/v1/query \
+  --data-urlencode 'query=node_systemd_unit_state{state="failed"} == 1' \
+  | jq '.data.result[] | {instance: .metric.instance, unit: .metric.name}'
 ```
+
+A node missing from the first answer is either not scraped (check the targets above) or not running its conductor. The second answer is empty on a healthy fleet; each entry is a unit to look at with `systemctl status` on that node.
 
 ## Rolling back
 

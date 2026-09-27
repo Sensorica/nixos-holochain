@@ -170,7 +170,7 @@ Eight NixOS VM tests, all built in CI:
 | `vmTest` / `vmTest-0_6` | A bare conductor comes up and answers `list-apps` on 0.7.0 and on 0.6.3 |
 | `vmTestWithHapp` / `vmTestWithHapp-0_6` | A hApp installs once, stays enabled, and survives a cold boot on both lines |
 | `vmTestConductorMetrics-0_6` | The conductor's gauges appear on `/metrics` on the 0.6 line |
-| `vmTestGrafana` | Conductor series reach Prometheus and the dashboard is provisioned with its data source |
+| `vmTestGrafana` | Conductor series reach Prometheus, the dashboard is provisioned with its data source, and every one of its queries answers from real series |
 | `vmTestGateway` | A zome read answers 200 with JSON through the HTTP gateway, and a function outside the allow list answers 403 |
 | `vmTestWindtunnel` | The generated container unit carries the flags the runner requires, and stays stopped when `autoStart = false` |
 

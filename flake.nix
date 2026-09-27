@@ -538,9 +538,16 @@
                 adminPasswordFile = "/var/lib/secrets/grafana-admin-password";
                 scrapeTargets = ["127.0.0.1:9100"];
                 openFirewall = true;
+                # Added to the default list rather than replacing it, both at
+                # option-default priority, so the test sees the default units
+                # and proves the option reaches the provisioned JSON.
+                overviewUnits = pkgs.lib.mkOptionDefault ["systemd-journald.service"];
               };
             };
             testScript = ''
+              import base64
+              import json
+
               machine.wait_for_unit("grafana.service")
               machine.wait_for_unit("prometheus.service")
               machine.wait_for_open_port(3000)
@@ -626,6 +633,119 @@
               )
               machine.log("grafana datasource: " + datasource)
               assert '"type":"prometheus"' in datasource, datasource
+
+              # ---- criterion 6: the overview answers "is everything up?" ----
+              # Prometheus must hold the series the Overview row is built on,
+              # not merely accept the queries.
+              def prom_file(expr, name):
+                  encoded = base64.b64encode(expr.encode()).decode()
+                  machine.succeed(f"echo {encoded} | base64 -d > /tmp/{name}")
+                  return f"/tmp/{name}"
+
+
+              def prom_query(path):
+                  return json.loads(machine.succeed(
+                      f"curl -s --get localhost:9090/api/v1/query --data-urlencode query@{path}"
+                  ))
+
+
+              def wait_non_empty(expr, name, timeout=180):
+                  path = prom_file(expr, name)
+                  machine.wait_until_succeeds(
+                      f"curl -s --get localhost:9090/api/v1/query --data-urlencode query@{path}"
+                      " | jq -e '.status == \"success\" and (.data.result | length > 0)'",
+                      timeout=timeout,
+                  )
+                  return prom_query(path)["data"]["result"]
+
+
+              result = wait_non_empty(
+                  'node_systemd_unit_state{name="holochain-conductor.service",state="active"} == 1',
+                  "q-conductor-unit",
+              )
+              machine.log("conductor unit active: " + json.dumps(result))
+              result = wait_non_empty(
+                  'node_filesystem_size_bytes{mountpoint="/", fstype!~"tmpfs|ramfs|overlay|squashfs"} > 0',
+                  "q-root-fs",
+              )
+              machine.log("root filesystem: " + json.dumps(result))
+
+              # The dashboard as Grafana serves it, after the module rewrote it.
+              served = json.loads(machine.succeed(
+                  "curl -s -u admin:${grafanaTestPassword}"
+                  " http://localhost:3000/api/dashboards/uid/holochain-fleet"
+              ))["dashboard"]
+              panels = []
+              for panel in served["panels"]:
+                  panels.append(panel)
+                  panels.extend(panel.get("panels", []))
+              titles = {p["title"] for p in panels}
+              machine.log("provisioned panels: " + ", ".join(sorted(titles)))
+              for title in [
+                  "Overview", "Fleet status", "Services",
+                  "Holochain", "Conductors up", "Conductor peers",
+                  "Conductor network throughput", "Conductor metrics age",
+                  "Conductor messages", "Blocked messages",
+                  "Host health", "CPU busy", "Memory used", "Load average",
+                  "Disk space used", "Disk IO", "Temperatures",
+                  "Host network throughput", "Pressure",
+              ]:
+                  assert title in titles, f"panel {title!r} missing: {sorted(titles)}"
+
+              variables = {v["name"]: v for v in served["templating"]["list"]}
+              units = variables["units"]["current"]["value"]
+              machine.log("units variable default: " + units)
+              for unit in ["holochain-conductor.service", "systemd-journald.service"]:
+                  assert unit in units.split("|"), f"{unit} not in the units default: {units}"
+
+              # Every query on the dashboard, with its variables filled in the
+              # way Grafana fills them for "All", has to be valid PromQL over
+              # series that exist here. Temperatures is the one panel a VM has
+              # nothing for: QEMU exposes no hwmon sensor.
+              no_data_expected = {"Temperatures"}
+              for panel in panels:
+                  for n, target in enumerate(panel.get("targets", [])):
+                      expr = (
+                          target["expr"]
+                          .replace("''${units:raw}", units)
+                          .replace("$instance", ".*")
+                      )
+                      assert "$" not in expr, f"unsubstituted variable in {expr}"
+                      name = f"q-panel-{panel['id']}-{n}"
+                      if panel["title"] in no_data_expected:
+                          reply = prom_query(prom_file(expr, name))
+                          assert reply["status"] == "success", f"{panel['title']}: {reply}"
+                          machine.log(f"{panel['title']} [{target['refId']}]: {len(reply['data']['result'])} series (none expected in a VM)")
+                      else:
+                          result = wait_non_empty(expr, name)
+                          machine.log(f"{panel['title']} [{target['refId']}]: {len(result)} series")
+
+              # The Services panel's own query, in this node's terms.
+              services = {
+                  r["metric"]["name"]: r["value"][1]
+                  for r in prom_query(prom_file(
+                      next(t["expr"] for p in panels if p["title"] == "Services" for t in p["targets"])
+                      .replace("''${units:raw}", units).replace("$instance", ".*"),
+                      "q-services",
+                  ))["data"]["result"]
+              }
+              machine.log("services: " + json.dumps(services, sort_keys=True))
+              for unit in [
+                  "holochain-conductor.service", "holochain-conductor-metrics.timer",
+                  "prometheus.service", "prometheus-node-exporter.service",
+                  "grafana.service", "nix-daemon.socket", "systemd-journald.service",
+              ]:
+                  assert services.get(unit) == "1", f"{unit} not active on the Services panel: {services}"
+
+              # A dashboard Grafana could not provision leaves an error in its
+              # journal and nothing else.
+              journal = machine.succeed("journalctl -u grafana --no-pager")
+              offenders = [
+                  line
+                  for line in journal.splitlines()
+                  if "level=error" in line and "provisioning" in line
+              ]
+              assert not offenders, "grafana provisioning errors:\n" + "\n".join(offenders)
             '';
           };
 

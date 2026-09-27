@@ -270,9 +270,11 @@ Two properties are worth stating explicitly:
 
 ### 2. Prometheus and Grafana
 
-`holochain-grafana` runs both on the monitor node and provisions the pair that makes a dashboard work without a human: a Prometheus data source with the fixed uid `holochain-prometheus`, and every JSON file under `modules/dashboards/`. The shipped dashboard, "Holochain Fleet", draws CPU, memory and host network from node_exporter next to the conductor series, so a spike in one is legible against the other.
+`holochain-grafana` runs both on the monitor node and provisions the pair that makes a dashboard work without a human: a Prometheus data source with the fixed uid `holochain-prometheus`, and every JSON file under `modules/dashboards/`. The shipped dashboard, "Holochain Fleet", opens on an Overview row that says per node whether the node, its conductor and its services are up, then a Holochain row with the conductor series, then a Host health row with CPU, memory, load, disk, temperature, network and pressure from node_exporter, so a spike in one is legible against the other. Every query is filtered by an `instance` variable, so the same dashboard serves one homelab machine and a fleet of five.
 
-`vmTestGrafana` runs the whole path in one VM: it waits for the conductor, asserts `holochain_conductor_up 1` appears on `/metrics`, asserts every Prometheus target reports `"health":"up"`, asserts Prometheus kept the series, and asserts Grafana's search API returns the provisioned dashboard and its data source.
+The Services panel reads `node_systemd_unit_state`, which node_exporter's systemd collector exports for every unit on the node. Which units it shows is the `units` variable, and its default comes from the `overviewUnits` option: the module rewrites that one default into each provisioned dashboard on its way into the store, because the JSON is read-only once there and a browser edit would not survive a rebuild. Everything else in the JSON reaches Grafana untouched.
+
+`vmTestGrafana` runs the whole path in one VM: it waits for the conductor, asserts `holochain_conductor_up 1` appears on `/metrics`, asserts every Prometheus target reports `"health":"up"`, asserts Prometheus kept the series, and asserts Grafana's search API returns the provisioned dashboard and its data source. It then reads the dashboard back from Grafana's API, checks every panel title and that the `units` default carries `overviewUnits`, and runs every query on the dashboard against Prometheus with the variables filled in, requiring a non-empty answer from all of them except Temperatures, which a VM has no sensors for. Finally it fails on any provisioning error in Grafana's journal.
 
 A fleet is the monitor node naming its peers and every node exporting:
 
