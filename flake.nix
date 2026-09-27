@@ -734,6 +734,12 @@
                 enable = true;
                 metricsExporter.enable = true;
                 conductorMetrics.enable = true;
+                # An app gives the conductor DHTs, without which the per-DHT
+                # panels would have no series to query.
+                happs.dino-adventure = {
+                  src = dinoAdventureHapp;
+                  networkSeed = "ci-test-seed";
+                };
               };
               # Root-owned 0400, as the option reference tells operators to
               # create it: systemd reads it, the grafana user never does.
@@ -787,6 +793,7 @@
               # ---- criterion 4: the conductor's own series ----
               machine.wait_for_unit("holochain-conductor.service")
               machine.wait_for_unit("holochain-conductor-metrics.timer")
+              machine.wait_for_unit("holochain-happ-installer.service")
 
               # The timer fires on its interval; the first file may not exist
               # yet when the conductor has only just come up.
@@ -903,6 +910,8 @@
                   "Holochain", "Conductors up", "Conductor peers",
                   "Conductor network throughput", "Conductor metrics age",
                   "Conductor messages", "Blocked messages",
+                  "DHT peers", "DHT ops held here vs best peer",
+                  "DHT seconds since last gossip",
                   "Host health", "CPU busy", "Memory used", "Load average",
                   "Disk space used", "Disk IO", "Temperatures",
                   "Host network throughput", "Pressure",
@@ -1023,7 +1032,27 @@
               assert conductor == {"127.0.0.1:9100": "1", "${deadTarget}": "5"}, conductor
               assert target_expr("Conductors up", "A") == conductor_expr, "Conductors up and Fleet status disagree"
               apps = by_instance(target_expr("Fleet status", "I"), "q-fleet-apps")
-              assert apps == {"127.0.0.1:9100": "0"}, apps
+              assert apps == {"127.0.0.1:9100": "1"}, apps
+
+              # The per-DHT panels in this node's terms: every DHT is the one
+              # app's, and a node alone on its network has no peer and has
+              # never gossiped.
+              def by_dht(title, ref, name):
+                  return {
+                      (r["metric"]["app"], r["metric"]["role"]): r["value"][1]
+                      for r in prom_query(prom_file(target_expr(title, ref), name))["data"]["result"]
+                  }
+
+              dht_peers = by_dht("DHT peers", "A", "q-dht-peers")
+              machine.log("DHT peers: " + json.dumps({f"{a} {r}": v for (a, r), v in dht_peers.items()}))
+              assert dht_peers and {a for a, _ in dht_peers} == {"dino-adventure"}, dht_peers
+              assert set(dht_peers.values()) == {"0"}, dht_peers
+              gossip = by_dht("DHT seconds since last gossip", "A", "q-dht-gossip")
+              assert gossip.keys() == dht_peers.keys() and set(gossip.values()) == {"-1"}, gossip
+              held = by_dht("DHT ops held here vs best peer", "A", "q-dht-held")
+              best = by_dht("DHT ops held here vs best peer", "B", "q-dht-best")
+              machine.log(f"DHT ops held here: {held}; best peer: {best}")
+              assert held.keys() == dht_peers.keys() and set(best.values()) == {"0"}, best
 
               # What those numbers look like. A swapped colour or a lost
               # mapping would leave every query above passing.
@@ -1052,7 +1081,9 @@
               }
               assert mapping("Fleet status", "Conductor") == conductor_states, mapping("Fleet status", "Conductor")
               assert mapping("Conductors up") == conductor_states, mapping("Conductors up")
-              assert mapping("Fleet status", "Node") == {"0": ("down", "red"), "1": ("up", "green")}              assert mapping("Services") == {
+              assert mapping("Fleet status", "Node") == {"0": ("down", "red"), "1": ("up", "green")}
+              assert mapping("DHT seconds since last gossip") == {"-1": ("never", "orange")}, mapping("DHT seconds since last gossip")
+              assert mapping("Services") == {
                   "0": ("inactive", "orange"), "1": ("active", "green"),
                   "2": ("starting or stopping", "yellow"), "3": ("failed", "red"),
                   "4": ("unreachable", "red"),

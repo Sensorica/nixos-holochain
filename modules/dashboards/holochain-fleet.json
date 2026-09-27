@@ -718,10 +718,118 @@
       }
     },
     {
+      "id": 20,
+      "type": "timeseries",
+      "title": "DHT peers",
+      "description": "Peers the conductor keeps gossip state for in each DHT (holochain_dht_peers), one line per app and role. The line is the fewest any selected node has, so one node cut off from a DHT pulls it to zero; pick a single instance to see that node's own count. Five nodes sharing an app should each see at least the other four.",
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 32},
+      "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
+          "expr": "min by (app, role) (holochain_dht_peers{instance=~\"$instance\"})",
+          "legendFormat": "{{app}} {{role}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "unit": "short",
+          "decimals": 0,
+          "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "auto"}
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {"displayMode": "list", "placement": "bottom", "showLegend": true},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      }
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "DHT ops held here vs best peer",
+      "description": "For each app and role, held here is the fewest DHT operations any selected node holds (holochain_dht_local_ops), and best peer is the largest count any peer reported to them (holochain_dht_peer_ops). A node that is in sync holds about as many as its best peer; a held-here line that stays under its best-peer line is a node that is not catching up. Best peer reads 0 while a DHT has no peer. Pending fetches and gossip timeouts per DHT are exported too, as holochain_dht_pending_fetches and holochain_dht_peer_timeouts_total.",
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 32},
+      "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
+          "expr": "min by (app, role) (holochain_dht_local_ops{instance=~\"$instance\"})",
+          "legendFormat": "{{app}} {{role}} held here"
+        },
+        {
+          "refId": "B",
+          "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
+          "expr": "max by (app, role) (holochain_dht_peer_ops{instance=~\"$instance\"})",
+          "legendFormat": "{{app}} {{role}} best peer"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "unit": "short",
+          "decimals": 0,
+          "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "auto"}
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {"displayMode": "list", "placement": "bottom", "showLegend": true},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      }
+    },
+    {
+      "id": 22,
+      "type": "bargauge",
+      "title": "DHT seconds since last gossip",
+      "description": "Seconds since the last gossip round with any peer in each DHT, as of now, for the selected node that has gone longest without one (holochain_dht_seconds_since_gossip), one bar per app and role. never means no selected node has a gossip timestamp for any peer in that DHT, which is what a node alone on its network shows. The 300 s and 900 s thresholds are a starting point for a quiet but healthy DHT, not a Holochain figure.",
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 32},
+      "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
+          "expr": "max by (app, role) (holochain_dht_seconds_since_gossip{instance=~\"$instance\"})",
+          "legendFormat": "{{app}} {{role}}",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "valueMode": "color",
+        "namePlacement": "top",
+        "showUnfilled": true,
+        "sizing": "auto",
+        "text": {"titleSize": 12, "valueSize": 14},
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 300}, {"color": "red", "value": 900}]
+          },
+          "mappings": [
+            {"type": "value", "options": {"-1": {"text": "never", "color": "orange", "index": 0}}}
+          ],
+          "min": 0,
+          "max": 900
+        },
+        "overrides": []
+      }
+    },
+    {
       "id": 11,
       "type": "row",
       "title": "Host health",
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 32},
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 40},
       "collapsed": false,
       "panels": []
     },
@@ -730,7 +838,7 @@
       "type": "timeseries",
       "title": "CPU busy",
       "description": "Percentage of CPU time not spent idle, from node_exporter's cpu collector.",
-      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 33},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 41},
       "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
       "targets": [
         {
@@ -759,7 +867,7 @@
       "type": "timeseries",
       "title": "Memory used",
       "description": "Share of RAM that is not available, from node_exporter's meminfo collector.",
-      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 33},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 41},
       "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
       "targets": [
         {
@@ -788,7 +896,7 @@
       "type": "timeseries",
       "title": "Load average",
       "description": "Five-minute load average (node_load5) divided by the node's CPU count, one line per node. Above the dashed line at 1, work is queueing for the processor. node_load1 and node_load15 are in Prometheus for a closer look.",
-      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 33},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 41},
       "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
       "targets": [
         {
@@ -824,7 +932,7 @@
       "type": "bargauge",
       "title": "Disk space used",
       "description": "Share of each mounted filesystem that is used, from node_exporter's filesystem collector. Memory-backed and image filesystems (tmpfs, ramfs, overlay, squashfs) are left out, and so is /nix/store, which NixOS bind-mounts from the filesystem that holds /nix.",
-      "gridPos": {"h": 10, "w": 8, "x": 0, "y": 41},
+      "gridPos": {"h": 10, "w": 8, "x": 0, "y": 49},
       "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
       "targets": [
         {
@@ -865,7 +973,7 @@
       "type": "timeseries",
       "title": "Disk IO",
       "description": "Bytes per second read (above the axis) and written (below it), summed over each node's disks, from node_exporter's diskstats collector, which already leaves out partitions and loop devices; optical drives are left out too. Per-disk series are in Prometheus as node_disk_read_bytes_total and node_disk_written_bytes_total.",
-      "gridPos": {"h": 10, "w": 8, "x": 8, "y": 41},
+      "gridPos": {"h": 10, "w": 8, "x": 8, "y": 49},
       "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
       "targets": [
         {
@@ -900,7 +1008,7 @@
       "type": "timeseries",
       "title": "Temperatures",
       "description": "The hottest temperature sensor on each node (the maximum of node_hwmon_temp_celsius over every chip and sensor node_exporter's hwmon collector finds). Dashed lines at 75 and 85 C. A virtual machine usually exposes no sensors, and this panel then says No data. Per-sensor series are in Prometheus; on an Intel machine the coretemp chip's temp1 is the package and the others are cores.",
-      "gridPos": {"h": 10, "w": 8, "x": 16, "y": 41},
+      "gridPos": {"h": 10, "w": 8, "x": 16, "y": 49},
       "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
       "targets": [
         {
@@ -937,7 +1045,7 @@
       "type": "timeseries",
       "title": "Host network throughput",
       "description": "Bytes per second in and out of every interface except loopback, from node_exporter's netdev collector.",
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 51},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 59},
       "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
       "targets": [
         {
@@ -971,7 +1079,7 @@
       "type": "timeseries",
       "title": "Pressure",
       "description": "Share of time some task was stalled waiting for CPU, memory or IO, from the kernel's pressure stall information (node_exporter's pressure collector). Sustained memory or IO pressure is the early sign of a machine that is too small for what it runs.",
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 51},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 59},
       "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
       "targets": [
         {
