@@ -243,6 +243,9 @@
       --state-dir ${lib.escapeShellArg (toString cfg.dataDir)}
   '';
 in {
+  # The services this node runs, by name, for the dashboards.
+  imports = [./holochain-services.nix];
+
   options.services.holochain-edgenode = {
     enable = lib.mkEnableOption "Holochain edgenode (conductor + lair + hApp installer)";
 
@@ -716,6 +719,26 @@ in {
         '';
       }
     ];
+
+    # What the dashboards list among this node's services. The conductor
+    # names its readings' conductor label, so it reads Not answering when the
+    # conductor stops answering although systemd says the unit is active.
+    services.holochain-services = {
+      units = {
+        "holochain-conductor.service" = {
+          name = "Holochain conductor";
+          conductor =
+            if cfg.conductorMetrics.enable
+            then cfg.conductorMetrics.name
+            else null;
+        };
+        # A one-shot that remains active once it has run.
+        "holochain-happ-installer.service" = lib.mkIf (cfg.happs != {}) "App installer";
+        # The service sits idle between runs; its timer stays active.
+        "holochain-conductor-metrics.timer" = lib.mkIf cfg.conductorMetrics.enable "Holochain readings (timer)";
+      };
+      textfileDirectory = lib.mkIf cfg.metricsExporter.enable (toString textfileDir);
+    };
 
     services.prometheus.exporters.node = lib.mkIf cfg.metricsExporter.enable {
       enable = true;

@@ -217,7 +217,16 @@
     inherit (cfg) states;
     unitNames = cfg.overviewUnits;
   });
+
+  # Where a monitor that is not an edgenode lets node_exporter read textfiles,
+  # so its own services (Prometheus, Grafana) reach the dashboards too. An
+  # edgenode's own setting replaces this one.
+  defaultTextfileDirectory = "/var/lib/prometheus-node-exporter-text-files";
+  edgenodeExports = (config.services.holochain-edgenode.enable or false) && (config.services.holochain-edgenode.metricsExporter.enable or false);
 in {
+  # The services this node runs, by name, for the dashboards.
+  imports = [./holochain-services.nix];
+
   options.services.holochain-grafana = {
     enable = lib.mkEnableOption "Prometheus + Grafana observability for Holochain fleet";
 
@@ -470,75 +479,49 @@ in {
       type =
         lib.types.coercedTo (lib.types.listOf lib.types.str) (units: lib.genAttrs units (_: null))
         (lib.types.attrsOf (lib.types.nullOr lib.types.str));
-      default = {
-        "holochain-conductor.service" = "Holochain conductor";
-        "holochain-happ-installer.service" = "App installer";
-        "holochain-conductor-metrics.timer" = "Holochain readings (timer)";
-        "holochain-http-gateway.service" = "HTTP gateway";
-        "(podman|docker)-wind-tunnel-runner.service" = "Wind Tunnel runner";
-        "prometheus.service" = "Metrics database";
-        "prometheus-node-exporter.service" = "Machine readings";
-        "grafana.service" = "Dashboards";
-        "sshd.service" = "Remote login";
-        "tailscaled.service" = "Private network (Tailscale)";
-        "nix-daemon.socket" = "Nix";
-      };
+      default = {};
       example = lib.literalExpression ''
         {
-          "holochain-conductor.service" = "Holochain conductor";
           "caddy.service" = "Web server";
           "restic-backups-.*" = "Backups";
         }
       '';
       description = ''
-        systemd units the dashboards watch on every node, read from
-        node_exporter's systemd collector (`node_systemd_unit_state`), each
-        with the name a person reads for it. The keys are units, the values
-        their names; a unit whose name is null, or an entry of a plain list of
-        units, is shown by its unit name.
+        systemd units to watch on every node on top of the ones each node
+        lists itself, each with the name a person reads for it. The keys are
+        units, the values their names; a unit whose name is null, or an entry
+        of a plain list of units, is shown by its unit name.
 
-        The default covers the long-running units the nixos-holochain modules
-        create, plus the services a fleet node usually runs beside them. It
-        holds only units that stay active while all is well: long-running
-        services, timers, sockets, and the app installer, a one-shot that
-        remains active once it has run. Two one-shot helpers are left out:
-        `holochain-conductor-metrics.service` sits idle between runs, so its
-        timer is listed instead, and `grafana-secret-key.service` runs once at
-        boot; if either fails, the fleet page's problem list names it. The Nix
-        daemon is listed by its socket: NixOS starts `nix-daemon.service` on
-        demand, so the service is inactive on an idle node that is perfectly
-        healthy.
-
-        The names reach a dashboard as value mappings: every field override
-        matched by name to `name` (the unit label) in a provisioned dashboard
-        gets one regex mapping per named unit.
-
-        The fleet page's "Which watched services are down?" and the node
-        page's Background jobs list the watched units that are not active, one
-        row per unit and machine, and nothing else: a unit a machine does not
-        run is not listed, so one set serves a whole fleet whose machines run
-        different things.
+        Every node lists its own services in
+        `services.holochain-services.units`, filled from the modules enabled
+        on it (the conductor, the HTTP gateway, the local bootstrap and relay,
+        the Wind Tunnel runner, Prometheus, Grafana, and the services beside
+        them), and publishes that list through node_exporter. This option is
+        for what a node does not list: a machine that does not run these
+        modules, or a unit of your own on every machine. Its default is empty,
+        so what is watched follows each node's configuration.
 
         Each key is a regular expression Prometheus matches against the whole
         unit name, suffix included, so `restic-backups-.*` works, and its name
-        is given to every unit it matches. The keys are joined with `|` into
-        the default of the dashboard's `units` variable; a viewer can type
-        another regex in the browser, which lives in that page's URL and is
-        never saved to the dashboard.
+        is given to every unit it matches. A unit is watched on each node that
+        runs it, and a node that does not run it has no row for it, so one set
+        serves a fleet whose machines run different things. A unit a node
+        lists itself keeps the name the node gives it.
 
-        Setting this option replaces the default. To add a unit and keep the
-        defaults, define it with `lib.mkOptionDefault`, which merges with the
-        default instead of overriding it:
-        `overviewUnits = lib.mkOptionDefault { "caddy.service" = "Web server"; };`
-        (a list, `lib.mkOptionDefault [ "caddy.service" ]`, merges the same
-        way).
+        The watched units reach the recording rules (`holochain:service_watched`
+        and `holochain:service_state`), which the node page's "Services on
+        this node", the fleet page's "Which watched services are down?" and
+        the room screen's machine tiles read. For a dashboard of your own, the
+        keys are also joined with `|` into the default of any `units` textbox
+        variable, and every field override matched by name to `name` (the
+        unit label of `node_systemd_unit_state`) gets one regex value mapping
+        per named unit.
 
-        This only picks what those two tables list. The
-        `holochain:node_problem` rule, which the problem lists read, gives
-        every failed unit on the node a sentence of its own whatever is listed
-        here, except device, scope and slice units, which the node_exporter
-        flags these modules set leave out, naming it by its name here or, when
-        it has none or is not listed, by its unit name.
+        The `holochain:node_problem` rule, which the problem lists read, gives
+        every failed unit on the node a sentence of its own whether it is
+        watched or not, except device, scope and slice units, which the
+        node_exporter flags these modules set leave out, naming it by its
+        watched name or, when it has none, by its unit name.
       '';
     };
 
@@ -726,13 +709,30 @@ in {
     services.prometheus.exporters.node = {
       enable = lib.mkDefault true;
       port = lib.mkDefault 9100;
-      enabledCollectors = lib.mkDefault ["systemd"];
+      # The textfile collector publishes this machine's list of services.
+      enabledCollectors = lib.mkDefault ["systemd" "textfile"];
       # Counts failed mount units too, which node_exporter leaves out by
-      # default. The same flag as holochain-edgenode's, and at mkDefault so
+      # default. The same flags as holochain-edgenode's, and at mkDefault so
       # that module's list replaces this one: node_exporter refuses to start
-      # when the flag is given twice.
-      extraFlags = lib.mkDefault ["--collector.systemd.unit-exclude=.+[.](device|scope|slice)"];
+      # when a flag is given twice.
+      extraFlags = lib.mkDefault [
+        "--collector.systemd.unit-exclude=.+[.](device|scope|slice)"
+        "--collector.textfile.directory=${defaultTextfileDirectory}"
+      ];
     };
+
+    # This machine's own services, by name. Its textfile directory is the one
+    # the node_exporter defaults above read; an edgenode's replaces it, with
+    # the flags.
+    services.holochain-services = {
+      units = {
+        "prometheus.service" = "Metrics database";
+        "grafana.service" = "Dashboards";
+      };
+      textfileDirectory = lib.mkDefault defaultTextfileDirectory;
+    };
+    # An edgenode creates the directory itself, owned by its user.
+    systemd.tmpfiles.rules = lib.mkIf (!edgenodeExports) ["d ${defaultTextfileDirectory} 0755 root root - -"];
 
     networking.firewall = lib.mkIf cfg.openFirewall {
       allowedTCPPorts = [cfg.grafanaPort cfg.prometheusPort 9100];
