@@ -197,6 +197,19 @@
         gatewayPkgs = inputs.holonix.inputs.nixpkgs.legacyPackages.${system};
         gatewayPkgs06 = inputs.holonix-0_6.inputs.nixpkgs.legacyPackages.${system};
 
+        # The textfile exporter every conductor on a machine runs; the edgenode
+        # module builds its own with its `hc`.
+        conductorExporter = pkgs.callPackage ./packages/holochain-conductor-exporter.nix {
+          hc = inputs.holonix.packages.${system}.hc;
+        };
+        # The jq programs as the exporter runs them, with families.jq beside
+        # them for `jq -L`.
+        inherit (conductorExporter) jqLib;
+        metricsChecks = import ./tests/metrics.nix {
+          inherit pkgs;
+          exporter = conductorExporter;
+        };
+
         # ---- generated option reference ------------------------------------
         #
         # docs/module-options.md was hand-written and had already drifted from
@@ -532,6 +545,12 @@
           holochain-http-gateway = gatewayPkgs.callPackage ./packages/holochain-http-gateway.nix {line = "0.7";};
           holochain-http-gateway-0_6 = gatewayPkgs06.callPackage ./packages/holochain-http-gateway.nix {line = "0.6";};
 
+          # The textfile exporter, one per Holochain line because the admin
+          # call differs. A conductor that is not an edgenode's own (a Moss
+          # node, say) runs the one of its line under its own name.
+          holochain-conductor-exporter = conductorExporter;
+          holochain-conductor-exporter-0_6 = conductorExporter.override {hc = holonix06.hc;};
+
           # The committed docs/module-options.md is a copy of this build.
           options-doc = pkgs.runCommand "module-options.md" {} ''
             cat ${optionsDocHeader} ${optionsDoc.optionsCommonMark} > $out
@@ -577,10 +596,10 @@
               # prev is a state file's contents; prints the textfile and leaves
               # the new state in state.json, as the timer's script does.
               run() {
-                jq -c --argjson prev "$2" -f ${./modules/conductor-counters.jq} < "$1" > state.json
-                jq -r --argjson up 1 --argjson now 1700000000 \
+                jq -c --argjson prev "$2" -f ${jqLib}/conductor-counters.jq < "$1" > state.json
+                jq -r -L ${jqLib} --arg conductor "''${4:-Workshop}" --argjson up 1 --argjson now 1700000000 \
                   --argjson totals "$(jq -c .totals state.json)" --argjson apps "$3" \
-                  -f ${./modules/conductor-metrics.jq} < "$1"
+                  -f ${jqLib}/conductor-metrics.jq < "$1"
               }
 
               echo '{}' > empty.json
@@ -593,21 +612,21 @@
               done
 
               run busy.json '{}' "$(cat apps.json)" > out.prom
-              grep -qx 'holochain_conductor_blocked_messages_total 6' out.prom
-              grep -qx 'holochain_conductor_peer_connections 2' out.prom
-              grep -qx 'holochain_conductor_direct_peer_connections 1' out.prom
-              grep -qx 'holochain_conductor_network_sent_bytes_total 150' out.prom
-              grep -qx 'holochain_conductor_apps{status="enabled"} 1' out.prom
-              grep -qx 'holochain_conductor_apps{status="disabled"} 1' out.prom
-              grep -qx 'holochain_conductor_apps{status="awaiting_memproofs"} 1' out.prom
+              grep -qx 'holochain_conductor_blocked_messages_total{conductor="Workshop"} 6' out.prom
+              grep -qx 'holochain_conductor_peer_connections{conductor="Workshop"} 2' out.prom
+              grep -qx 'holochain_conductor_direct_peer_connections{conductor="Workshop"} 1' out.prom
+              grep -qx 'holochain_conductor_network_sent_bytes_total{conductor="Workshop"} 150' out.prom
+              grep -qx 'holochain_conductor_apps{conductor="Workshop",status="enabled"} 1' out.prom
+              grep -qx 'holochain_conductor_apps{conductor="Workshop",status="disabled"} 1' out.prom
+              grep -qx 'holochain_conductor_apps{conductor="Workshop",status="awaiting_memproofs"} 1' out.prom
 
               # The totals only go up: 150 + a's 20 more + c's 7, although b and
               # its 50 bytes are gone from the reply.
               run later.json "$(cat state.json)" null > out.prom
               cat out.prom
-              grep -qx 'holochain_conductor_network_sent_bytes_total 177' out.prom
-              grep -qx 'holochain_conductor_network_sent_messages_total 10' out.prom
-              grep -qx 'holochain_conductor_network_received_bytes_total 210' out.prom
+              grep -qx 'holochain_conductor_network_sent_bytes_total{conductor="Workshop"} 177' out.prom
+              grep -qx 'holochain_conductor_network_sent_messages_total{conductor="Workshop"} 10' out.prom
+              grep -qx 'holochain_conductor_network_received_bytes_total{conductor="Workshop"} 210' out.prom
               if grep -q '^holochain_conductor_apps' out.prom; then
                 echo "an unanswered list-apps must not read as zero apps" >&2
                 exit 1
@@ -615,45 +634,83 @@
 
               # A down conductor answers nothing: the totals hold.
               run empty.json "$(cat state.json)" '[]' > out.prom
-              grep -qx 'holochain_conductor_network_sent_bytes_total 177' out.prom
-              grep -qx 'holochain_conductor_apps{status="enabled"} 0' out.prom
-              grep -qx 'holochain_conductor_apps{status="disabled"} 0' out.prom
+              grep -qx 'holochain_conductor_network_sent_bytes_total{conductor="Workshop"} 177' out.prom
+              grep -qx 'holochain_conductor_apps{conductor="Workshop",status="enabled"} 0' out.prom
+              grep -qx 'holochain_conductor_apps{conductor="Workshop",status="disabled"} 0' out.prom
+
+              # Every line names its conductor, and a name is free text: a
+              # quote, a backslash and a newline in it are escaped, and no line
+              # of the file is left without the label.
+              run busy.json '{}' "$(cat apps.json)" "$(printf 'Mo"ss\\\nx')" > odd.prom
+              cat odd.prom
+              promtool check metrics < odd.prom
+              grep -qxF 'holochain_conductor_up{conductor="Mo\"ss\\\nx"} 1' odd.prom
+              grep -qxF 'holochain_conductor_apps{conductor="Mo\"ss\\\nx",status="enabled"} 1' odd.prom
+              if grep -v '^#' odd.prom | grep -vF '{conductor="Mo\"ss\\\nx"'; then
+                echo "a sample line without the conductor label" >&2
+                exit 1
+              fi
               touch $out
             '';
 
-          # The per-DHT jq against replies captured from a real Holochain 0.6.1
-          # conductor in seven DHTs (a Moss group node, 2026-09-27; network
-          # seeds redacted, nothing the jq reads changed), against the ways the
-          # calls fail, and against label values that would break the textfile
-          # if they reached it unescaped. Every output goes through promtool,
-          # alone and appended to the conductor series as the timer writes it.
+          # The per-DHT jq against replies captured from two real conductors:
+          # a Holochain 0.6.1 Moss group node in seven DHTs and the homelab's
+          # 0.6.3 edgenode conductor with three apps in four (both 2026-09-27;
+          # network seeds redacted, nothing the jq reads changed), against the
+          # ways the calls fail, against names files good and bad, and against
+          # label values that would break the textfile if they reached it
+          # unescaped. Every output goes through promtool, alone and appended
+          # to the conductor series as the exporter writes it.
           dhtMetricsJq =
             pkgs.runCommand "dht-metrics-jq" {
               nativeBuildInputs = [pkgs.jq pkgs.prometheus.cli];
             } ''
               apps=${./tests/fixtures/dht-0_6_1/list-apps.json}
               metrics=${./tests/fixtures/dht-0_6_1/dump-network-metrics.json}
+              ws_apps=${./tests/fixtures/edgenode-0_6_3/list-apps.json}
+              ws_metrics=${./tests/fixtures/edgenode-0_6_3/dump-network-metrics.json}
 
-              # Both replies on stdin, list-apps first, as the timer passes them.
+              # The three documents on stdin, list-apps first and the names
+              # file last, as the exporter passes them; the conductor is Moss
+              # unless a fourth argument names another.
               dht() {
-                printf '%s\n%s\n' "$1" "$2" | jq -n -r --argjson now 1790484800 -f ${./modules/dht-metrics.jq}
+                printf '%s\n%s\n%s\n' "$1" "$2" "''${3:-null}" \
+                  | jq -n -r -L ${jqLib} --arg conductor "''${4:-Moss}" --argjson now 1790484800 \
+                      -f ${jqLib}/dht-metrics.jq
+              }
+
+              # Every data series has exactly one info row with the same key,
+              # and the other way round.
+              keys_match() {
+                grep '^holochain_dht_peers{' "$1" | sed -E 's/^holochain_dht_peers\{(.*)\} [-0-9]+$/\1/' | sort > data.keys
+                grep '^holochain_dht_info{' "$1" \
+                  | sed -E 's/^holochain_dht_info\{(conductor="[^"]*",app_id="[^"]*",role="[^"]*",dna="[^"]*"),.*/\1/' | sort > info.keys
+                diff data.keys info.keys
+                test "$(sort -u info.keys | wc -l)" = "$(wc -l < info.keys)"
               }
 
               dht "$(cat $apps)" "$(cat $metrics)" > out.prom
               cat out.prom
               promtool check metrics < out.prom
 
-              # Seven DHTs, seven series of each metric.
+              # Seven DHTs, seven series of each metric, one name row each.
               for name in peers local_ops peer_ops pending_fetches seconds_since_gossip \
-                completed_rounds_total peer_timeouts_total; do
+                completed_rounds_total peer_timeouts_total info; do
                 n=$(grep -c "^holochain_dht_$name{" out.prom)
                 test "$n" = 7 || { echo "holochain_dht_$name: $n series, expected 7" >&2; exit 1; }
               done
+              keys_match out.prom
+              # Data series carry machine keys only; `app` became app_id.
+              if grep -E '^holochain_dht_[a-z_]+\{' out.prom | grep -v '^holochain_dht_info' \
+                | grep -E '[{,](app|app_name|app_kind|part_name|network_label)="'; then
+                echo "a data series carries a name label" >&2
+                exit 1
+              fi
 
               # The group DHT, read by hand from the fixture: one peer holding
               # 975 ops against 948 here, 61 rounds, last gossip at
               # 1790484723.53 s, so 76.47 s before the fixed now, floored.
-              group='app="group#4zHNh4L9G9Lr7b6l/lmOORVbiNB2CaUzjKoqLgUR7UE=#null",role="group",dna="uhC0kDTZE5JwUHP9yIz2Bhjq2TPdkLSNhJtqTdq5RzS7vFPfrIvJY"'
+              group='conductor="Moss",app_id="group#4zHNh4L9G9Lr7b6l/lmOORVbiNB2CaUzjKoqLgUR7UE=#null",role="group",dna="uhC0kDTZE5JwUHP9yIz2Bhjq2TPdkLSNhJtqTdq5RzS7vFPfrIvJY"'
               grep -qxF "holochain_dht_peers{$group} 1" out.prom
               grep -qxF "holochain_dht_local_ops{$group} 948" out.prom
               grep -qxF "holochain_dht_peer_ops{$group} 975" out.prom
@@ -662,22 +719,98 @@
               grep -qxF "holochain_dht_peer_timeouts_total{$group} 0" out.prom
               grep -qxF "holochain_dht_seconds_since_gossip{$group} 76" out.prom
 
-              # Two applets of one tool share role names; the app label keeps
+              # Two applets of one tool share role names; the app_id label keeps
               # them apart. The second has never gossiped: -1, not a huge age.
               grep -c '^holochain_dht_peers{.*role="rVines"' out.prom | grep -qx 2
               grep '^holochain_dht_seconds_since_gossip{' out.prom | grep -F k1h2cpht | grep -F 'role="rVines"' | grep -q ' -1$'
 
-              # A failed call writes nothing rather than zeros.
-              test -z "$(dht null "$(cat $metrics)")"
-              test -z "$(dht "$(cat $apps)" null)"
+              # With no names file, Moss names come from the bundles: the two
+              # chats of one tool are numbered in installed_app_id order, the
+              # group is Group, and a role reads as its id without its prefix.
+              grep -qxF 'holochain_dht_info{conductor="Moss",app_id="applet#uhc$e$k1h2cpht$kfgs$v$l$t$3zhz-b$d_b$t$5kq$lyybe$vs$6lb$xzzsgd$hu$5ry$",role="rFiles",dna="uhC0kujTsC4x0m_WoAtP-Ct0WJtsAK8cK-UAOsIgvY0q30XjbFbRj",app_name="Vines 1",app_kind="Vines",part_name="Files",network_label="Vines 1: Files"} 1' out.prom
+              grep -qxF 'holochain_app_info{conductor="Moss",app_id="applet#uhc$e$krun4ink$1nl$paibamp$j$j3r$t$egt$57b$rc$ue$c$2j$bd$1a$k$hbh$g$p$zu$l$",app_name="Vines 2",app_kind="Vines",status="enabled"} 1' out.prom
+              grep -qxF "holochain_dht_info{$group,app_name=\"Group\",app_kind=\"Group\",part_name=\"Group\",network_label=\"Group: Group\"} 1" out.prom
+              test "$(grep -c '^holochain_app_info{' out.prom)" = 3
+
+              # A Moss names file: the group's name, one chat's name, a part
+              # table per kind. The unnamed chat keeps its number.
+              cat > moss-names.json <<'EOF'
+              {"apps":{"group#4zHNh4L9G9Lr7b6l/lmOORVbiNB2CaUzjKoqLgUR7UE=#null":{"name":"Sensorica"},
+                       "applet#uhc$e$krun4ink$1nl$paibamp$j$j3r$t$egt$57b$rc$ue$c$2j$bd$1a$k$hbh$g$p$zu$l$":{"name":"General chat"}},
+               "kinds":{"Vines":{"rVines":"Messages","rFiles":"Files"},
+                        "Group":{"group":"Members and tools","foyer":"Foyer","assets":"Shared assets"}}}
+              EOF
+              dht "$(cat $apps)" "$(cat $metrics)" "$(cat moss-names.json)" > named.prom
+              cat named.prom
+              promtool check metrics < named.prom
+              keys_match named.prom
+              grep -qxF "holochain_dht_info{$group,app_name=\"Sensorica\",app_kind=\"Group\",part_name=\"Members and tools\",network_label=\"Sensorica: Members and tools\"} 1" named.prom
+              grep -qxF 'holochain_dht_info{conductor="Moss",app_id="applet#uhc$e$krun4ink$1nl$paibamp$j$j3r$t$egt$57b$rc$ue$c$2j$bd$1a$k$hbh$g$p$zu$l$",role="rVines",dna="uhC0kjGGg7aTaaHUDdSQgoqNAGekaa9rYCe0DjK6RwDr5KaaRaZeD",app_name="General chat",app_kind="Vines",part_name="Messages",network_label="General chat: Messages"} 1' named.prom
+              grep -qF 'app_name="Vines 1",app_kind="Vines",part_name="Messages",network_label="Vines 1: Messages"} 1' named.prom
+              # Names never touch the data series.
+              grep -v '_info' out.prom > out.data
+              grep -v '_info' named.prom > named.data
+              diff out.data named.data
+
+              # The edgenode shape, with the names file the module writes: a
+              # display name and role names for one app, the bundle's name for
+              # the others, and a one-role app's network named by the app alone.
+              cat > ws-names.json <<'EOF'
+              {"apps":{"requests-and-offers":{"name":"Requests & Offers",
+                         "roles":{"requests_and_offers":"Listings","hrea":"Accounting"}}},
+               "kinds":{},"expected":["hrea","kando","requests-and-offers","not-installed"]}
+              EOF
+              dht "$(cat $ws_apps)" "$(cat $ws_metrics)" "$(cat ws-names.json)" Workshop > ws.prom
+              cat ws.prom
+              promtool check metrics < ws.prom
+              keys_match ws.prom
+              test "$(grep -c '^holochain_dht_info{' ws.prom)" = 4
+              grep -qxF 'holochain_dht_info{conductor="Workshop",app_id="requests-and-offers",role="requests_and_offers",dna="uhC0k5Kg49j1kwUFmDlTqLBXoQAZHQdutkEojX0m_OKSqBtERwBOY",app_name="Requests & Offers",app_kind="Requests & Offers",part_name="Listings",network_label="Requests & Offers: Listings"} 1' ws.prom
+              grep -qxF 'holochain_dht_info{conductor="Workshop",app_id="kando",role="kando",dna="uhC0kFujhaUaX5mZCE1BbC-ZtzLJMNr3-wyIDKd4N1Tn6Avrfk8cD",app_name="Kando",app_kind="Kando",part_name="",network_label="Kando"} 1' ws.prom
+              grep -qxF 'holochain_app_info{conductor="Workshop",app_id="hrea",app_name="Hrea",app_kind="Hrea",status="enabled"} 1' ws.prom
+              grep -qxF 'holochain_app_info{conductor="Workshop",app_id="requests-and-offers",app_name="Requests & Offers",app_kind="Requests & Offers",status="enabled"} 1' ws.prom
+              # Expected by Nix and not listed: there, and not running.
+              grep -qxF 'holochain_app_info{conductor="Workshop",app_id="not-installed",app_name="Not installed",app_kind="Not installed",status="expected"} 1' ws.prom
+              test "$(grep -c '^holochain_app_info{' ws.prom)" = 4
+
+              # list-apps did not answer: every app Nix expects is written as
+              # expected, and nothing else is.
+              dht null "$(cat $ws_metrics)" "$(cat ws-names.json)" Workshop > down.prom
+              cat down.prom
+              promtool check metrics < down.prom
+              grep -qxF 'holochain_app_info{conductor="Workshop",app_id="requests-and-offers",app_name="Requests & Offers",app_kind="Requests & Offers",status="expected"} 1' down.prom
+              grep -qxF 'holochain_app_info{conductor="Workshop",app_id="kando",app_name="Kando",app_kind="Kando",status="expected"} 1' down.prom
+              test "$(grep -c '^holochain_app_info{' down.prom)" = 4
+              test "$(grep -c -v '^#\|^holochain_app_info{' down.prom)" = 0
+
+              # A names file of the wrong shape costs the names, not the series.
+              for bad in '[]' '"x"' '{"apps":[],"kinds":"x","expected":"x"}' \
+                '{"apps":{"kando":"Kando"}}' '{"apps":{"kando":{"name":7,"roles":["x"]}}}'; do
+                dht "$(cat $ws_apps)" "$(cat $ws_metrics)" "$bad" Workshop > bad.prom
+                promtool check metrics < bad.prom
+                test "$(grep -c '^holochain_dht_peers{' bad.prom)" = 4
+                grep -qF 'app_id="kando",role="kando",dna="uhC0kFujhaUaX5mZCE1BbC-ZtzLJMNr3-wyIDKd4N1Tn6Avrfk8cD",app_name="Kando"' bad.prom
+              done
+
+              # A failed call writes no DHT series rather than zeros; list-apps
+              # alone still names the apps.
+              dht null "$(cat $metrics)" > failed.prom
+              dht "$(cat $apps)" null >> failed.prom
+              dht null null >> failed.prom
+              dht "$(cat $apps)" '{}' >> failed.prom
+              dht '[]' "$(cat $metrics)" >> failed.prom
+              if grep -q '^holochain_dht_' failed.prom; then
+                echo "per-DHT series without both replies" >&2
+                exit 1
+              fi
               test -z "$(dht null null)"
-              # A conductor in no network yet: no DHT to report.
-              test -z "$(dht "$(cat $apps)" '{}')"
               test -z "$(dht '[]' "$(cat $metrics)")"
+              test "$(dht "$(cat $apps)" null | grep -c '^holochain_app_info{')" = 3
 
               # Hostile and malformed input: a quote, a backslash and a newline
-              # in an app id, a stem cell without a cell_id, a cloned cell, a
-              # DNA the reply does not mention, and fields of the wrong type.
+              # in an app id and in the conductor name, a stem cell without a
+              # cell_id, a cloned cell, a DNA the reply does not mention, and
+              # fields of the wrong type.
               cat > odd-apps.json <<'EOF'
               [{"installed_app_id":"we\"ird\\app\nid","status":{"type":"enabled"},
                 "cell_info":{"main":[
@@ -694,26 +827,32 @@
                          "local_op_count":11}},
                "dnaB":{"fetch_state_summary":null,"gossip_state_summary":{"peer_meta":null,"local_op_count":null}}}
               EOF
-              dht "$(cat odd-apps.json)" "$(cat odd-metrics.json)" > odd.prom
+              dht "$(cat odd-apps.json)" "$(cat odd-metrics.json)" null "$(printf 'M"o\\\ns')" > odd.prom
               cat odd.prom
               promtool check metrics < odd.prom
+              key='conductor="M\"o\\\ns",app_id="we\"ird\\app\nid",role="main"'
               test "$(grep -c '^holochain_dht_peers{' odd.prom)" = 2
-              grep -qF 'holochain_dht_peers{app="we\"ird\\app\nid",role="main",dna="dnaA"} 2' odd.prom
-              grep -qF 'holochain_dht_pending_fetches{app="we\"ird\\app\nid",role="main",dna="dnaA"} 2' odd.prom
-              grep -qF 'holochain_dht_peer_ops{app="we\"ird\\app\nid",role="main",dna="dnaA"} 12' odd.prom
-              grep -qF 'holochain_dht_seconds_since_gossip{app="we\"ird\\app\nid",role="main",dna="dnaA"} 10' odd.prom
-              grep -qF 'holochain_dht_completed_rounds_total{app="we\"ird\\app\nid",role="main",dna="dnaA"} 2' odd.prom
-              grep -qF 'holochain_dht_seconds_since_gossip{app="we\"ird\\app\nid",role="main",dna="dnaB"} -1' odd.prom
+              grep -qF "holochain_dht_peers{$key,dna=\"dnaA\"} 2" odd.prom
+              grep -qF "holochain_dht_pending_fetches{$key,dna=\"dnaA\"} 2" odd.prom
+              grep -qF "holochain_dht_peer_ops{$key,dna=\"dnaA\"} 12" odd.prom
+              grep -qF "holochain_dht_seconds_since_gossip{$key,dna=\"dnaA\"} 10" odd.prom
+              grep -qF "holochain_dht_completed_rounds_total{$key,dna=\"dnaA\"} 2" odd.prom
+              grep -qF "holochain_dht_seconds_since_gossip{$key,dna=\"dnaB\"} -1" odd.prom
+              # The escaped app id reaches the names too, prettified.
+              grep -qF 'holochain_app_info{conductor="M\"o\\\ns",app_id="we\"ird\\app\nid",app_name="We\"ird\\app\nid"' odd.prom
               if grep -q 'dnaC\|dnaD' odd.prom; then
                 echo "a stem cell or a DNA outside the reply got series" >&2
                 exit 1
               fi
 
-              # The file as the timer writes it: conductor series, then DHT series.
-              echo '{}' | jq -r --argjson up 1 --argjson now 1790484800 --argjson totals '{}' \
-                --argjson apps '[{"status":{"type":"enabled"}}]' -f ${./modules/conductor-metrics.jq} > whole.prom
-              cat out.prom >> whole.prom
-              promtool check metrics < whole.prom
+              # The file as the exporter writes it: conductor series, then the
+              # names and the DHT series, for each shape.
+              for f in out.prom named.prom ws.prom; do
+                echo '{}' | jq -r -L ${jqLib} --arg conductor Moss --argjson up 1 --argjson now 1790484800 --argjson totals '{}' \
+                  --argjson apps '[{"status":{"type":"enabled"}}]' -f ${jqLib}/conductor-metrics.jq > whole.prom
+                cat $f >> whole.prom
+                promtool check metrics < whole.prom
+              done
               touch $out
             '';
 

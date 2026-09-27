@@ -186,88 +186,48 @@
 
   textfileDir = cfg.metricsExporter.textfileDirectory;
   conductorMetricsFile = "${textfileDir}/holochain-conductor.prom";
-  conductorCountersFile = "${cfg.dataDir}/conductor-metrics-counters.json";
   # [.] rather than an escaped dot: the flag reaches ExecStart unquoted, and
   # systemd would parse a backslash as an escape sequence of its own.
   systemdUnitExclude = ".+[.](device|scope|slice)";
 
-  conductorMetricsScript = pkgs.writeShellApplication {
-    name = "holochain-conductor-metrics";
-    runtimeInputs = [cfg.hcPackage pkgs.coreutils pkgs.jq];
-    text = ''
-      out=${lib.escapeShellArg conductorMetricsFile}
-      tmp="$out.tmp"
-
-      # A conductor that is starting, restarting or wedged must not delete the
-      # series: it reports holochain_conductor_up 0 and leaves every other
-      # gauge at its zero value, which is what makes a dead node visible on the
-      # dashboard rather than absent from it. 15 s is generous for a call over
-      # a loopback websocket; anything slower is a conductor that is not well.
-      if stats=$(timeout 15 ${callPrefix} dump-network-stats 2>/dev/null) \
-        && printf '%s' "$stats" | jq -e . > /dev/null 2>&1; then
-        up=1
-      else
-        up=0
-        stats='{}'
-      fi
-
-      # null, not [], when the call fails: an unanswered list-apps must not
-      # read as a conductor with no apps.
-      if ! { apps=$(timeout 15 ${callPrefix} list-apps 2>/dev/null) \
-        && printf '%s' "$apps" | jq -e 'type == "array"' > /dev/null 2>&1; }; then
-        apps=null
-      fi
-      # The reply carries every DNA's properties and reaches jq below as one
-      # command-line argument, which Linux caps at 128 KiB (MAX_ARG_STRLEN):
-      # a Moss node with three apps already answers 110 KB. Only the status
-      # is read from it there.
-      app_status=$(printf '%s' "$apps" | jq -c 'if type == "array" then [.[] | {status: {type: .status.type}}] else . end')
-
-      # Gossip and fetch state for every DHT the conductor is in, keyed by DNA
-      # hash; list-apps names the app and role each DNA belongs to. null when
-      # the call fails, and dht-metrics.jq then writes no per-DHT series.
-      if ! { dht=$(timeout 15 ${callPrefix} dump-network-metrics --include-dht-summary 2>/dev/null) \
-        && printf '%s' "$dht" | jq -e 'type == "object"' > /dev/null 2>&1; }; then
-        dht=null
-      fi
-
-      # The reply counts bytes and messages per open connection only, so the
-      # running totals live here between runs (see conductor-counters.jq). A
-      # missing or unreadable file starts them from zero, which Prometheus
-      # reads as the counter reset it is.
-      state=${lib.escapeShellArg conductorCountersFile}
-      prev=$(cat "$state" 2>/dev/null || true)
-      if ! printf '%s' "$prev" | jq -e 'type == "object"' > /dev/null 2>&1; then
-        prev='{}'
-      fi
-      counters=$(printf '%s' "$stats" | jq -c --argjson prev "$prev" -f ${./conductor-counters.jq})
-      printf '%s\n' "$counters" > "$state.tmp"
-      mv -f "$state.tmp" "$state"
-
-      now=$(date +%s)
-      printf '%s' "$stats" \
-        | jq -r --argjson up "$up" --argjson now "$now" \
-            --argjson totals "$(printf '%s' "$counters" | jq -c .totals)" \
-            --argjson apps "$app_status" \
-            -f ${./conductor-metrics.jq} > "$tmp"
-
-      # Appended only when jq finished cleanly: a reply of a shape it did not
-      # expect must cost the per-DHT series, never the conductor series above
-      # or the file as a whole. Both replies go through stdin (see
-      # dht-metrics.jq for why not --argjson).
-      if printf '%s\n%s\n' "$apps" "$dht" \
-        | jq -n -r --argjson now "$now" -f ${./dht-metrics.jq} > "$tmp.dht"; then
-        cat "$tmp.dht" >> "$tmp"
-      else
-        echo "dht-metrics.jq failed; per-DHT series left out of this run" >&2
-      fi
-      rm -f "$tmp.dht"
-
-      # The collector may read the directory at any moment, so the file is
-      # swapped in whole rather than truncated and rewritten in place.
-      mv -f "$tmp" "$out"
-    '';
+  # The same program a Moss node or any other conductor on the machine runs
+  # (packages/holochain-conductor-exporter.nix), built with this conductor's
+  # `hc` so the admin call matches its line. One program means one set of
+  # HELP texts, which node_exporter needs when two conductors share its
+  # textfile directory.
+  conductorExporter = pkgs.callPackage ../packages/holochain-conductor-exporter.nix {
+    hc = cfg.hcPackage;
   };
+
+  # The admin port never moves on an edgenode; the exporter asks a command
+  # for it because a Moss node's does.
+  adminEndpoint = pkgs.writeShellScript "holochain-admin-endpoint" ''
+    echo ${toString cfg.adminPort}
+  '';
+
+  # What the dashboards call each app and each of its parts, and which apps
+  # Nix manages, so one it manages that the conductor does not list reads as
+  # not running instead of vanishing. See dht-metrics.jq for the fallbacks.
+  happNames = pkgs.writeText "happ-names.json" (builtins.toJSON {
+    apps =
+      lib.mapAttrs (_: happ:
+        lib.optionalAttrs (happ.displayName != null) {name = happ.displayName;}
+        // lib.optionalAttrs (happ.roleNames != {}) {roles = happ.roleNames;})
+      cfg.happs;
+    kinds = {};
+    expected = lib.attrNames (lib.filterAttrs (_: happ: happ.installed) cfg.happs);
+  });
+
+  # systemd expands % specifiers and $ variables inside ExecStart, so the
+  # conductor name, which is free text, goes through a script instead.
+  conductorMetricsScript = pkgs.writeShellScript "holochain-conductor-metrics" ''
+    exec ${lib.getExe conductorExporter} \
+      --conductor ${lib.escapeShellArg cfg.conductorMetrics.name} \
+      --admin ${adminEndpoint} \
+      --names ${happNames} \
+      --out ${lib.escapeShellArg conductorMetricsFile} \
+      --state-dir ${lib.escapeShellArg (toString cfg.dataDir)}
+  '';
 in {
   options.services.holochain-edgenode = {
     enable = lib.mkEnableOption "Holochain edgenode (conductor + lair + hApp installer)";
@@ -437,6 +397,35 @@ in {
             default = null;
             description = "Network seed override for every DNA in this app.";
           };
+          displayName = lib.mkOption {
+            type = lib.types.nullOr lib.types.str;
+            default = null;
+            example = "Requests & Offers";
+            description = ''
+              What dashboards call this app, as `app_name` on the
+              `holochain_app_info` and `holochain_dht_info` series. `null`
+              falls back to the bundle's own name from `list-apps`, with
+              underscores and dashes read as spaces and the first letter
+              capitalised (`requests_and_offers` reads "Requests and
+              offers").
+            '';
+          };
+          roleNames = lib.mkOption {
+            type = lib.types.attrsOf lib.types.str;
+            default = {};
+            example = {
+              requests_and_offers = "Listings";
+              hrea = "Accounting";
+            };
+            description = ''
+              What dashboards call each part of this app, keyed by DNA role,
+              as `part_name` on `holochain_dht_info`. A role left out reads
+              as nothing when the app has one role, so its network is shown
+              by the app's name alone, and otherwise as the role id with a
+              one-letter prefix dropped and underscores read as spaces
+              (`rFiles` reads "Files").
+            '';
+          };
         };
       });
       default = {};
@@ -493,9 +482,24 @@ in {
         calls `dump-network-metrics --include-dht-summary` and writes one
         `holochain_dht_*` series set per DHT the conductor is in (peers, ops
         held here and by the best peer, pending fetches, seconds since the
-        last gossip, completed rounds and timeouts), labelled `app`, `role`
-        and `dna`. Requires `metricsExporter.enable`
+        last gossip, completed rounds and timeouts), labelled `app_id`,
+        `role` and `dna`, and names every app and DHT in `holochain_app_info`
+        and `holochain_dht_info` from `displayName` and `roleNames`. Every
+        line carries `conductor`, from `name`. Requires
+        `metricsExporter.enable`
       '';
+
+      name = lib.mkOption {
+        type = lib.types.str;
+        default = "Holochain";
+        example = "Workshop";
+        description = ''
+          The `conductor` label on every `holochain_*` series this node
+          writes, and the name dashboards show for the conductor. It keeps
+          two conductors on one machine apart (this one and a Moss node, say),
+          so give each its own.
+        '';
+      };
 
       interval = lib.mkOption {
         type = lib.types.str;
@@ -660,7 +664,7 @@ in {
         StateDirectory = stateDirectory;
         StateDirectoryMode = "0700";
         WorkingDirectory = cfg.dataDir;
-        ExecStart = lib.getExe conductorMetricsScript;
+        ExecStart = "${conductorMetricsScript}";
         TimeoutStartSec = "60s";
       };
     };
