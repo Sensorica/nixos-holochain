@@ -48,6 +48,13 @@ in {
   # PermitRootLogin stays at its NixOS default, prohibit-password: keys only.
   users.users.root.openssh.authorizedKeys.keys = operatorKeys;
 
+  # Every host's flake output carries its hostname, so one alias rebuilds
+  # whichever Holoport it runs on, from the checkout the install left in
+  # /root/nixos-holochain (docs/deployment.md). It does not pull: that checkout
+  # carries the operator keys as a local commit, so updating it stays a
+  # separate, deliberate `git -C /root/nixos-holochain pull --rebase`.
+  environment.shellAliases.rebuild = "sudo nixos-rebuild switch --flake /root/nixos-holochain/examples/sensorica-fleet";
+
   services.desktopManager.plasma6.enable = true;
   services.displayManager.sddm.enable = true;
 
