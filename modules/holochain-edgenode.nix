@@ -232,6 +232,11 @@
         && printf '%s' "$apps" | jq -e 'type == "array"' > /dev/null 2>&1; }; then
         apps=null
       fi
+      # The reply carries every DNA's properties and reaches jq below as one
+      # command-line argument, which Linux caps at 128 KiB (MAX_ARG_STRLEN):
+      # a Moss node with three apps already answers 110 KB. Only the status
+      # is read from it there.
+      app_status=$(printf '%s' "$apps" | jq -c 'if type == "array" then [.[] | {status: {type: .status.type}}] else . end')
 
       # The reply counts bytes and messages per open connection only, so the
       # running totals live here between runs (see conductor-counters.jq). A
@@ -249,7 +254,7 @@
       printf '%s' "$stats" \
         | jq -r --argjson up "$up" --argjson now "$(date +%s)" \
             --argjson totals "$(printf '%s' "$counters" | jq -c .totals)" \
-            --argjson apps "$apps" \
+            --argjson apps "$app_status" \
             -f ${./conductor-metrics.jq} > "$tmp"
 
       # The collector may read the directory at any moment, so the file is
