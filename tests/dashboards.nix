@@ -267,7 +267,9 @@ in {
                     # of the Moss group and two of the connected chat. Last
                     # heard leaves out the parts nobody else runs yet, which
                     # read grey rather than a red "never".
-                    | {expr: "count(\(.expr))", eval_time: "30m",
+                    # Counted by __name__: a query that keeps its metric
+                    # name splits the Grafana merge into a row per query.
+                    | {expr: "count by (__name__) (\(.expr))", eval_time: "30m",
                        exp_samples: [{labels: "{}", value: ({C: 5, D: 5}[.ref] // 13)}]})
                 ]
               },
@@ -370,6 +372,9 @@ in {
       broken "a join on part of the key" \
         'map(if .title == "Is each app part connected, complete and recent?" then .expr |= gsub("instance, conductor, app_id, role, dna"; "instance, conductor, app_id, role") else . end)' \
         "many-to-many"
+      broken "a part table query that keeps its metric name" \
+        'map(if .title == "Is each app part connected, complete and recent?" and .ref == "B" then .expr |= sub(" [+] 0$"; "") else . end)' \
+        "holochain:dht_peers:named"
       touch $out
     '';
 }
