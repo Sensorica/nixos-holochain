@@ -14,3 +14,6 @@ result-*
 
 # Git worktrees used by the PM/Builder workflow
 .worktrees/
+# Claude Code subagents started with worktree isolation land here, outside
+# the .worktrees/ convention; never commit them.
+.claude/worktrees/
