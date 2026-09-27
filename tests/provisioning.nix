@@ -3,11 +3,14 @@
 # refusal of two targets that would go by one node name, the rule file and its
 # states, and the dashboards as the module rewrites them on their way into the
 # store (the units regex, the units' names as value mappings on the Service
-# column, the room constants).
+# column, the room constants). Also the services each machine lists for the
+# dashboards, from the modules enabled on it.
 {
   pkgs,
   # A monitor node's config, from a list of extra modules.
   monitor,
+  # The other modules, to evaluate a machine that runs every one of them.
+  modules,
 }: let
   inherit (pkgs) lib;
 
@@ -77,6 +80,43 @@
     }
   ];
 
+  # A monitor that runs every module that installs a service, with sshd and
+  # Tailscale beside them, and the same machine without the bootstrap server.
+  # What each lists for the dashboards must follow what is enabled on it.
+  everything = bootstrap:
+    monitor [
+      modules.edgenode
+      modules.holochain-http-gateway
+      modules.holochain-bootstrap
+      modules.holochain-windtunnel
+      {
+        services.holochain-edgenode = {
+          enable = true;
+          metricsExporter = {
+            enable = true;
+            textfileDirectory = "/var/lib/holochain-textfiles";
+          };
+          conductorMetrics = {
+            enable = true;
+            name = "Workshop";
+          };
+        };
+        services.holochain-http-gateway.enable = true;
+        services.holochain-bootstrap.enable = bootstrap;
+        services.holochain-windtunnel.enable = true;
+        services.openssh.enable = true;
+        services.tailscale.enable = true;
+      }
+    ];
+  withBootstrap = everything true;
+  withoutBootstrap = everything false;
+  servicesOf = config: {
+    inherit (config.services.holochain-services) units healthChecks textfileDirectory;
+    # The health timer, when there is one to run.
+    healthTimer = config.systemd.timers ? holochain-service-health;
+    flags = config.services.prometheus.exporters.node.extraFlags;
+  };
+
   scrape = config: (lib.findFirst (c: c.job_name == "holochain-nodes") null config.services.prometheus.scrapeConfigs).static_configs;
   # This module's failed assertions; a bare evaluated system fails others
   # (no root file system, no boot loader) that say nothing here.
@@ -110,6 +150,11 @@
     };
     # Its string alone: with its context, this check would build the package.
     unbuilt.home = builtins.unsafeDiscardStringContext (homeOf unbuilt);
+    services = {
+      monitor = servicesOf list;
+      withBootstrap = servicesOf withBootstrap;
+      withoutBootstrap = servicesOf withoutBootstrap;
+    };
     restated.dashboards = dashboardsOf restated;
   });
   shipped = ../modules/dashboards;
@@ -145,10 +190,41 @@ in
       {targets: ["edgenode-01:9100"], labels: {node: "lab-1", site: "Sensorica lab"}}]'
     check '.named.failed == []'
     check '.named.warnings == []'
-    # List and attrset definitions merge into the named default.
-    check '.named.units["holochain-conductor.service"] == "Holochain conductor"
-      and .named.units["caddy.service"] == null
-      and .named.units["restic-backups-.*"] == "Backups"'
+    # List and attrset definitions merge into the default, which is empty:
+    # what is watched follows each node's own configuration.
+    check '.named.units == {"caddy.service": null, "restic-backups-.*": "Backups"}'
+
+    # Every machine lists the services of the modules enabled on it, and only
+    # those, by name. A monitor alone: its own, in the textfile directory its
+    # node_exporter reads.
+    check '.services.monitor.units | map_values(.name) == {
+      "prometheus.service": "Metrics database", "grafana.service": "Dashboards",
+      "prometheus-node-exporter.service": "Machine readings", "nix-daemon.socket": "Nix"}'
+    check '.services.monitor.textfileDirectory == "/var/lib/prometheus-node-exporter-text-files"
+      and (.services.monitor.flags | index("--collector.textfile.directory=/var/lib/prometheus-node-exporter-text-files") != null)
+      and .services.monitor.healthTimer == false'
+    # Every module at once: each adds its units, the conductor claims its
+    # readings' conductor, and the bootstrap server gets a health check on the
+    # address it listens on.
+    check '.services.withBootstrap.units | map_values(.name) == {
+      "holochain-conductor.service": "Holochain conductor",
+      "holochain-conductor-metrics.timer": "Holochain readings (timer)",
+      "holochain-http-gateway.service": "HTTP gateway",
+      "holochain-bootstrap.service": "Local bootstrap and relay",
+      "podman-wind-tunnel-runner.service": "Wind Tunnel runner",
+      "prometheus.service": "Metrics database", "grafana.service": "Dashboards",
+      "prometheus-node-exporter.service": "Machine readings", "nix-daemon.socket": "Nix",
+      "sshd.service": "Remote login", "tailscaled.service": "Private network (Tailscale)"}'
+    check '.services.withBootstrap.units["holochain-conductor.service"].conductor == "Workshop"
+      and ([.services.withBootstrap.units[] | select(.conductor != null)] | length == 1)'
+    check '.services.withBootstrap.healthChecks == {"holochain-bootstrap.service": {url: "http://127.0.0.1:443/health", insecure: false, timeoutSeconds: 5}}
+      and .services.withBootstrap.healthTimer == true'
+    # The edgenode's own textfile directory wins over the monitor default.
+    check '.services.withBootstrap.textfileDirectory == "/var/lib/holochain-textfiles"'
+    # Without the bootstrap server, nothing of it is listed or checked.
+    check '(.services.withoutBootstrap.units | has("holochain-bootstrap.service") | not)
+      and (.services.withoutBootstrap.units | has("holochain-http-gateway.service"))
+      and .services.withoutBootstrap.healthChecks == {} and .services.withoutBootstrap.healthTimer == false'
 
     # Grafana's home page is the shipped room screen, as provisioned (so with
     # its room constants); a dashboards directory without one gets a copy of
@@ -180,7 +256,7 @@ in
         exit 1
       fi
     }
-    dcheck '[.templating.list[] | select(.name == "units") | .current.value][0] | split("|") | index("caddy.service") != null and index("sshd.service") != null'
+    dcheck '[.templating.list[] | select(.name == "units") | .current.value][0] | split("|") | sort == ["caddy.service", "restic-backups-.*"]'
     dcheck '[.templating.list[] | {(.name): .query}] | add | .room_app == "requests-and-offers" and .room_part == "requests_and_offers" and .room_label == "Requests & Offers" and .room_app_note == "untouched" and .node == "label_values(up, node)"'
     dcheck '[.templating.list[] | select(.name == "room_label") | .current.text][0] == "Requests & Offers"'
     # Every Service column gets the units' names, and only them: the old
@@ -191,7 +267,7 @@ in
     dcheck '.panels[0].fieldConfig.overrides[0].properties[0] == {id: "displayName", value: "Service"}'
     dcheck '[.. | objects | select(.matcher? == {id: "byName", options: "name"}) | .properties[] | select(.id == "mappings") | .value]
       | .[0] == .[1]
-        and (.[0] | map(.options.result.text) | index("Holochain conductor") != null and index("Backups") != null and index("stale") == null)
+        and (.[0] | map(.options.result.text) == ["Backups"])
         and (.[0] | map(select(.options.pattern == "^(?:restic-backups-.*)$" and .options.result.text == "Backups")) | length == 1)
         and (.[0] | map(select(.options.pattern | contains("caddy"))) | length == 0)
         and (.[0] | all(.type == "regex"))'

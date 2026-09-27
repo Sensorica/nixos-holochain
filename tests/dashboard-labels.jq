@@ -12,11 +12,11 @@
 # job is to show the machine keys of one network for an issue report.
 
 # The labels whose values are names a person reads: the node, its site and
-# conductor, the app and its parts, a problem sentence, a watched unit and its
-# state (both mapped to words by the dashboards), and the parts of a machine
-# (a disk's mount point, a sensor).
+# conductor, the app and its parts, a problem sentence, a service's name, a
+# watched unit and its state (both mapped to words by a dashboard that shows
+# them), and the parts of a machine (a disk's mount point, a sensor).
 def human: ["node", "site", "conductor", "app_name", "app_kind", "part_name", "network_label",
-            "problem", "name", "state", "mountpoint", "chip", "sensor"];
+            "problem", "service", "name", "state", "mountpoint", "chip", "sensor"];
 # The value columns of a table query, which hold numbers, not labels.
 def value_field: test("^Value( #[A-Z]+)?$");
 def exempt: "Identity, for bug reports";

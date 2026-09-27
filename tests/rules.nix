@@ -13,6 +13,8 @@
   pkgs,
   # The rendered rule file.
   rules,
+  # The rule file the grafana module renders for a given `overviewUnits`.
+  overviewRulesFor,
   # The two fixture conductors' textfiles (tests/fixture-textfiles.nix).
   textfiles,
 }: let
@@ -48,6 +50,23 @@
   in [
     (series "node_filesystem_avail_bytes" fs (hold avail))
     (series "node_filesystem_size_bytes" fs (hold 100))
+  ];
+  # A unit in one systemd state, as node_exporter writes it: one series per
+  # state, 1 for the unit's own.
+  unitIn = at: name: state:
+    map (s:
+      unitState at name s (
+        if s == state
+        then 1
+        else 0
+      )) ["active" "activating" "deactivating" "failed" "inactive"];
+  # A service as its node lists it (services.holochain-services.units).
+  serviceInfo = at: name: service: extra:
+    series "holochain_service_info" (at // {inherit name service;} // extra) (hold 1);
+  # A health check's reading and when it was taken.
+  health = at: name: healthy: stamp: [
+    (series "holochain_service_healthy" (at // {inherit name;}) (hold healthy))
+    (series "holochain_service_health_timestamp_seconds" (at // {inherit name;}) stamp)
   ];
   temperature = at: value:
     series "node_hwmon_temp_celsius" (at
@@ -179,7 +198,7 @@
             }
             3)
         ])
-        (expect "holochain:node_state" "30m" [(recorded "holochain:node_state" (target "lab-1") 3)])
+        (expect "holochain:node_state" "30m" [(recorded "holochain:node_state" (target "lab-1") 4)])
         (expect "holochain:dht_share" "30m" [])
         (expect "max by (network_label) (holochain:dht_heard:named)" "30m" [(sample {network_label = "Kando";} 1.0e9)])
         (expect "holochain:dna_nodes" "30m" [(recorded "holochain:dna_nodes" {dna = "dnaK";} 1)])
@@ -235,7 +254,7 @@
         (expect "holochain:dna_nodes" "30m" [(recorded "holochain:dna_nodes" {dna = "dnaR";} 3)])
         (expect "holochain:dna_same_data" "30m" [(recorded "holochain:dna_same_data" {dna = "dnaR";} 0.9)])
         (expect ''max by (node) (holochain:dht_missing:named{node="lab-3"})'' "30m" [(sample {node = "lab-3";} 20)])
-        (expect nodeStates "30m" (map (node: sample {inherit node;} 3) ["lab-1" "lab-2" "lab-3"]))
+        (expect nodeStates "30m" (map (node: sample {inherit node;} 4) ["lab-1" "lab-2" "lab-3"]))
       ];
     }
 
@@ -451,7 +470,7 @@
           "Workshop/Hrea" = 3;
         }))
         (expect "holochain:node_state" "5m" [
-          (recorded "holochain:node_state" (target "homelab" // {site = "Soushi home";}) 3)
+          (recorded "holochain:node_state" (target "homelab" // {site = "Soushi home";}) 4)
         ])
         (expect "holochain:node_problem" "5m" [])
       ];
@@ -591,7 +610,7 @@
         (expect nodeStates "30m" [
           (sample {node = "lab-1";} 1)
           (sample {node = "lab-2";} 0)
-          (sample {node = "lab-3";} 4)
+          (sample {node = "lab-3";} 5)
         ])
         (expect "holochain:node_problem" "30m" [
           (recorded "holochain:node_problem" {
@@ -645,12 +664,16 @@
         at = target "lab-1";
       in
         [(up "lab-1" 1)]
-        # One failed unit with no name, one named in the default overviewUnits
-        # and one named by a regex key of it; each problem names its unit.
+        # Three failed units, one the node does not list, which goes by its
+        # unit name, and two it lists, which go by the names it gives them.
         ++ lib.concatMap (unit: [
           (unitState at unit "failed" 1)
           (unitState at unit "active" 0)
         ]) ["x.service" "holochain-conductor.service" "docker-wind-tunnel-runner.service"]
+        ++ [
+          (serviceInfo at "holochain-conductor.service" "Holochain conductor" {})
+          (serviceInfo at "docker-wind-tunnel-runner.service" "Wind Tunnel runner" {})
+        ]
         ++ disk at "sda1" "ext4" "/" 5
         ++ [
           (series "node_memory_MemAvailable_bytes" at (hold 5))
@@ -673,7 +696,126 @@
           "Running hot (over 85 °C)"
           "A metrics file could not be read (see the node_exporter log)"
         ]))
-        (expect nodeStates "30m" [(sample {node = "lab-1";} 4)])
+        # No conductor, but two watched services failed: the machine is not
+        # "No Holochain here", it has a service down.
+        (expect nodeStates "30m" [(sample {node = "lab-1";} 3)])
+      ];
+    }
+
+    {
+      name = "services: every state in words, and what each does to its node";
+      input_series = let
+        on = node: target node;
+        # A conductor the node lists as the unit that runs it.
+        claimed = {conductor = "Workshop";};
+      in
+        map (node: up node 1) ["lab-1" "lab-2" "lab-3" "lab-4" "lab-5" "lab-6"]
+        # lab-1: one service in each state of the ladder, a conductor unit
+        # active while its conductor does not answer, and a Moss conductor
+        # that no unit claims.
+        ++ conductor {
+          node = "lab-1";
+          isUp = 0;
+        }
+        ++ conductor {
+          node = "lab-1";
+          name = "Moss";
+        }
+        ++ lib.concatLists [
+          [(serviceInfo (on "lab-1") "a.service" "Alpha" {})]
+          (unitIn (on "lab-1") "a.service" "failed")
+          [(serviceInfo (on "lab-1") "b.service" "Bravo" {})]
+          (unitIn (on "lab-1") "b.service" "inactive")
+          [(serviceInfo (on "lab-1") "holochain-bootstrap.service" "Local bootstrap and relay" {})]
+          (unitIn (on "lab-1") "holochain-bootstrap.service" "active")
+          (health (on "lab-1") "holochain-bootstrap.service" 0 fresh)
+          [(serviceInfo (on "lab-1") "d.service" "Delta" {})]
+          (unitIn (on "lab-1") "d.service" "active")
+          (health (on "lab-1") "d.service" 1 (hold 0))
+          [(serviceInfo (on "lab-1") "e.service" "Echo" {})]
+          (unitIn (on "lab-1") "e.service" "activating")
+          [(serviceInfo (on "lab-1") "f.service" "Foxtrot" {})]
+          (unitIn (on "lab-1") "f.service" "deactivating")
+          [(serviceInfo (on "lab-1") "g.service" "Golf" {})]
+          (unitIn (on "lab-1") "g.service" "active")
+          (health (on "lab-1") "g.service" 1 fresh)
+          [(serviceInfo (on "lab-1") "holochain-conductor.service" "Holochain conductor" claimed)]
+          (unitIn (on "lab-1") "holochain-conductor.service" "active")
+        ]
+        # lab-2: Holochain answers, and one service is stopped.
+        ++ conductor {node = "lab-2";}
+        ++ [(serviceInfo (on "lab-2") "holochain-conductor.service" "Holochain conductor" claimed)]
+        ++ unitIn (on "lab-2") "holochain-conductor.service" "active"
+        ++ [(serviceInfo (on "lab-2") "b.service" "Bravo" {})]
+        ++ unitIn (on "lab-2") "b.service" "inactive"
+        # lab-3: Holochain answers, and one service's health reading is old.
+        ++ conductor {node = "lab-3";}
+        ++ [(serviceInfo (on "lab-3") "holochain-bootstrap.service" "Local bootstrap and relay" {})]
+        ++ unitIn (on "lab-3") "holochain-bootstrap.service" "active"
+        ++ health (on "lab-3") "holochain-bootstrap.service" 1 (hold 0)
+        # lab-4: Holochain answers, and one service is on its way up.
+        ++ conductor {node = "lab-4";}
+        ++ [(serviceInfo (on "lab-4") "e.service" "Echo" {})]
+        ++ unitIn (on "lab-4") "e.service" "activating"
+        # lab-5: no Holochain, every service running.
+        ++ [(serviceInfo (on "lab-5") "g.service" "Golf" {})]
+        ++ unitIn (on "lab-5") "g.service" "active"
+        # lab-6: a Moss conductor no unit claims, not answering.
+        ++ conductor {
+          node = "lab-6";
+          name = "Moss";
+          isUp = 0;
+        };
+      promql_expr_test = [
+        (expect ''max by (service) (holochain:service_state{node="lab-1"})'' "30m" (lib.mapAttrsToList (service: sample {inherit service;}) {
+          "Alpha" = 0;
+          "Bravo" = 1;
+          "Local bootstrap and relay" = 2;
+          "Delta" = 3;
+          "Echo" = 4;
+          "Foxtrot" = 5;
+          "Golf" = 6;
+          "Holochain conductor" = 2;
+          "Moss node" = 6;
+        }))
+        # The conductor a unit claims is not listed a second time.
+        (expect ''max by (service) (holochain:service_state{node="lab-2"})'' "30m" [
+          (sample {service = "Holochain conductor";} 6)
+          (sample {service = "Bravo";} 1)
+        ])
+        (expect ''max by (service) (holochain:service_state{node="lab-6"})'' "30m" [(sample {service = "Moss node";} 2)])
+        (expect nodeStates "30m" (lib.mapAttrsToList (node: sample {inherit node;}) {
+          "lab-1" = 1;
+          "lab-2" = 3;
+          "lab-3" = 2;
+          "lab-4" = 4;
+          "lab-5" = 5;
+          "lab-6" = 1;
+        }))
+        # Failed, stopped and not answering in words; a conductor's service
+        # is left to the conductor's own sentence.
+        (expect ''count by (node, problem) (holochain:node_problem{node=~"lab-[12]"})'' "30m" (map (p: sample p 1) [
+          {
+            node = "lab-1";
+            problem = "Alpha has failed";
+          }
+          {
+            node = "lab-1";
+            problem = "Bravo is stopped";
+          }
+          {
+            node = "lab-1";
+            problem = "Local bootstrap and relay is not answering";
+          }
+          {
+            node = "lab-1";
+            problem = "Holochain (Workshop) is not answering";
+          }
+          {
+            node = "lab-2";
+            problem = "Bravo is stopped";
+          }
+        ]))
       ];
     }
 
@@ -704,11 +846,81 @@
     }
   ];
 
-  tests = pkgs.writeText "holochain-rules-tests.json" (builtins.toJSON {
-    rule_files = ["${rules}"];
-    evaluation_interval = "1m";
-    tests = map (case: {interval = "1m";} // case) cases;
-  });
+  # The units a monitor adds on top of what each node lists, as flake.nix
+  # renders overviewRules with them.
+  overviewUnits = {
+    "caddy.service" = "Web server";
+    "restic-backups-.*" = "Backups";
+    "x.service" = null;
+    "sshd.service" = "SSH";
+  };
+  overviewRules = overviewRulesFor overviewUnits;
+
+  overviewCases = [
+    {
+      name = "overviewUnits: watched on every node that runs them, a node's own name kept";
+      input_series = let
+        at = target "lab-1";
+      in
+        [(up "lab-1" 1) (up "lab-2" 1)]
+        ++ [(serviceInfo at "sshd.service" "Remote login" {})]
+        ++ unitIn at "sshd.service" "active"
+        ++ unitIn at "caddy.service" "inactive"
+        ++ unitIn at "restic-backups-daily.service" "failed"
+        ++ unitIn at "x.service" "active"
+        # Runs, and nobody watches it.
+        ++ unitIn at "y.service" "active"
+        ++ unitIn (target "lab-2") "x.service" "active";
+      promql_expr_test = [
+        (expect "max by (node, service) (holochain:service_state)" "30m" (map (p: sample (removeAttrs p ["v"]) p.v) [
+          {
+            node = "lab-1";
+            service = "Remote login";
+            v = 6;
+          }
+          {
+            node = "lab-1";
+            service = "Web server";
+            v = 1;
+          }
+          {
+            node = "lab-1";
+            service = "Backups";
+            v = 0;
+          }
+          {
+            node = "lab-1";
+            service = "x.service";
+            v = 6;
+          }
+          {
+            node = "lab-2";
+            service = "x.service";
+            v = 6;
+          }
+        ]))
+        (expect "count by (node, problem) (holochain:node_problem)" "30m" (map (problem:
+          sample {
+            node = "lab-1";
+            inherit problem;
+          }
+          1) ["Backups has failed" "Web server is stopped"]))
+        (expect nodeStates "30m" [
+          (sample {node = "lab-1";} 3)
+          (sample {node = "lab-2";} 5)
+        ])
+      ];
+    }
+  ];
+
+  testFile = name: ruleFile: caseList:
+    pkgs.writeText name (builtins.toJSON {
+      rule_files = ["${ruleFile}"];
+      evaluation_interval = "1m";
+      tests = map (case: {interval = "1m";} // case) caseList;
+    });
+  tests = testFile "holochain-rules-tests.json" rules cases;
+  overviewTests = testFile "holochain-rules-overview-tests.json" overviewRules overviewCases;
 in
   pkgs.runCommand "holochain-rules" {
     nativeBuildInputs = [pkgs.jq pkgs.prometheus.cli];
@@ -730,30 +942,33 @@ in
       .tests |= map(if .name | startswith("the homelab")
         then .input_series = $homelab[0] + [{series: "up{instance=\"homelab:9100\", job=\"${job}\", node=\"homelab\", site=\"Soushi home\"}", values: "1+0x60"}]
         else . end)' ${tests} > tests.json
-
-    promtool test rules tests.json
+    cp ${overviewTests} overview.json
+    grep -F 'Web server' ${overviewRules} > /dev/null
 
     # Each expectation broken on its own must fail its test.
     broken=0
-    for i in $(seq 0 $(($(jq '.tests | length' tests.json) - 1))); do
-      for j in $(seq 0 $(($(jq ".tests[$i].promql_expr_test | length" tests.json) - 1))); do
-        jq --argjson i "$i" --argjson j "$j" '
-          .tests = [.tests[$i] | .promql_expr_test = [.promql_expr_test[$j]
-            | if (.exp_samples | length) > 0
-              then .exp_samples[0].value += 1
-              else .exp_samples = [{labels: "{}", value: 1}]
-              end]]' tests.json > broken.json
-        if promtool test rules broken.json > broken.log 2>&1; then
-          echo "still passes with a wrong expectation:" >&2
-          jq -c '.tests[0] | {name, test: .promql_expr_test[0]}' broken.json >&2
-          exit 1
-        fi
-        if ! grep -q 'got:' broken.log; then
-          echo "failed for another reason than the expectation:" >&2
-          cat broken.log >&2
-          exit 1
-        fi
-        broken=$((broken + 1))
+    for file in tests.json overview.json; do
+      promtool test rules "$file"
+      for i in $(seq 0 $(($(jq '.tests | length' "$file") - 1))); do
+        for j in $(seq 0 $(($(jq ".tests[$i].promql_expr_test | length" "$file") - 1))); do
+          jq --argjson i "$i" --argjson j "$j" '
+            .tests = [.tests[$i] | .promql_expr_test = [.promql_expr_test[$j]
+              | if (.exp_samples | length) > 0
+                then .exp_samples[0].value += 1
+                else .exp_samples = [{labels: "{}", value: 1}]
+                end]]' "$file" > broken.json
+          if promtool test rules broken.json > broken.log 2>&1; then
+            echo "still passes with a wrong expectation:" >&2
+            jq -c '.tests[0] | {name, test: .promql_expr_test[0]}' broken.json >&2
+            exit 1
+          fi
+          if ! grep -q 'got:' broken.log; then
+            echo "failed for another reason than the expectation:" >&2
+            cat broken.log >&2
+            exit 1
+          fi
+          broken=$((broken + 1))
+        done
       done
     done
     echo "$broken expectations, each seen to fail when wrong"

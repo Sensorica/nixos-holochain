@@ -133,4 +133,6 @@ jobs:
             .#checks.x86_64-linux.dashboardWords \
             .#checks.x86_64-linux.dashboardQueries \
             .#checks.x86_64-linux.vmTestBootstrap \
+            .#checks.x86_64-linux.vmTestServices \
+            .#checks.x86_64-linux.vmTestServices-noBootstrap \
             .#checks.x86_64-linux.edgenodeConfigRender

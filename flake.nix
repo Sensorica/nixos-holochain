@@ -804,6 +804,223 @@
               window("two conductors connected, steady state", 60)
             '';
           };
+
+        # One machine running an edgenode, the HTTP gateway, Grafana and, when
+        # `bootstrap` is true, the local bootstrap and relay. The pass
+        # condition is what a person reads through Grafana's own query API:
+        # the node page's "Services on this node" names every service the
+        # enabled modules installed, and nothing else, each Running; with
+        # bootstrap, the server frozen reads Not answering while systemd still
+        # says active, and stopped reads Stopped, the room screen's tile for
+        # the machine turning to A service is down both times.
+        #
+        # `expectBootstrap` exists for the falsifiers: a test that expects
+        # the bootstrap server on a machine without it, or not on one with it,
+        # has to fail (legacyPackages.falsifiers).
+        servicesTest = {
+          name,
+          bootstrap ? true,
+          expectBootstrap ? bootstrap,
+        }:
+          pkgs.testers.nixosTest {
+            inherit name;
+            nodes.machine = {
+              imports = [
+                edgenodeNode
+                roomToWork
+                self.nixosModules.holochain-grafana
+                self.nixosModules.holochain-http-gateway
+                self.nixosModules.holochain-bootstrap
+              ];
+              environment.systemPackages = [pkgs.jq];
+              services.holochain-edgenode = {
+                enable = true;
+                metricsExporter.enable = true;
+                conductorMetrics.enable = true;
+              };
+              services.holochain-http-gateway.enable = true;
+              services.holochain-bootstrap.enable = bootstrap;
+              systemd.tmpfiles.rules = [
+                "d /var/lib/secrets 0700 root root - -"
+                "f /var/lib/secrets/grafana-admin-password 0400 root root - ${grafanaTestPassword}"
+              ];
+              services.holochain-grafana = {
+                enable = true;
+                adminPasswordFile = "/var/lib/secrets/grafana-admin-password";
+                scrapeTargets.machine.address = "127.0.0.1:9100";
+              };
+            };
+            testScript = ''
+              import base64
+              import json
+
+              EXPECT_BOOTSTRAP = ${
+                if expectBootstrap
+                then "True"
+                else "False"
+              }
+              BOOTSTRAP = "Local bootstrap and relay"
+              RUNNING, NOT_ANSWERING, STOPPED = 6, 2, 1
+              TILE_RUNNING, TILE_SERVICE_DOWN = 4, 3
+
+              machine.wait_for_unit("grafana.service")
+              machine.wait_for_unit("prometheus.service")
+              machine.wait_for_unit("holochain-conductor.service")
+              machine.wait_for_open_port(3000)
+
+
+              def grafana(path):
+                  return json.loads(machine.succeed(
+                      "curl -sf -u admin:${grafanaTestPassword}"
+                      f" 'http://localhost:3000{path}'"
+                  ))
+
+
+              def target(uid, title):
+                  panels = grafana(f"/api/dashboards/uid/{uid}")["dashboard"]["panels"]
+                  panels = panels + [p for row in panels for p in row.get("panels", [])]
+                  expr = next(p for p in panels if p["title"] == title and p["type"] != "row")["targets"][0]["expr"]
+                  expr = expr.replace("$node", "machine").replace("$site", ".*")
+                  assert "$" not in expr, expr
+                  return expr
+
+
+              # The queries the pages run, as Grafana serves them.
+              services_expr = target("holochain-node", "Services on this node")
+              tile_expr = target("holochain-now", "Which machines are on?")
+              down_expr = target("holochain-fleet", "Which watched services are down?")
+              problems_expr = target("holochain-fleet", "What needs a human?")
+              machine.log(f"services query: {services_expr}")
+
+
+              def ds(expr, name):
+                  """One instant query through Grafana's /api/ds/query, as {labels: value}."""
+                  body = {
+                      "from": "now-5m",
+                      "to": "now",
+                      "queries": [{
+                          "refId": "A",
+                          "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
+                          "expr": expr,
+                          "instant": True,
+                          "range": False,
+                          "intervalMs": 15000,
+                          "maxDataPoints": 100,
+                      }],
+                  }
+                  encoded = base64.b64encode(json.dumps(body).encode()).decode()
+                  machine.succeed(f"echo {encoded} | base64 -d > /tmp/{name}.json")
+                  reply = json.loads(machine.succeed(
+                      "curl -s -u admin:${grafanaTestPassword} -H 'Content-Type: application/json'"
+                      f" -X POST --data @/tmp/{name}.json http://localhost:3000/api/ds/query"
+                  ))
+                  result = reply["results"]["A"]
+                  assert result.get("error") is None, result
+                  return [
+                      (frame["schema"]["fields"][1].get("labels", {}), frame["data"]["values"][1][-1])
+                      for frame in result.get("frames", [])
+                      if frame["data"]["values"] and frame["data"]["values"][1]
+                  ]
+
+
+              def services():
+                  """The node page's services table: {service name: state code}."""
+                  return {labels["service"]: value for labels, value in ds(services_expr, "services")}
+
+
+              def tile():
+                  return {labels["node"]: value for labels, value in ds(tile_expr, "tile")}.get("machine")
+
+
+              expected = {
+                  "Holochain conductor", "Holochain readings (timer)", "HTTP gateway",
+                  "Metrics database", "Dashboards", "Machine readings", "Nix",
+              } | ({BOOTSTRAP} if EXPECT_BOOTSTRAP else set())
+
+
+              def all_running(rows, want):
+                  return set(rows) == want and all(v == RUNNING for v in rows.values())
+
+
+              # The check must fail on an answer that is not the one wanted:
+              # one service short, one in another state, one too many.
+              sample = {n: RUNNING for n in expected}
+              assert all_running(sample, expected)
+              assert not all_running({n: v for n, v in sample.items() if n != "HTTP gateway"}, expected)
+              assert not all_running({**sample, "HTTP gateway": STOPPED}, expected)
+              assert not all_running({**sample, "Remote login": RUNNING}, expected)
+
+              last = {}
+
+
+              def settled(_):
+                  global last
+                  last = services()
+                  return all_running(last, expected)
+
+
+              try:
+                  retry(settled, timeout_seconds=300)
+              finally:
+                  machine.log("services on the node page: " + json.dumps(last, sort_keys=True))
+              # The services can settle before the conductor's first readings
+              # reach Prometheus, and until then the machine has no Holochain
+              # to show.
+              retry(lambda _: tile() == TILE_RUNNING, timeout_seconds=180)
+
+              if not EXPECT_BOOTSTRAP:
+                  # Nothing of the server anywhere: no unit, no health reading.
+                  assert BOOTSTRAP not in services()
+                  machine.fail("systemctl cat holochain-bootstrap.service")
+                  machine.fail("curl -s localhost:9100/metrics | grep -q '^holochain_service_healthy'")
+              else:
+                  health = machine.succeed("curl -s localhost:9100/metrics | grep '^holochain_service_healthy'")
+                  machine.log("health reading: " + health)
+                  assert 'holochain_service_healthy{name="holochain-bootstrap.service"} 1' in health, health
+
+
+                  def reads(state):
+                      return lambda _: services().get(BOOTSTRAP) == state
+
+
+                  def listed_down(state):
+                      return any(
+                          labels.get("service") == BOOTSTRAP and value == state
+                          for labels, value in ds(down_expr, "down")
+                      )
+
+
+                  def problem(sentence):
+                      return any(labels.get("problem") == sentence for labels, _ in ds(problems_expr, "problems"))
+
+
+                  # Running but not answering: the server frozen, its unit
+                  # still active. The same checks fail while it answers.
+                  assert not reads(NOT_ANSWERING)(None)
+                  assert not listed_down(NOT_ANSWERING)
+                  pid = machine.succeed("systemctl show -p MainPID --value holochain-bootstrap.service").strip()
+                  machine.succeed(f"kill -STOP {pid}")
+                  retry(reads(NOT_ANSWERING), timeout_seconds=180)
+                  assert machine.succeed("systemctl is-active holochain-bootstrap.service").strip() == "active"
+                  assert listed_down(NOT_ANSWERING)
+                  assert problem(f"{BOOTSTRAP} is not answering")
+                  assert tile() == TILE_SERVICE_DOWN, tile()
+                  machine.log("frozen: Not answering, while systemd says active")
+
+                  machine.succeed(f"kill -CONT {pid}")
+                  retry(reads(RUNNING), timeout_seconds=180)
+                  retry(lambda _: tile() == TILE_RUNNING, timeout_seconds=60)
+
+                  # Stopped.
+                  assert not reads(STOPPED)(None)
+                  machine.succeed("systemctl stop holochain-bootstrap.service")
+                  retry(reads(STOPPED), timeout_seconds=120)
+                  assert listed_down(STOPPED)
+                  assert problem(f"{BOOTSTRAP} is stopped")
+                  assert tile() == TILE_SERVICE_DOWN, tile()
+                  machine.log("stopped: Stopped")
+            '';
+          };
       in {
         packages = {
           holochain-0_6 = holonix06.holochain;
@@ -843,6 +1060,17 @@
           vmTestBootstrap-wrongPort = bootstrapTest {
             name = "holochain-bootstrap-wrong-port";
             bobBootstrapPort = 444;
+          };
+          # The services test, expecting the bootstrap server where it does
+          # not run, and not expecting it where it does.
+          vmTestServices-bootstrapMissing = servicesTest {
+            name = "holochain-services-bootstrap-missing";
+            bootstrap = false;
+            expectBootstrap = true;
+          };
+          vmTestServices-bootstrapUnexpected = servicesTest {
+            name = "holochain-services-bootstrap-unexpected";
+            expectBootstrap = false;
           };
         };
 
@@ -1339,6 +1567,7 @@
           holochainRules = import ./tests/rules.nix {
             inherit pkgs;
             rules = holochainRulesFile;
+            overviewRulesFor = units: builtins.head (monitor [{services.holochain-grafana.overviewUnits = units;}]).services.prometheus.ruleFiles;
             textfiles = fixtureTextfiles;
           };
 
@@ -1348,6 +1577,10 @@
           # dashboard rewrite (units, unit names, room constants).
           grafanaProvisioning = import ./tests/provisioning.nix {
             inherit pkgs monitor;
+            modules = {
+              edgenode = edgenodeNode;
+              inherit (self.nixosModules) holochain-http-gateway holochain-bootstrap holochain-windtunnel;
+            };
           };
 
           # The edgenode module's own names wiring, which the checks above
@@ -1697,12 +1930,6 @@
                   for uid, dashboard in served.items()
               }
 
-              units = variables["holochain-fleet"]["units"]["current"]["value"]
-              machine.log("units variable default: " + units)
-              for unit in ["holochain-conductor.service", "systemd-journald.service"]:
-                  assert unit in units.split("|"), f"{unit} not in the units default: {units}"
-              assert variables["holochain-node"]["units"]["current"]["value"] == units
-
               # The room constants, rewritten from the room option.
               room = {n: variables["holochain-now"][n]["current"]["value"] for n in ["room_app", "room_part", "room_label"]}
               machine.log("room constants: " + json.dumps(room))
@@ -1756,8 +1983,13 @@
               }
               node_words = {
                   "0": ("Unreachable", "red"), "1": ("Holochain not answering", "red"),
-                  "2": ("No fresh readings", "orange"), "3": ("Running", "green"),
-                  "4": ("No Holochain here", grey),
+                  "2": ("No fresh readings", "orange"), "3": ("A service is down", "red"),
+                  "4": ("Running", "green"), "5": ("No Holochain here", grey),
+              }
+              service_words = {
+                  "0": ("Failed", "red"), "1": ("Stopped", "red"), "2": ("Not answering", "red"),
+                  "3": ("No fresh readings", "orange"), "4": ("Starting", amber),
+                  "5": ("Stopping", amber), "6": ("Running", "green"),
               }
               for uid, title in [("holochain-now", "Is each app working on each node?"),
                                  ("holochain-fleet", "Is each app in step on each node?")]:
@@ -1769,10 +2001,10 @@
               assert words(panel("holochain-node", "Conductors")["fieldConfig"]["defaults"]["mappings"]) == {
                   "1": ("Not answering", "red"), "2": ("No fresh readings", "orange"), "3": ("Running", "green"),
               }
-              # The watched units' names reached both service tables.
-              for uid, title in [("holochain-fleet", "Which watched services are down?"), ("holochain-node", "Background jobs")]:
-                  named = [m["options"]["result"]["text"] for m in override(panel(uid, title), "name", "mappings")]
-                  assert "Holochain conductor" in named, (uid, title, named)
+              assert words(panel("holochain-fleet", "Node status over time")["fieldConfig"]["defaults"]["mappings"]) == node_words
+              # Both service tables read their states in the same words.
+              for uid, title in [("holochain-fleet", "Which watched services are down?"), ("holochain-node", "Services on this node")]:
+                  assert words(override(panel(uid, title), "State", "mappings")) == service_words, (uid, title)
 
               # ---- node names and the recording rules, over three conductors ----
               # Every target carries its node's name, and its site when it has one.
@@ -1841,11 +2073,25 @@
               for name, health, error, _ in loaded:
                   assert health == "ok" and error == "", (name, health, error)
 
-              # The node reads Running by its worst conductor, and the dead
-              # target reads Unreachable, each by its name.
+              # Every conductor answers, but always-fails.service, which
+              # overviewUnits adds to the watched services, has failed: the
+              # node reads A service is down, and the dead target reads
+              # Unreachable, each by its name.
               wait_values("holochain:node_state", "q-node-state", {"machine": "3", "unplugged": "0"}, "node")
               wait_values('max by (conductor) (holochain:conductor_state)', "q-conductor-state",
                           {"Holochain": "3", "Workshop": "3", "Moss": "3"}, "conductor")
+
+              # The services of the machine by name, and nothing else: the ones
+              # its modules installed, as the machine lists them, the two
+              # overviewUnits adds, by their unit names, and the two fixture
+              # conductors that no unit on the machine claims, the Moss one as
+              # "Moss node". The live conductor is claimed by its unit.
+              wait_values('max by (service) (holochain:service_state{node="machine"})', "q-services", {
+                  "Holochain conductor": "6", "App installer": "6", "Holochain readings (timer)": "6",
+                  "Metrics database": "6", "Dashboards": "6", "Machine readings": "6", "Nix": "6",
+                  "systemd-journald.service": "6", "always-fails.service": "0",
+                  "Moss node": "6", "Workshop node": "6",
+              }, "service")
 
               # The Moss node's shape: the connected chat and the group in step,
               # the chat nobody else opened alone and grey, not red.
@@ -1901,7 +2147,6 @@
 
               def fill(expr):
                   for name, value in [
-                      ("''${units:raw}", units),
                       ("''${room_app}", room["room_app"]),
                       ("''${room_part}", room["room_part"]),
                       ("$network", network),
@@ -2241,6 +2486,15 @@
           # Two 0.6 edgenodes find each other through a holochain-bootstrap
           # server with no internet, over its plain-HTTP relay.
           vmTestBootstrap = bootstrapTest {name = "holochain-bootstrap";};
+
+          # Every service the enabled modules install, on the node page by
+          # its name, derived from the configuration: with the bootstrap
+          # server and the HTTP gateway, then without the server.
+          vmTestServices = servicesTest {name = "holochain-services";};
+          vmTestServices-noBootstrap = servicesTest {
+            name = "holochain-services-no-bootstrap";
+            bootstrap = false;
+          };
 
           vmTestWithHapp-0_6 = happTest {
             name = "holochain-edgenode-happ-installer-0_6";

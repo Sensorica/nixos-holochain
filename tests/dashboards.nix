@@ -64,6 +64,8 @@ in {
         '(.. | objects | select(.title? == "What needs a human?") | .transformations[] | select(.id == "filterFieldsByName") | .options.include.names) += ["instance"]'
       broken "shows the column dna" holochain-node.json \
         '(.. | objects | select(.title? == "Is each app part connected, complete and recent?") | .fieldConfig.overrides) |= map(select(.matcher.options != "dna"))'
+      broken "panel \"Services on this node\" shows the column instance" holochain-node.json \
+        '(.. | objects | select(.title? == "Services on this node") | .transformations[] | select(.id == "filterFieldsByName") | .options.include.names) += ["instance"]'
       broken "is used by" holochain-network.json '.uid = "holochain-node"'
       touch $out
     '';
@@ -144,7 +146,27 @@ in {
 
       # promtool input: every sample line of the files on one instance named
       # homelab, readings that keep pace with the test clock, the target's up
-      # series, and one failed unit, so the problem tables have a row.
+      # series, one failed unit, so the problem tables have a row, and the
+      # services the node lists: the conductor that runs Workshop, a gateway
+      # that is stopped, so the fleet's list of services down has a row, and a
+      # bootstrap server whose health reading keeps pace with the clock. The
+      # Moss and Clones conductors are claimed by no unit.
+      unit() {
+        for state in active activating deactivating failed inactive; do
+          jq -n -c --arg unit "$1" --arg state "$state" --arg v "$([ "$state" = "$2" ] && echo 1 || echo 0)" \
+            '{series: "node_systemd_unit_state{instance=\"homelab:9100\",job=\"holochain-nodes\",node=\"homelab\",name=\"\($unit)\",state=\"\($state)\"}", values: "\($v)+0x60"}'
+        done
+      }
+      {
+        unit holochain-conductor.service active
+        unit holochain-http-gateway.service inactive
+        unit holochain-bootstrap.service active
+      } | jq -s '. + [
+        {series: "holochain_service_info{instance=\"homelab:9100\",job=\"holochain-nodes\",node=\"homelab\",conductor=\"Workshop\",name=\"holochain-conductor.service\",service=\"Holochain conductor\"}", values: "1+0x60"},
+        {series: "holochain_service_info{instance=\"homelab:9100\",job=\"holochain-nodes\",node=\"homelab\",name=\"holochain-http-gateway.service\",service=\"HTTP gateway\"}", values: "1+0x60"},
+        {series: "holochain_service_info{instance=\"homelab:9100\",job=\"holochain-nodes\",node=\"homelab\",name=\"holochain-bootstrap.service\",service=\"Local bootstrap and relay\"}", values: "1+0x60"},
+        {series: "holochain_service_healthy{instance=\"homelab:9100\",job=\"holochain-nodes\",node=\"homelab\",name=\"holochain-bootstrap.service\"}", values: "1+0x60"},
+        {series: "holochain_service_health_timestamp_seconds{instance=\"homelab:9100\",job=\"holochain-nodes\",node=\"homelab\",name=\"holochain-bootstrap.service\"}", values: "0+60x60"}]' > services.json
       series() {
         cat "$@" | grep -v '^#' \
           | sed -E 's/^([a-z_]+)\{/\1{instance="homelab:9100",job="holochain-nodes",node="homelab",/' \
@@ -153,7 +175,8 @@ in {
                  values: (if (.s | startswith("holochain_conductor_metrics_scrape_timestamp_seconds{"))
                           then "0+60x60" else "\(.v)+0x60" end)}' \
           | jq -s '. + [{series: "up{instance=\"homelab:9100\",job=\"holochain-nodes\",node=\"homelab\"}", values: "1+0x60"},
-                       {series: "node_systemd_unit_state{instance=\"homelab:9100\",job=\"holochain-nodes\",node=\"homelab\",name=\"x.service\",state=\"failed\"}", values: "1+0x60"}]'
+                       {series: "node_systemd_unit_state{instance=\"homelab:9100\",job=\"holochain-nodes\",node=\"homelab\",name=\"x.service\",state=\"failed\"}", values: "1+0x60"}]
+              + $services[0]' --slurpfile services services.json
       }
       series ${runs}/holochain-conductor.prom ${runs}/moss-node.prom clones.prom > up.json
       series ${runs}/holochain-conductor.prom ${runs}/moss-down.prom > down.json
@@ -257,7 +280,39 @@ in {
                     | {expr, eval_time: "30m", exp_samples: [{labels: "{node=\"homelab\"}", value: 1}]}),
                   ($targets[0][] | select(.dashboard == "holochain-now" and .title == "Which machines are on?")
                     | {expr, eval_time: "30m",
-                       exp_samples: [{labels: "holochain:node_state{instance=\"homelab:9100\",job=\"holochain-nodes\",node=\"homelab\"}", value: 1}]})
+                       exp_samples: [{labels: "holochain:node_state{instance=\"homelab:9100\",job=\"holochain-nodes\",node=\"homelab\"}", value: 1}]}),
+                  # The Moss node is a service of its own, and does not answer.
+                  ($targets[0][] | select(.dashboard == "holochain-node" and .title == "Services on this node")
+                    | {expr: "max by (service) (\(.expr))", eval_time: "30m",
+                       exp_samples: [
+                         {labels: "{service=\"Holochain conductor\"}", value: 6},
+                         {labels: "{service=\"HTTP gateway\"}", value: 1},
+                         {labels: "{service=\"Local bootstrap and relay\"}", value: 6},
+                         {labels: "{service=\"Moss node\"}", value: 2}]})
+                ]
+              },
+              {
+                name: "the services each node lists, by name, and the one that is down",
+                interval: "1m",
+                input_series: $up[0],
+                promql_expr_test: [
+                  # One row per service: the three the node lists, and a row
+                  # for each conductor no unit claims, Moss as "Moss node".
+                  ($targets[0][] | select(.dashboard == "holochain-node" and .title == "Services on this node")
+                    | {expr: "max by (service) (\(.expr))", eval_time: "30m",
+                       exp_samples: [
+                         {labels: "{service=\"Holochain conductor\"}", value: 6},
+                         {labels: "{service=\"HTTP gateway\"}", value: 1},
+                         {labels: "{service=\"Local bootstrap and relay\"}", value: 6},
+                         {labels: "{service=\"Moss node\"}", value: 6},
+                         {labels: "{service=\"Clones node\"}", value: 6}]}),
+                  ($targets[0][] | select(.dashboard == "holochain-fleet" and .title == "Which watched services are down?")
+                    | {expr: "max by (node, service) (\(.expr))", eval_time: "30m",
+                       exp_samples: [{labels: "{node=\"homelab\", service=\"HTTP gateway\"}", value: 1}]}),
+                  # A stopped gateway turns the tile of the machine to A service is down.
+                  ($targets[0][] | select(.dashboard == "holochain-now" and .title == "Which machines are on?")
+                    | {expr, eval_time: "30m",
+                       exp_samples: [{labels: "holochain:node_state{instance=\"homelab:9100\",job=\"holochain-nodes\",node=\"homelab\"}", value: 3}]})
                 ]
               }
             ]
@@ -267,7 +322,8 @@ in {
       echo "expressions under test: $(jq '[.tests[].promql_expr_test[]] | length' tests.json)"
       echo "series selectors read: $(jq length selectors.json)"
       test "$(jq '.tests[2].promql_expr_test | length' tests.json)" = 6
-      test "$(jq '.tests[3].promql_expr_test | length' tests.json)" = 2
+      test "$(jq '.tests[3].promql_expr_test | length' tests.json)" = 3
+      test "$(jq '.tests[4].promql_expr_test | length' tests.json)" = 3
       promtool test rules tests.json
 
       # Broken on purpose: a rule name misspelt in one query, in queries
@@ -308,6 +364,9 @@ in {
       broken "a label filter that selects nothing behind a vector fallback" \
         'map(if .dashboard == "holochain-network" and .title == "Lost contact" then .expr |= sub("dna=\""; "dna=\"no-such-") else . end)' \
         'count(holochain:dht_state{dna=\"no-such-'
+      broken "a services table that reads the watched list, not the states" \
+        'map(if .title == "Services on this node" then .expr |= sub("holochain:service_state"; "holochain:service_watched") else . end)' \
+        'got:'
       broken "a join on part of the key" \
         'map(if .title == "Is each app part connected, complete and recent?" then .expr |= gsub("instance, conductor, app_id, role, dna"; "instance, conductor, app_id, role") else . end)' \
         "many-to-many"
