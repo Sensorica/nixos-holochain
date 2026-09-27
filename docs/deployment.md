@@ -154,9 +154,9 @@ systemctl list-timers holochain-conductor-metrics
 curl -s localhost:9100/metrics | grep '^holochain_'
 ```
 
-`holochain_conductor_up 0` means the timer is running and the conductor is not answering; check `journalctl -u holochain-conductor`. No `holochain_` lines at all means the timer has not fired yet, or `conductorMetrics.enable` is off.
+`holochain_conductor_up{conductor="Holochain"} 0` means the timer is running and the conductor is not answering; check `journalctl -u holochain-conductor`. The `conductor` label is `conductorMetrics.name`. No `holochain_` lines at all means the timer has not fired yet, or `conductorMetrics.enable` is off. A `node_textfile_scrape_error` of 1 with another conductor's textfile in the same directory (a Moss node, say) means the two files declare a family differently: both must be written by `holochain-conductor-exporter`, and node_exporter's log names the family.
 
-Each DHT the conductor is in has its own `holochain_dht_*` series, labelled with the app, the role and the DNA hash:
+Each DHT the conductor is in has its own `holochain_dht_*` series, labelled with the conductor, the installed app id (`app_id`), the role and the DNA hash, and one `holochain_dht_info` line that names it for dashboards (see [Names](architecture.md#names)):
 
 ```bash
 # one line per cell of every enabled app

@@ -238,6 +238,10 @@ hc sandbox call --running 4444 dump-network-stats     # 0.6
 
 also calls `list-apps` for the installed apps, folds the reply's per-connection counts into running totals with `modules/conductor-counters.jq`, pipes the lot through `modules/conductor-metrics.jq`, and moves the result into `metricsExporter.textfileDirectory` atomically, because the collector may read the directory at any moment.
 
+The service is a thin wrapper around one program, `packages.<system>.holochain-conductor-exporter` (`packages/holochain-conductor-exporter.nix`), which any other conductor on the machine runs too: a Moss node, say, under its own name. It takes the conductor's name, a command that prints the admin port and optionally the allowed origin (a Moss node picks both anew at every start), the names file described below, the textfile to write and a directory for the running totals. Every line it writes carries `conductor`, from `conductorMetrics.name` (default `Holochain`), so two conductors on one machine never merge into one series.
+
+One program matters for a reason that is easy to miss. node_exporter's textfile collector merges every `*.prom` file of its directory by family, and when two files give one family different `# HELP` text it logs `inconsistent metric help text`, keeps the family from the first file only, and sets `node_textfile_scrape_error` to 1: every series of that family in the second file vanishes. So every `# HELP` and `# TYPE` line lives in one place, `modules/families.jq`, which both jq programs `include`, and a family missing from it is an error rather than a line made up on the spot. `checks.metricsHelpAgreement` runs the whole program for an edgenode-shaped conductor and a Moss-shaped one on captured replies, requires every family the two files share to be declared with the same bytes, and then has a real node_exporter read both files and keep every series of each with `node_textfile_scrape_error 0`.
+
 The reply is Kitsune2's `TransportStats` (`kitsune2` `crates/api/src/transport.rs`), wrapped by Holochain with `blocked_message_counts`. It is byte-identical on both lines. Verified against the pinned binaries, on a bare conductor with no app installed and no peers:
 
 ```
@@ -250,7 +254,7 @@ $ hc sandbox call --running 4461 dump-network-stats        # holochain 0.6.3
 
 `dump-network-metrics`, the other candidate the issue named, answers `{}` on a conductor with no app installed, because it reports per-DNA gossip state and there is none. `dump-network-stats` always has something to say, which is why the gauges are derived from it.
 
-Each entry of `connections` carries `pub_key`, `send_message_count`, `send_bytes`, `recv_message_count`, `recv_bytes`, `opened_at_s` and `is_direct`. These are the series derived from them:
+Each entry of `connections` carries `pub_key`, `send_message_count`, `send_bytes`, `recv_message_count`, `recv_bytes`, `opened_at_s` and `is_direct`. These are the series derived from them, each labelled `conductor`:
 
 | Series | Type | Meaning |
 |---|---|---|
@@ -263,7 +267,7 @@ Each entry of `connections` carries `pub_key`, `send_message_count`, `send_bytes
 | `holochain_conductor_network_sent_messages_total` | counter | Messages sent, kept as a running total across connections that have closed |
 | `holochain_conductor_network_received_messages_total` | counter | Messages received, kept as a running total across connections that have closed |
 | `holochain_conductor_blocked_messages_total` | counter | Messages blocked in either direction, summed over every block reason |
-| `holochain_conductor_apps{status}` | gauge | Installed apps by status type from `list-apps`; `enabled` and `disabled` always present, absent when `list-apps` did not answer |
+| `holochain_conductor_apps{conductor, status}` | gauge | Installed apps by status type from `list-apps`; `enabled` and `disabled` always present, absent when `list-apps` did not answer |
 | `holochain_conductor_metrics_scrape_timestamp_seconds` | gauge | When the textfile was last written |
 
 Two properties are worth stating explicitly:
@@ -280,7 +284,7 @@ hc client call --port 4444 dump-network-metrics --include-dht-summary        # 0
 hc sandbox call --running 4444 dump-network-metrics --include-dht-summary     # 0.6
 ```
 
-and passes its reply, with the `list-apps` reply, to `modules/dht-metrics.jq`. The reply is keyed by DNA hash; each entry has a `fetch_state_summary` (`pending_requests`, one entry per operation asked of a peer and not yet received) and a `gossip_state_summary` whose `peer_meta` holds, per peer URL, `last_gossip_timestamp` in microseconds, `completed_rounds`, `peer_timeouts` and the peer's own `dht_op_count`, next to `local_op_count` for this node. Kitsune2 declares these structs identically in `kitsune2_api` 0.4.1 and 0.5.0, and the fixtures under `tests/fixtures/dht-0_6_1/` are both replies as a Holochain 0.6.1 conductor in seven DHTs gave them (a Moss group node, network seeds redacted). `list-apps` names the app and role each DNA belongs to, so every series carries `app` (the installed_app_id), `role` and `dna`:
+and passes its reply, with the `list-apps` reply, to `modules/dht-metrics.jq`. The reply is keyed by DNA hash; each entry has a `fetch_state_summary` (`pending_requests`, one entry per operation asked of a peer and not yet received) and a `gossip_state_summary` whose `peer_meta` holds, per peer URL, `last_gossip_timestamp` in microseconds, `completed_rounds`, `peer_timeouts` and the peer's own `dht_op_count`, next to `local_op_count` for this node. Kitsune2 declares these structs identically in `kitsune2_api` 0.4.1 and 0.5.0, and the fixtures under `tests/fixtures/dht-0_6_1/` are both replies as a Holochain 0.6.1 conductor in seven DHTs gave them (a Moss group node, network seeds redacted). The homelab's Holochain 0.6.3 edgenode conductor, with three apps in four DHTs, gave the second pair of fixtures, under `tests/fixtures/edgenode-0_6_3/`. `list-apps` names the app and role each DNA belongs to, so every series carries `conductor`, `app_id` (the installed_app_id), `role` and `dna`, and nothing else: machine keys only.
 
 | Series | Type | Meaning |
 |---|---|---|
@@ -294,9 +298,37 @@ and passes its reply, with the `list-apps` reply, to `modules/dht-metrics.jq`. T
 
 The two counters are sums over the peers the conductor still knows, so forgetting a peer lowers them, which `rate()` reads as a reset; they are exported as the conductor keeps them rather than folded into running totals the way the byte counters are.
 
+#### Names
+
+No hash, loopback port or role id is meant to reach a screen, and a rename must never split a data series. So names travel apart from the data, on two info families whose value is always 1, written by the same program and joined at query time:
+
+| Series | Labels |
+|---|---|
+| `holochain_app_info` | `conductor`, `app_id`, `app_name`, `app_kind`, `status` (the `list-apps` status, or `expected`) |
+| `holochain_dht_info` | `conductor`, `app_id`, `role`, `dna`, `app_name`, `app_kind`, `part_name`, `network_label` |
+
+Everything that knows a name puts it in a JSON file the program reads as the third document on the jq's stdin, so this program stays the only writer of both families and a dashboard join never meets two rows for one key:
+
+```json
+{
+  "apps": { "requests-and-offers": { "name": "Requests & Offers", "roles": { "requests_and_offers": "Listings", "hrea": "Accounting" } } },
+  "kinds": { "Vines": { "rVines": "Messages", "rFiles": "Files" } },
+  "expected": ["hrea", "kando", "requests-and-offers"]
+}
+```
+
+The edgenode module writes it from each app's `displayName` and `roleNames`, and lists in `expected` every app it manages with `installed = true`. What a name falls back to when nobody gave one:
+
+- **`app_name`**: the bundle's name from `list-apps`, underscores and dashes read as spaces and the first letter capitalised (`requests_and_offers` reads "Requests and offers"). A Moss tool (`applet#...`) takes its kind instead, and a Moss group (`group#...`) reads "Group". Two apps that would read alike, the two chats of one Moss tool for instance, are numbered in the order of their installed_app_id ("Vines 1", "Vines 2"), so a hash is never how two of them are told apart.
+- **`app_kind`**: for a Moss app, the bundle's name without the "h" before a capital (`hVines` reads "Vines"), or "Group"; for any other app, its `app_name` again.
+- **`part_name`**: the app's own `roles` entry, then the `kinds` table for the app's kind, then nothing when the app has a single role (its network then reads by the app's name alone, "Kando" rather than "Kando kando"), and otherwise the role id with a one-letter prefix dropped (`rFiles` reads "Files").
+- **`network_label`**: `app_name` alone for a one-part app, else "app_name: part_name".
+
+An app in `expected` that `list-apps` does not list, or every expected app when `list-apps` did not answer, is still written to `holochain_app_info`, with `status="expected"`, so a dashboard can show it as not running instead of losing it. A names file that is missing or of the wrong shape costs the names, never the series. `checks.metricsNameShape` fails when any `app_name`, `app_kind`, `part_name` or `network_label` the program writes for the two fixture conductors contains `$` (Moss's case escape), starts with `uhC` (a hash), or is a run of twenty or more id characters without a space.
+
 What happens when something goes wrong is chosen so that it costs only these series. Either call failing writes no `holochain_dht_*` line at all, rather than zeros that would read as a DHT with no peers; a cell whose DNA the reply does not list is skipped for the same reason. Label values are escaped, since an app id is free text and one unescaped quote would make node_exporter drop the whole file. And the script appends the jq output only when jq exits cleanly, so a reply of an unexpected shape loses the DHT series for that run and never the conductor series. Both replies reach jq on stdin rather than as `--argjson`: a `list-apps` reply carries every DNA's properties, the Moss node above answers 110 KB for three apps, and Linux caps a single command-line argument at 128 KiB.
 
-`checks.dhtMetricsJq` runs the jq on the captured replies and checks the numbers of one DHT by hand, then on each call failing, on an empty network, and on an app id with a quote, a backslash and a newline in it next to stem, cloned and unlisted cells and fields of the wrong type, passing every output through `promtool check metrics`. `vmTestWithHapp` and `vmTestWithHapp-0_6` install a real hApp and assert that every cell `list-apps` reports has its seven series on `/metrics`, with 0 peers and -1 seconds since gossip on a node that is alone on its network.
+`checks.dhtMetricsJq` runs the jq on both pairs of captured replies and checks the numbers of one DHT by hand, the names with no names file, with a Moss-shaped one and with the one the edgenode module writes, that every data series has exactly one info row with its key and that names never change a data line; then each call failing, an empty network, `list-apps` not answering while apps are expected, names files of the wrong shape, and an app id and a conductor name with a quote, a backslash and a newline in them next to stem, cloned and unlisted cells and fields of the wrong type, passing every output through `promtool check metrics`. `vmTestWithHapp` and `vmTestWithHapp-0_6` install a real hApp and assert that every cell `list-apps` reports has its seven series on `/metrics` and one `holochain_dht_info` row, with 0 peers and -1 seconds since gossip on a node that is alone on its network.
 
 ### 2. Prometheus and Grafana
 
@@ -304,7 +336,7 @@ What happens when something goes wrong is chosen so that it costs only these ser
 
 The Services panel reads `node_systemd_unit_state`, which node_exporter's systemd collector exports for every unit on the node except device, scope and slice units; both modules pass `--collector.systemd.unit-exclude` so that mount units, which node_exporter leaves out by default, are counted when they fail. Which units it shows is the `units` variable, and its default comes from the `overviewUnits` option: the module rewrites that one default into each provisioned dashboard on its way into the store, because the JSON is read-only once there and a browser edit would not survive a rebuild. Everything else in the JSON reaches Grafana untouched.
 
-`vmTestGrafana` runs the whole path in one VM, scraping its own node_exporter and a second target nothing listens on. Its edgenode installs one hApp, so the conductor is in DHTs and the per-DHT panels have series to query; the test requires them to name that app, 0 peers, -1 seconds since gossip (drawn as never) and a best peer holding 0 operations. It waits for the conductor, asserts `holochain_conductor_up 1` appears on `/metrics`, asserts the live target is up and the dead one down, asserts Prometheus kept the series, and asserts Grafana's search API returns the provisioned dashboard and its data source. It then reads the dashboard back from Grafana's API and checks every panel title, that the `units` default carries `overviewUnits`, and that the `instance` variable's own `label_values` definition finds both targets. It runs every query on the dashboard against Prometheus with the variables filled in, once for all nodes and once for the live node alone, requiring a non-empty answer from all of them except those on `node_hwmon_temp_celsius`, which a VM has no sensors for (there it requires the hwmon collector to be running instead); checks that every label a query matches negatively exists on its metric, since a misspelled one would match everything; and checks that mount units are exported. The Overview's failure states are exercised for real: a unit that always fails reads failed on the Services panel and counts under Failed units, the dead target reads down, unknown and node unreachable, and the conductor is then stopped, its metrics timer stopped, and its textfile corrupted, with the Conductor state required to read down, stale and textfile error in turn. The value mappings that colour those states are checked too. Finally it fails on any provisioning error in Grafana's journal.
+`vmTestGrafana` runs the whole path in one VM, scraping its own node_exporter and a second target nothing listens on. Its edgenode installs one hApp, so the conductor is in DHTs and the per-DHT panels have series to query; the test requires them to name that app, 0 peers, -1 seconds since gossip (drawn as never) and a best peer holding 0 operations. It waits for the conductor, asserts `holochain_conductor_up{conductor="Holochain"} 1` appears on `/metrics`, asserts the live target is up and the dead one down, asserts Prometheus kept the series, and asserts Grafana's search API returns the provisioned dashboard and its data source. It then reads the dashboard back from Grafana's API and checks every panel title, that the `units` default carries `overviewUnits`, and that the `instance` variable's own `label_values` definition finds both targets. It runs every query on the dashboard against Prometheus with the variables filled in, once for all nodes and once for the live node alone, requiring a non-empty answer from all of them except those on `node_hwmon_temp_celsius`, which a VM has no sensors for (there it requires the hwmon collector to be running instead); checks that every label a query matches negatively exists on its metric, since a misspelled one would match everything; and checks that mount units are exported. The Overview's failure states are exercised for real: a unit that always fails reads failed on the Services panel and counts under Failed units, the dead target reads down, unknown and node unreachable, and the conductor is then stopped, its metrics timer stopped, and its textfile corrupted, with the Conductor state required to read down, stale and textfile error in turn. The value mappings that colour those states are checked too. Finally it fails on any provisioning error in Grafana's journal.
 
 A fleet is the monitor node naming its peers and every node exporting:
 
