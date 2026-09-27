@@ -27,7 +27,13 @@
   #     node_systemd_unit_state) gets the overviewUnits names as its value
   #     mappings, replacing any it had;
   #   * constant variables named `room_app`, `room_part` and `room_label` get
-  #     the `room` option's values, when it is set.
+  #     the `room` option's values, when it is set;
+  #   * a threshold step that names a `states` option in `fromOption` takes
+  #     that option's value, and the plain steps beside it move with it so
+  #     the steps stay in order, so a colour changes where the state word
+  #     the rules compute changes;
+  #   * the sentences that quote a state's threshold ("more than 90 seconds
+  #     old", "at least 95%") quote the value given instead.
   #
   # Everything else in the directory is copied unchanged. A directory outside
   # the store is read by Grafana at runtime and cannot be rewritten here, so it
@@ -53,6 +59,7 @@
     })
     namedUnits);
   roomJson = builtins.toJSON cfg.room;
+  statesJson = builtins.toJSON cfg.states;
   dashboardsPath = toString cfg.dashboards;
   dashboardsInStore =
     builtins.isPath cfg.dashboards
@@ -62,11 +69,12 @@
     then
       pkgs.runCommand "holochain-grafana-dashboards" {
         nativeBuildInputs = [pkgs.jq];
-        inherit unitsRegex unitMappings roomJson;
+        inherit unitsRegex unitMappings roomJson statesJson;
       } ''
         cp -rL --no-preserve=mode ${cfg.dashboards} $out
         find $out -type f -name '*.json' | while IFS= read -r f; do
-          jq --arg units "$unitsRegex" --argjson mappings "$unitMappings" --argjson room "$roomJson" '
+          jq --arg units "$unitsRegex" --argjson mappings "$unitMappings" --argjson room "$roomJson" \
+            --argjson states "$statesJson" '
             def default($v): .query = $v
               | .current = {text: $v, value: $v}
               | .options = [{selected: true, text: $v, value: $v}];
@@ -84,9 +92,50 @@
                 + [{id: "mappings", value: $mappings}]
               else .
               end;
+            # Steps that come from a state, and the plain steps around them
+            # clamped between them, so the colours keep their order.
+            def restateSteps:
+              if (.steps | type) == "array" and any(.steps[]; type == "object" and has("fromOption"))
+              then .steps |= (map(if type == "object" and has("fromOption") then .value = $states[.fromOption] else . end)
+                | . as $s
+                | [range(length) as $i | $s[$i]
+                   | if has("fromOption") or .value == null then .
+                     else ([$s[:$i][] | select(has("fromOption")) | .value] | max) as $lo
+                       | ([$s[$i + 1:][] | select(has("fromOption")) | .value] | min) as $hi
+                       | .value |= (if $lo != null and . < $lo then $lo else . end
+                           | if $hi != null and . > $hi then $hi else . end)
+                     end])
+              else .
+              end;
+            def plural($n; $unit): "\($n) \($unit)\(if $n == 1 then "" else "s" end)";
+            def seconds:
+              if . >= 3600 and . % 3600 == 0 then plural(. / 3600; "hour")
+              elif . >= 60 and . % 60 == 0 then plural(. / 60; "minute")
+              else plural(.; "second")
+              end;
+            def duration: capture("^(?<n>[0-9]+)(?<u>ms|s|m|h|d|w|y)$")
+              | plural(.n | tonumber; {ms: "millisecond", s: "second", m: "minute", h: "hour", d: "day", w: "week", y: "year"}[.u]);
+            def percent: "\((. * 1000 | round) / 10)%";
+            # Every sentence that quotes a state threshold, as the shipped
+            # dashboards word it with the default states, and as it reads
+            # with the states given. With the defaults each reads the same.
+            def sentences: [
+              ["more than 90 seconds old", "more than \($states.staleAfterSeconds | seconds) old"],
+              ["in 90 s", "in \($states.staleAfterSeconds) s"],
+              ["at 600 s", "at \($states.silentAfterSeconds) s"],
+              ["heard from them for 10 minutes", "heard from them for \($states.silentAfterSeconds | seconds)"],
+              ["under 95%", "under \($states.inStepShare | percent)"],
+              ["less than 95%", "less than \($states.inStepShare | percent)"],
+              ["at least 95%", "at least \($states.inStepShare | percent)"],
+              ["averaged over 10 minutes", "averaged over \($states.shareWindow | duration)"],
+              ["over the last 10 minutes", "over the last \($states.shareWindow | duration)"],
+              ["in the last 24 hours", "in the last \($states.historyWindow | duration)"]
+            ];
+            def restated: reduce sentences[] as [$old, $new] (.; split($old) | join($new));
             if type == "object" and has("panels")
             then (.templating.list // empty) |= map(variable)
               | (.. | objects | select(has("fieldConfig")) | .fieldConfig.overrides // empty) |= map(unitNames)
+              | walk(if type == "object" then restateSteps elif type == "string" then restated else . end)
             else .
             end
           ' "$f" > "$f.tmp"
@@ -405,7 +454,11 @@ in {
         `overviewUnits` on its way in, every field override matched by name
         to `name` given the units' names as value mappings, and the
         `room_app`, `room_part` and `room_label` constants set from `room`
-        when that is set. A directory outside the store, or a
+        when that is set. Every threshold step that names a `states` option
+        in its `fromOption` key takes that option's value, and the sentences
+        that quote a state's threshold quote the value given, so the colours
+        and the words agree with the state the rules compute. A directory
+        outside the store, or a
         store path written as a bare string that carries no Nix string
         context, is provisioned as it is.
       '';

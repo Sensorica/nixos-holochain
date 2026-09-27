@@ -125,7 +125,7 @@ Every app part reads one of six words, worst first: **Not running**, **No fresh 
 
 Two options feed the pages. `overviewUnits` names the systemd units the fleet and node pages watch, and the name a person reads for each: setting it replaces the default, so to add a service and keep the rest, write `overviewUnits = lib.mkOptionDefault { "caddy.service" = "Web server"; };` (a list, `lib.mkOptionDefault [ "caddy.service" ]`, still works and shows the unit name). `room` (`app`, `part`, `label`) picks the one app part whose writes the room screen follows; left unset, that chart says so. Temperatures are empty in this VM and on any machine without hardware sensors; that is expected.
 
-The thresholds behind the words (readings older than 90 s, 10 minutes without contact, 95% of the best peer's data) are `services.holochain-grafana.states`. The sentences on the pages quote the defaults, so a fleet that changes them should say so to its readers.
+The thresholds behind the words (readings older than 90 s, 10 minutes without contact, 95% of the best peer's data) are `services.holochain-grafana.states`. The provisioned dashboards follow them: every colour step that stands for a state threshold, and every sentence that quotes one, is rewritten from the option on its way into the store. A dashboards directory outside the store is not rewritten, so it keeps the defaults.
 
 The dashboards are provisioned, not saved by hand. Editing one in the browser will appear to work and will be discarded on the next rebuild; change the JSON in `modules/dashboards/` instead, and run `checks.dashboardLabels` and `checks.dashboardQueries`.
 

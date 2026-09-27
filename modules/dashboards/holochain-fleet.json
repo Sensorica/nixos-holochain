@@ -793,7 +793,8 @@
                     },
                     {
                       "color": "orange",
-                      "value": 90
+                      "value": 90,
+                      "fromOption": "staleAfterSeconds"
                     },
                     {
                       "color": "red",

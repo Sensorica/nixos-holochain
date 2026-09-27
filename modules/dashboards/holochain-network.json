@@ -725,7 +725,8 @@
               },
               {
                 "color": "red",
-                "value": 600
+                "value": 600,
+                "fromOption": "silentAfterSeconds"
               }
             ]
           },

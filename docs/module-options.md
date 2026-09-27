@@ -982,9 +982,12 @@ and ` holochain-network ` (“Is this app in step on every node?”), one
 app network across every machine\. They read the recording rules of
 holochain-rules\.nix, so they agree on every state\.
 
-When the directory holds a ` holochain-now.json `, the module makes it
-Grafana’s home page (` services.grafana.settings.dashboards.default_home_dashboard_path `,
-at default priority, so a definition of your own wins)\.
+For a directory in the Nix store, the module sets Grafana’s home page
+(` services.grafana.settings.dashboards.default_home_dashboard_path `,
+at default priority, so a definition of your own wins): its
+` holochain-now.json ` when it has one, otherwise a copy of Grafana’s
+own home page\. The choice is made while building, so a directory
+inside a package is not built during evaluation\.
 
 A directory in the Nix store (a path in your flake, or a directory
 inside a flake input or package such as ` "${inputs.x}/dashboards" `)
@@ -992,7 +995,11 @@ has every dashboard’s ` units ` textbox variable set from
 ` overviewUnits ` on its way in, every field override matched by name
 to ` name ` given the units’ names as value mappings, and the
 ` room_app `, ` room_part ` and ` room_label ` constants set from ` room `
-when that is set\. A directory outside the store, or a
+when that is set\. Every threshold step that names a ` states ` option
+in its ` fromOption ` key takes that option’s value, and the sentences
+that quote a state’s threshold quote the value given, so the colours
+and the words agree with the state the rules compute\. A directory
+outside the store, or a
 store path written as a bare string that carries no Nix string
 context, is provisioned as it is\.
 
