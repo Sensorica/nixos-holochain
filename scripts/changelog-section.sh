@@ -29,14 +29,22 @@ fi
 # regex wildcards, and the closing bracket keeps [0.1.0] from matching
 # [0.1.0-rc.1]. After the bracket only the end of the line or the Keep a
 # Changelog " - DATE" suffix is accepted.
+#
+# A carriage return is dropped from every line, so a CRLF file reads like an LF
+# one, and trailing blanks after a heading are ignored. Inside a fenced code
+# block (``` or ~~~) a line starting "## [" or "[x]: " is content, not the end
+# of the section.
 notes=$(awk -v heading="## [$version]" '
+  { sub(/\r$/, "") }
   !found && index($0, heading) == 1 {
     rest = substr($0, length(heading) + 1)
+    sub(/[[:space:]]+$/, "", rest)
     if (rest == "" || rest ~ /^ - /) { found = 1; next }
   }
-  found && /^## \[/ { exit }
-  found && /^\[[^]]+\]: / { exit }
-  found && /^[[:space:]]*$/ { blanks++; next }
+  found && !fence && /^## \[/ { exit }
+  found && !fence && /^\[[^]]+\]: / { exit }
+  found && /^ ? ? ?(```|~~~)/ { fence = !fence }
+  found && !fence && /^[[:space:]]*$/ { blanks++; next }
   found {
     if (started) { while (blanks > 0) { print ""; blanks-- } }
     blanks = 0
