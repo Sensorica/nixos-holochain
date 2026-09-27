@@ -64,17 +64,21 @@
   failed = config:
     lib.filter (lib.hasPrefix "services.holochain-grafana")
     (map (a: a.message) (lib.filter (a: !a.assertion) config.assertions));
+  # This module's warnings.
+  warned = config: lib.filter (lib.hasPrefix "services.holochain-grafana") config.warnings;
   dashboardsOf = config: (builtins.head config.services.grafana.provision.dashboards.settings.providers).options.path;
 
   facts = pkgs.writeText "provisioning-facts.json" (builtins.toJSON {
     list = {
       scrape = scrape list;
       failed = failed list;
+      warnings = warned list;
     };
     shared.failed = failed shared;
     named = {
       scrape = scrape named;
       failed = failed named;
+      warnings = warned named;
       units = named.services.holochain-grafana.overviewUnits;
       ruleFiles = map toString named.services.prometheus.ruleFiles;
     };
@@ -98,6 +102,11 @@ in
       {targets: ["10.0.0.3:9100"], labels: {node: "10.0.0.3"}},
       {targets: ["[fd00::7]:9100"], labels: {node: "[fd00::7]"}}]'
     check '.list.failed == []'
+    # A list entry given by an IP address goes by that address, and the
+    # module says so; a host name and a loopback do not warn.
+    check '.list.warnings | length == 2
+      and (map(select(contains("\"10.0.0.3\""))) | length == 1)
+      and (map(select(contains("\"[fd00::7]\""))) | length == 1)'
     # Two targets that would go by one name are refused, by that name.
     check '.shared.failed | length == 1 and (.[0] | contains("\"monitor\""))'
     # An attrset names each node by its key, with its site when given.
@@ -105,6 +114,7 @@ in
       {targets: ["127.0.0.1:9100"], labels: {node: "homelab"}},
       {targets: ["edgenode-01:9100"], labels: {node: "lab-1", site: "Sensorica lab"}}]'
     check '.named.failed == []'
+    check '.named.warnings == []'
     # List and attrset definitions merge into the named default.
     check '.named.units["holochain-conductor.service"] == "Holochain conductor"
       and .named.units["caddy.service"] == null

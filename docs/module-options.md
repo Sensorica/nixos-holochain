@@ -1103,7 +1103,9 @@ way)\.
 This only picks what the Services panel draws\. The Fleet status panel
 counts every failed unit on the node whatever is listed here, except
 device, scope and slice units, which the node_exporter flags these
-modules set leave out\.
+modules set leave out, and the ` holochain:node_problem ` rule gives
+each failed unit a sentence of its own, naming it by its name here or,
+when it has none or is not listed, by its unit name\.
 
 
 
@@ -1310,14 +1312,16 @@ string
 The node_exporter of every node Prometheus scrapes, and the name each
 node goes by on the dashboards\. Prometheus attaches the name to every
 series from the target as the ` node ` label, so a node that is down is
-still shown by its name, and the dashboards never show an address\.
+still shown by its name\.
 
 As an attribute set, each key is the node’s name, and the value gives
 its ` address ` (host:port) and, optionally, its ` site `, which becomes a
 ` site ` label\. As a list of host:port strings, each node is named after
 the host part of its address, except that a loopback address
 (127\.0\.0\.1, localhost, ::1) takes this machine’s
-` networking.hostName `\.
+` networking.hostName `\. A list entry given by an IP address therefore
+goes by that address on every dashboard, and evaluation warns about
+it: give such a node a name with the attribute set form\.
 
 No two targets may go by the same name: the dashboards aggregate by
 ` node `, so two targets named alike would read as one machine\. Two

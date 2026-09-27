@@ -1001,8 +1001,9 @@
           # The recording rules every dashboard reads, under promtool's rule
           # tests: a node alone, nodes in step and catching up, contact lost
           # three ways, readings that stop, the homelab's two conductors from
-          # the exporter's jq on the captured replies, an app expected and not listed, a DHT
-          # with no name, node states, and a machine in trouble. Each
+          # the exporter's jq on the captured replies, an app expected and not listed, DHTs
+          # with no name, node states, conductors under the default name, a
+          # machine in trouble and a healthy one. Each
           # expectation is also broken on its own and must then fail.
           holochainRules = import ./tests/rules.nix {
             inherit pkgs;
@@ -1153,6 +1154,14 @@
               # A unit in the failed state, for the Overview to show as one.
               systemd.services.always-fails = {
                 description = "A unit that always fails, for vmTestGrafana";
+                wantedBy = ["multi-user.target"];
+                script = "exit 1";
+              };
+              # One that fails and is not watched: the problem list still
+              # names it, since no panel that filters on the watched units
+              # would.
+              systemd.services.fails-unwatched = {
+                description = "A unit that always fails and is not in overviewUnits, for vmTestGrafana";
                 wantedBy = ["multi-user.target"];
                 script = "exit 1";
               };
@@ -1593,19 +1602,23 @@
               wait_values('max by (network_label) (holochain:dht_state:named{conductor="Holochain"})', "q-live-states",
                           {n: "3" for n in dht_names}, "network_label")
 
-              # In words: the unit that always fails, and nothing that would
-              # mean the readings or the names are broken.
+              # In words: the two units that always fail, each by its name,
+              # the watched one and the one no panel watches, and nothing else:
+              # no disk, memory or heat problem on a healthy VM, and nothing
+              # that would mean the readings or the names are broken.
+              expected_problems = {"always-fails.service has failed", "fails-unwatched.service has failed"}
+              machine.wait_until_succeeds(
+                  "curl -s --get localhost:9090/api/v1/query"
+                  " --data-urlencode 'query=count(holochain:node_problem{node=\"machine\", problem=~\".* has failed\"})'"
+                  " | jq -e '.data.result[0].value[1] == \"2\"'",
+                  timeout=120,
+              )
               problems = {
                   r["metric"]["problem"]
                   for r in wait_non_empty('holochain:node_problem{node="machine"}', "q-problems")
               }
               machine.log("problems: " + json.dumps(sorted(problems)))
-              assert "A service has failed" in problems, problems
-              for p in problems:
-                  assert not p.startswith("Holochain (") and p not in {
-                      "Some app parts have no name yet",
-                      "A metrics file could not be read (see the node_exporter log)",
-                  }, problems
+              assert problems == expected_problems, problems
 
               # The fixtures go, so what follows sees the live conductor alone.
               machine.succeed("rm ${textfileDir}/fixture-workshop.prom ${textfileDir}/fixture-moss.prom")

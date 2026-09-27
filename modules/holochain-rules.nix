@@ -38,8 +38,16 @@
   interval,
   # services.holochain-grafana.states.
   states,
+  # services.holochain-grafana.overviewUnits: a unit regex to the name a
+  # person reads for it, or to null. A failed unit is named by it in its
+  # problem sentence, else by its unit name.
+  unitNames ? {},
 }: let
   num = builtins.toJSON;
+  # A PromQL string literal, and a label_replace replacement that is taken as
+  # it is (a `$` in it would otherwise refer to a capture).
+  str = builtins.toJSON;
+  literal = text: builtins.replaceStrings ["$"] ["$$"] text;
 
   stale = num states.staleAfterSeconds;
   silent = num states.silentAfterSeconds;
@@ -57,6 +65,45 @@
   virtualFs = ''fstype!~"tmpfs|ramfs|overlay|squashfs|nsfs"'';
 
   problem = text: expr: ''label_replace(${expr}, "problem", "${text}", "", "")'';
+
+  # A conductor's problem, which says which conductor, except for one named
+  # "Holochain" (conductorMetrics.name's default, so every single-conductor
+  # node), which would read "Holochain (Holochain) ...".
+  conductorProblem = text: expr: ''
+    label_replace(
+      label_replace(max by (instance, node, site, conductor) (${expr}),
+        "problem", "Holochain ($1) ${text}", "conductor", "(.*)"),
+      "problem", "Holochain ${text}", "conductor", "Holochain")'';
+
+  # One sentence per failed unit, naming it, watched or not: a failed unit
+  # the dashboards do not watch is on no other panel. label_replace anchors
+  # its regex, as Prometheus anchors the `units` match, so a key such as
+  # `restic-backups-.*` names every unit it matches.
+  namedUnits = builtins.filter (unit: unitNames.${unit} != null) (builtins.attrNames unitNames);
+  failedUnits =
+    builtins.foldl' (expr: unit: ''
+      label_replace(${expr},
+        "problem", ${str "${literal unitNames.${unit}} has failed"}, "name", ${str unit})'')
+    ''label_replace(node_systemd_unit_state{state="failed"} > 0, "problem", "$1 has failed", "name", "(.*)")''
+    namedUnits;
+
+  # The name of a part with no info row, from its role id, as the exporter
+  # makes one (part_pretty in dht-metrics.jq): a one-letter prefix before a
+  # capital goes ("rFiles" reads "Files"), runs of `_` and `-` become spaces
+  # (up to six of them), and the first letter becomes a capital
+  # ("requests_and_offers" reads "Requests and offers"). PromQL has no string
+  # functions, so each step is a label_replace of the whole value.
+  lower = "abcdefghijklmnopqrstuvwxyz";
+  upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  onPart = expr: replacement: regex: ''label_replace(${expr}, "part_name", "${replacement}", "part_name", "${regex}")'';
+  prettyPart = expr: let
+    copied = ''label_replace(${expr}, "part_name", "$1", "role", "(.*)")'';
+    unprefixed = onPart copied "$1" "[a-z]([A-Z].*)";
+    spaced = builtins.foldl' (e: _: onPart e "$1 $2" "(.*?)[_-]+(.*)") unprefixed (builtins.genList (i: i) 6);
+    trimmed = onPart spaced "$1" " *(.*?) *";
+  in
+    builtins.foldl' (e: i: onPart e "${builtins.substring i 1 upper}$1" "${builtins.substring i 1 lower}(.*)")
+    trimmed (builtins.genList (i: i) 26);
 in {
   groups = [
     {
@@ -70,17 +117,18 @@ in {
         }
 
         # The names of every DHT, with a fallback for one that has no info
-        # row, so it is still drawn, as "Unnamed app", and still counted.
+        # row, so it is still drawn, as "Unnamed app" and a part named after
+        # its role, and still counted. Two such apps that share a role read
+        # alike: no label may carry the app id, and the problem "Some app
+        # parts have no name yet" asks for the names.
         {
           record = "holochain:dht_names";
           expr = ''
             holochain_dht_info
             or on (${dht})
             label_replace(
-              label_replace(
-                label_replace(holochain_dht_peers * 0 + 1, "app_name", "Unnamed app", "", ""),
-                "part_name", "$1", "role", "(.*)"),
-              "network_label", "Unnamed app: $1", "role", "(.*)")'';
+              ${prettyPart ''label_replace(holochain_dht_peers * 0 + 1, "app_name", "Unnamed app", "", "")''},
+              "network_label", "Unnamed app: $1", "part_name", "(.*)")'';
         }
 
         # The share of the best peer's data held here, only while there is a
@@ -98,6 +146,11 @@ in {
             and on (${dht}) (holochain_dht_peers > 0)'';
         }
 
+        # The history is kept per full key, so it starts afresh when the key
+        # of a DHT's series changes, as at the switch from an exporter that
+        # wrote other labels. For up to historyWindow after such a change, a
+        # DHT that lost its peers before it reads No one else yet rather than
+        # Lost contact, unless another node of the fleet runs its DNA.
         {
           record = "holochain:dht_had_peers";
           expr = "max_over_time(holochain_dht_peers[${historyWindow}]) > bool 0";
@@ -196,15 +249,13 @@ in {
         {
           record = "holochain:node_problem";
           expr = ''
-              ${problem "A service has failed" ''max by (instance, node, site) (node_systemd_unit_state{state="failed"}) > 0''}
+              max by (instance, node, site, problem) (${failedUnits})
             or ${problem "A disk is over 90% full" "max by (instance, node, site) (1 - node_filesystem_avail_bytes{${virtualFs}} / node_filesystem_size_bytes{${virtualFs}}) > 0.9"}
             or ${problem "Memory is over 90% used" "max by (instance, node, site) (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.9"}
             or ${problem "Running hot (over 85 °C)" "max by (instance, node, site) (node_hwmon_temp_celsius) > 85"}
             or ${problem "A metrics file could not be read (see the node_exporter log)" "max by (instance, node, site) (node_textfile_scrape_error) > 0"}
-            or label_replace(max by (instance, node, site, conductor) (holochain_conductor_up == 0),
-                "problem", "Holochain ($1) is not answering", "conductor", "(.*)")
-            or label_replace(max by (instance, node, site, conductor) (holochain:conductor_fresh == 0),
-                "problem", "Holochain ($1) readings are over ${stale} s old", "conductor", "(.*)")
+            or ${conductorProblem "is not answering" "holochain_conductor_up == 0"}
+            or ${conductorProblem "readings are over ${stale} s old" "holochain:conductor_fresh == 0"}
             or ${problem "Some app parts have no name yet" ''count by (instance, node, site) (holochain:dht_names{app_name="Unnamed app"}) > 0''}'';
         }
       ];

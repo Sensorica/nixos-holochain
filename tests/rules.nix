@@ -35,6 +35,27 @@
 
   up = node: value: series "up" (target node) (hold value);
 
+  # node_exporter's series for one unit in one state, one filesystem (its
+  # size is 100, so `avail` is its free percentage) and one sensor.
+  unitState = at: name: state: value:
+    series "node_systemd_unit_state" (at
+      // {
+        inherit name state;
+        type = "simple";
+      }) (hold value);
+  disk = at: device: fstype: mountpoint: avail: let
+    fs = at // {inherit device fstype mountpoint;};
+  in [
+    (series "node_filesystem_avail_bytes" fs (hold avail))
+    (series "node_filesystem_size_bytes" fs (hold 100))
+  ];
+  temperature = at: value:
+    series "node_hwmon_temp_celsius" (at
+      // {
+        chip = "platform_coretemp_0";
+        sensor = "temp1";
+      }) (hold value);
+
   conductor = {
     node,
     name ? "Workshop",
@@ -486,40 +507,68 @@
     }
 
     {
-      name = "a DHT without a name: Unnamed app, and a problem";
+      name = "DHTs without a name: Unnamed app, parts named after their roles, and a problem";
       input_series =
         [(up "lab-1" 1)]
         ++ conductor {node = "lab-1";}
-        ++ dht {
-          node = "lab-1";
-          app = "mystery";
-          role = "main";
-          dna = "dnaM";
-          peers = hold 0;
-          local = hold 7;
-        };
+        ++ lib.concatMap ({
+          role,
+          dna,
+        }:
+          dht {
+            node = "lab-1";
+            app = "mystery";
+            inherit role dna;
+            peers = hold 0;
+            local = hold 7;
+          }) [
+          {
+            role = "rFiles";
+            dna = "dnaF";
+          }
+          {
+            role = "requests_and_offers";
+            dna = "dnaR";
+          }
+        ];
       promql_expr_test = [
-        (expect "holochain:dht_names" "30m" [
-          (recorded "holochain:dht_names" (target "lab-1"
+        (expect "holochain:dht_names" "30m" (map ({
+          role,
+          dna,
+          part,
+        }:
+          recorded "holochain:dht_names" (target "lab-1"
             // {
               conductor = "Workshop";
               app_id = "mystery";
-              role = "main";
-              dna = "dnaM";
+              inherit role dna;
               app_name = "Unnamed app";
-              part_name = "main";
-              network_label = "Unnamed app: main";
+              part_name = part;
+              network_label = "Unnamed app: ${part}";
             })
-          1)
+          1) [
+          {
+            role = "rFiles";
+            dna = "dnaF";
+            part = "Files";
+          }
+          {
+            role = "requests_and_offers";
+            dna = "dnaR";
+            part = "Requests and offers";
+          }
+        ]))
+        (expect "max by (network_label) (holochain:dht_state:named)" "30m" [
+          (sample {network_label = "Unnamed app: Files";} 3)
+          (sample {network_label = "Unnamed app: Requests and offers";} 3)
         ])
-        (expect "max by (network_label) (holochain:dht_state:named)" "30m" [(sample {network_label = "Unnamed app: main";} 3)])
         (expect "holochain:node_problem" "30m" [
           (recorded "holochain:node_problem" {
               instance = "lab-1:9100";
               node = "lab-1";
               problem = "Some app parts have no name yet";
             }
-            1)
+            2)
         ])
       ];
     }
@@ -557,57 +606,58 @@
     }
 
     {
+      name = "conductors under the default name: Holochain, said once";
+      input_series =
+        [(up "lab-1" 1) (up "lab-2" 1)]
+        ++ conductor {
+          node = "lab-1";
+          name = "Holochain";
+          stamp = "0+60x10 600x50";
+        }
+        ++ conductor {
+          node = "lab-2";
+          name = "Holochain";
+          isUp = 0;
+        };
+      promql_expr_test = [
+        (expect "holochain:node_problem" "30m" [
+          (recorded "holochain:node_problem" {
+              instance = "lab-1:9100";
+              node = "lab-1";
+              conductor = "Holochain";
+              problem = "Holochain readings are over 90 s old";
+            }
+            0)
+          (recorded "holochain:node_problem" {
+              instance = "lab-2:9100";
+              node = "lab-2";
+              conductor = "Holochain";
+              problem = "Holochain is not answering";
+            }
+            0)
+        ])
+      ];
+    }
+
+    {
       name = "a machine in trouble: problems in words";
       input_series = let
         at = target "lab-1";
-      in [
-        (up "lab-1" 1)
-        (series "node_systemd_unit_state" (at
-          // {
-            name = "x.service";
-            state = "failed";
-            type = "simple";
-          }) (hold 1))
-        (series "node_systemd_unit_state" (at
-          // {
-            name = "x.service";
-            state = "active";
-            type = "simple";
-          }) (hold 0))
-        (series "node_filesystem_avail_bytes" (at
-          // {
-            device = "sda1";
-            fstype = "ext4";
-            mountpoint = "/";
-          }) (hold 5))
-        (series "node_filesystem_size_bytes" (at
-          // {
-            device = "sda1";
-            fstype = "ext4";
-            mountpoint = "/";
-          }) (hold 100))
-        # A full tmpfs is not a disk anyone fills.
-        (series "node_filesystem_avail_bytes" (at
-          // {
-            device = "tmpfs";
-            fstype = "tmpfs";
-            mountpoint = "/run";
-          }) (hold 0))
-        (series "node_filesystem_size_bytes" (at
-          // {
-            device = "tmpfs";
-            fstype = "tmpfs";
-            mountpoint = "/run";
-          }) (hold 100))
-        (series "node_memory_MemAvailable_bytes" at (hold 5))
-        (series "node_memory_MemTotal_bytes" at (hold 100))
-        (series "node_hwmon_temp_celsius" (at
-          // {
-            chip = "platform_coretemp_0";
-            sensor = "temp1";
-          }) (hold 90))
-        (series "node_textfile_scrape_error" at (hold 1))
-      ];
+      in
+        [(up "lab-1" 1)]
+        # One failed unit with no name, one named in the default overviewUnits
+        # and one named by a regex key of it; each problem names its unit.
+        ++ lib.concatMap (unit: [
+          (unitState at unit "failed" 1)
+          (unitState at unit "active" 0)
+        ]) ["x.service" "holochain-conductor.service" "docker-wind-tunnel-runner.service"]
+        ++ disk at "sda1" "ext4" "/" 5
+        ++ [
+          (series "node_memory_MemAvailable_bytes" at (hold 5))
+          (series "node_memory_MemTotal_bytes" at (hold 100))
+          (temperature at 90)
+          (series "node_textfile_scrape_error" at (hold 1))
+        ];
       promql_expr_test = [
         (expect "count by (node, problem) (holochain:node_problem)" "30m" (map (problem:
           sample {
@@ -615,13 +665,41 @@
             inherit problem;
           }
           1) [
-          "A service has failed"
+          "x.service has failed"
+          "Holochain conductor has failed"
+          "Wind Tunnel runner has failed"
           "A disk is over 90% full"
           "Memory is over 90% used"
           "Running hot (over 85 °C)"
           "A metrics file could not be read (see the node_exporter log)"
         ]))
         (expect nodeStates "30m" [(sample {node = "lab-1";} 4)])
+      ];
+    }
+
+    {
+      # Just under every threshold, and a full tmpfs, which is not a disk
+      # anyone fills: nothing to act on. Without this case a rule that fired
+      # on any machine would still pass the one above.
+      name = "a healthy machine: no problem";
+      input_series = let
+        at = target "lab-1";
+      in
+        [
+          (up "lab-1" 1)
+          (unitState at "x.service" "failed" 0)
+          (unitState at "x.service" "active" 1)
+        ]
+        ++ disk at "sda1" "ext4" "/" 11
+        ++ disk at "tmpfs" "tmpfs" "/run" 0
+        ++ [
+          (series "node_memory_MemAvailable_bytes" at (hold 11))
+          (series "node_memory_MemTotal_bytes" at (hold 100))
+          (temperature at 84)
+          (series "node_textfile_scrape_error" at (hold 0))
+        ];
+      promql_expr_test = [
+        (expect "holochain:node_problem" "30m" [])
       ];
     }
   ];
