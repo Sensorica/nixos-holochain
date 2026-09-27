@@ -524,7 +524,7 @@
             "type": "prometheus",
             "uid": "holochain-prometheus"
           },
-          "expr": "holochain:dht_state:named{node=\"$node\", conductor=~\"$conductor\"}",
+          "expr": "holochain:dht_state:named{node=\"$node\", conductor=~\"$conductor\"} + 0",
           "format": "table",
           "instant": true,
           "range": false
@@ -535,7 +535,7 @@
             "type": "prometheus",
             "uid": "holochain-prometheus"
           },
-          "expr": "holochain:dht_peers:named{node=\"$node\", conductor=~\"$conductor\"}",
+          "expr": "holochain:dht_peers:named{node=\"$node\", conductor=~\"$conductor\"} + 0",
           "format": "table",
           "instant": true,
           "range": false
@@ -546,7 +546,7 @@
             "type": "prometheus",
             "uid": "holochain-prometheus"
           },
-          "expr": "holochain:dht_share:named{node=\"$node\", conductor=~\"$conductor\"}",
+          "expr": "holochain:dht_share:named{node=\"$node\", conductor=~\"$conductor\"} + 0",
           "format": "table",
           "instant": true,
           "range": false
@@ -557,7 +557,7 @@
             "type": "prometheus",
             "uid": "holochain-prometheus"
           },
-          "expr": "holochain:dht_heard:named{node=\"$node\", conductor=~\"$conductor\"} unless on (instance, conductor, app_id, role, dna) (holochain:dht_state == 3)",
+          "expr": "(holochain:dht_heard:named{node=\"$node\", conductor=~\"$conductor\"} unless on (instance, conductor, app_id, role, dna) (holochain:dht_state == 3)) + 0",
           "format": "table",
           "instant": true,
           "range": false
