@@ -210,6 +210,31 @@
           exporter = conductorExporter;
         };
 
+        # A monitor node's evaluated config, for the checks that read what the
+        # grafana module renders without booting anything.
+        monitor = extra:
+          (inputs.nixpkgs.lib.nixosSystem {
+            inherit system;
+            modules =
+              [
+                self.nixosModules.holochain-grafana
+                {
+                  networking.hostName = "monitor";
+                  system.stateVersion = "26.05";
+                  services.holochain-grafana.enable = true;
+                }
+              ]
+              ++ extra;
+          }).config;
+        # The recording rules as the module renders them with its defaults.
+        holochainRulesFile = builtins.head (monitor []).services.prometheus.ruleFiles;
+        # Two conductors' textfiles at the capture's clock, for the rule tests
+        # and vmTestGrafana.
+        fixtureTextfiles = import ./tests/fixture-textfiles.nix {
+          inherit pkgs jqLib;
+          inherit (metricsChecks) names;
+        };
+
         # ---- generated option reference ------------------------------------
         #
         # docs/module-options.md was hand-written and had already drifted from
@@ -973,6 +998,26 @@
           # at once, as the homelab's one instance serves them.
           inherit (metricsChecks) metricsHelpAgreement metricsNameShape fleetDashboardQueries;
 
+          # The recording rules every dashboard reads, under promtool's rule
+          # tests: a node alone, nodes in step and catching up, contact lost
+          # three ways, readings that stop, the homelab's two conductors from
+          # the exporter's jq on the captured replies, an app expected and not listed, a DHT
+          # with no name, node states, and a machine in trouble. Each
+          # expectation is also broken on its own and must then fail.
+          holochainRules = import ./tests/rules.nix {
+            inherit pkgs;
+            rules = holochainRulesFile;
+            textfiles = fixtureTextfiles;
+          };
+
+          # What the grafana module renders, from evaluated systems: node and
+          # site labels per scrape target, the refusal of two targets sharing
+          # a node name, the rule file with non-default states, and the
+          # dashboard rewrite (units, unit names, room constants).
+          grafanaProvisioning = import ./tests/provisioning.nix {
+            inherit pkgs monitor;
+          };
+
           # The edgenode module's own names wiring, which the checks above
           # only mimic by hand: an evaluated system's metrics unit, run with
           # the exporter binary swapped for one that prints its arguments, so
@@ -1090,7 +1135,15 @@
                 adminPasswordFile = "/var/lib/secrets/grafana-admin-password";
                 # The second target has nothing listening, so the dashboard
                 # has a node that is down to show, next to one that is up.
-                scrapeTargets = ["127.0.0.1:9100" deadTarget];
+                # Named, as a homelab names its nodes: both are on loopback,
+                # where a list would name both after this machine.
+                scrapeTargets = {
+                  machine = {
+                    address = "127.0.0.1:9100";
+                    site = "CI";
+                  };
+                  unplugged.address = deadTarget;
+                };
                 openFirewall = true;
                 # Added to the default list rather than replacing it, both at
                 # option-default priority, so the test sees the default units
@@ -1104,7 +1157,30 @@
                 script = "exit 1";
               };
             };
-            testScript = ''
+            testScript = {nodes, ...}: let
+              # Two more conductors on this node, Workshop and Moss, as the
+              # exporter writes them, in textfiles of their own beside the
+              # live conductor's. Their readings are dated an hour ahead, so
+              # they stay fresh while the test runs.
+              textfileDir = nodes.machine.services.holochain-edgenode.metricsExporter.textfileDirectory;
+              writeFixtures = pkgs.writeShellScript "write-fixture-textfiles" ''
+                set -eu
+                stamp=$(($(date +%s) + 3600))
+                for name in workshop moss; do
+                  sed -E "s/^(holochain_conductor_metrics_scrape_timestamp_seconds[{][^}]*[}]) .*/\1 $stamp/" \
+                    ${fixtureTextfiles}/$name.prom > ${textfileDir}/.fixture-$name.tmp
+                  mv ${textfileDir}/.fixture-$name.tmp ${textfileDir}/fixture-$name.prom
+                done
+              '';
+              # The record names of the rule file this node runs.
+              records =
+                map (rule: rule.record)
+                (builtins.head
+                  (import ./modules/holochain-rules.nix {
+                    interval = nodes.machine.services.holochain-grafana.scrapeInterval;
+                    inherit (nodes.machine.services.holochain-grafana) states;
+                  }).groups).rules;
+            in ''
               import base64
               import json
               import re
@@ -1432,6 +1508,108 @@
                   "2": ("starting or stopping", "yellow"), "3": ("failed", "red"),
                   "4": ("unreachable", "red"),
               }, mapping("Services")
+
+              # ---- node names and the recording rules, over three conductors ----
+              # Every target carries its node's name, and its site when it has one.
+              target_labels = json.loads(machine.succeed(
+                  "curl -s localhost:9090/api/v1/targets"
+                  " | jq -c '[.data.activeTargets[] | {(.labels.instance): (.labels | {node, site})}] | add'"
+              ))
+              machine.log("target labels: " + json.dumps(target_labels))
+              assert target_labels == {
+                  "127.0.0.1:9100": {"node": "machine", "site": "CI"},
+                  "${deadTarget}": {"node": "unplugged", "site": None},
+              }, target_labels
+
+              def wait_values(expr, name, want, key, timeout=180):
+                  # Waits until the query answers exactly `want`, {key label: value}.
+                  path = prom_file(expr, name)
+                  want_json = json.dumps(want)
+                  assert "'" not in want_json, want_json
+                  machine.wait_until_succeeds(
+                      f"curl -s --get localhost:9090/api/v1/query --data-urlencode query@{path}"
+                      f" | jq -e --argjson want '{want_json}'"
+                      f" '[.data.result[] | {{(.metric.{key} // \"\"): .value[1]}}] | add == $want'",
+                      timeout=timeout,
+                  )
+                  machine.log(f"{expr}: {json.dumps(want)}")
+
+              machine.succeed("${writeFixtures}")
+
+              # node_exporter serves every series of the three files, with no
+              # scrape error: the two fixtures declare their families exactly as
+              # the live conductor's exporter does.
+              fixture_dhts = 4 + 7
+              wait_values('count(holochain_dht_peers{conductor=~"Workshop|Moss"})', "q-fixture-dhts", {"": str(fixture_dhts)}, "none")
+              wait_values("count(holochain_dht_peers)", "q-all-dhts", {"": str(fixture_dhts + len(dht_names))}, "none")
+              wait_values("max(node_textfile_scrape_error)", "q-scrape-error", {"": "0"}, "none")
+
+              # Every rule of the file is loaded, has been evaluated, and has
+              # not failed: a join that turns many-to-many on real series
+              # fails the whole rule, with the reason in lastError.
+              # Prometheus leaves lastError out of the reply when it is empty.
+              records = json.loads('${builtins.toJSON records}')
+
+              def rule_states():
+                  groups = json.loads(machine.succeed("curl -s localhost:9090/api/v1/rules"))["data"]["groups"]
+                  return [
+                      (r["name"], r["health"], r.get("lastError", ""), r["lastEvaluation"])
+                      for g in groups for r in g["rules"]
+                  ]
+
+              # Only an evaluation that started after the fixtures were
+              # visible says anything about them.
+              since = int(machine.succeed("date +%s").strip()) + 1
+              try:
+                  machine.wait_until_succeeds(
+                      "curl -s localhost:9090/api/v1/rules"
+                      f" | jq -e --argjson since {since} '[.data.groups[].rules[]"
+                      " | select(.health != \"ok\" or (.lastError // \"\") != \"\""
+                      " or (.lastEvaluation | sub(\"[.][0-9]+Z$\"; \"Z\") | fromdate) < $since)]"
+                      " | length == 0'",
+                      timeout=180,
+                  )
+              finally:
+                  machine.log("rules: " + json.dumps(rule_states()))
+              loaded = rule_states()
+              assert sorted(r[0] for r in loaded) == sorted(records), (sorted(r[0] for r in loaded), records)
+              for name, health, error, _ in loaded:
+                  assert health == "ok" and error == "", (name, health, error)
+
+              # The node reads Running by its worst conductor, and the dead
+              # target reads Unreachable, each by its name.
+              wait_values("holochain:node_state", "q-node-state", {"machine": "3", "unplugged": "0"}, "node")
+              wait_values('max by (conductor) (holochain:conductor_state)', "q-conductor-state",
+                          {"Holochain": "3", "Workshop": "3", "Moss": "3"}, "conductor")
+
+              # The Moss node's shape: the connected chat and the group in step,
+              # the chat nobody else opened alone and grey, not red.
+              wait_values('max by (network_label) (holochain:dht_state:named{conductor="Moss"})', "q-moss-states", {
+                  "Sensorica: Members and tools": "5", "Sensorica: Foyer": "5", "Sensorica: Shared assets": "5",
+                  "General chat: Messages": "5", "General chat: Files": "5",
+                  "Vines 1: Messages": "3", "Vines 1: Files": "3",
+              }, "network_label")
+              # The live app is alone on its network: No one else yet.
+              wait_values('max by (network_label) (holochain:dht_state:named{conductor="Holochain"})', "q-live-states",
+                          {n: "3" for n in dht_names}, "network_label")
+
+              # In words: the unit that always fails, and nothing that would
+              # mean the readings or the names are broken.
+              problems = {
+                  r["metric"]["problem"]
+                  for r in wait_non_empty('holochain:node_problem{node="machine"}', "q-problems")
+              }
+              machine.log("problems: " + json.dumps(sorted(problems)))
+              assert "A service has failed" in problems, problems
+              for p in problems:
+                  assert not p.startswith("Holochain (") and p not in {
+                      "Some app parts have no name yet",
+                      "A metrics file could not be read (see the node_exporter log)",
+                  }, problems
+
+              # The fixtures go, so what follows sees the live conductor alone.
+              machine.succeed("rm ${textfileDir}/fixture-workshop.prom ${textfileDir}/fixture-moss.prom")
+              wait_values("count(holochain_conductor_up)", "q-live-alone", {"": "1"}, "none")
 
               # ---- the conductor, failing in each of the ways the Overview names ----
               def wait_conductor(value, timeout):

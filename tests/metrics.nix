@@ -368,4 +368,9 @@ in {
     '';
 
   inherit runs;
+  # The two names files, for checks that run the jq with a fixed clock.
+  names = {
+    workshop = workshopNames;
+    moss = mossNames;
+  };
 }

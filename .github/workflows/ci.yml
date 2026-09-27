@@ -126,4 +126,6 @@ jobs:
             .#checks.x86_64-linux.vmTestGateway \
             .#checks.x86_64-linux.vmTestWindtunnel \
             .#checks.x86_64-linux.conductorMetricsJq \
-            .#checks.x86_64-linux.dhtMetricsJq
+            .#checks.x86_64-linux.dhtMetricsJq \
+            .#checks.x86_64-linux.holochainRules \
+            .#checks.x86_64-linux.grafanaProvisioning

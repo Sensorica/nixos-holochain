@@ -5,7 +5,9 @@
 #   services.holochain-edgenode.metricsExporter.enable = true;
 #   services.holochain-edgenode.conductorMetrics.enable = true;
 # the first gives the host series, the second the holochain_* series the
-# provisioned dashboard is built around.
+# provisioned dashboard is built around. Prometheus names each node from
+# scrapeTargets and computes every state the dashboards show once, in the
+# recording rules of holochain-rules.nix.
 {
   config,
   lib,
@@ -14,11 +16,20 @@
 }: let
   cfg = config.services.holochain-grafana;
 
-  # A dashboard's variable defaults live in its JSON, and the JSON reaches
-  # Grafana read-only, so the only way a module option can set one is by
-  # rewriting the file on its way into the store. Every provisioned dashboard
-  # with a textbox variable named `units` gets overviewUnits as its default;
-  # everything else in the directory is copied unchanged. A directory outside
+  # A dashboard's variable defaults and value mappings live in its JSON, and
+  # the JSON reaches Grafana read-only, so the only way a module option can set
+  # one is by rewriting the file on its way into the store. In every
+  # provisioned dashboard:
+  #
+  #   * a textbox variable named `units` gets the overviewUnits regex as its
+  #     default;
+  #   * a field override matched by name to `name` (the unit label of
+  #     node_systemd_unit_state) gets the overviewUnits names as its value
+  #     mappings, replacing any it had;
+  #   * constant variables named `room_app`, `room_part` and `room_label` get
+  #     the `room` option's values, when it is set.
+  #
+  # Everything else in the directory is copied unchanged. A directory outside
   # the store is read by Grafana at runtime and cannot be rewritten here, so it
   # is passed through as it is.
   #
@@ -26,7 +37,22 @@
   # store and carries the context that makes it a build input, such as
   # "''${inputs.x}/dashboards". lib.isStorePath alone would miss the second:
   # it is true only for a top-level store path, not for a directory inside one.
-  unitsRegex = lib.concatStringsSep "|" cfg.overviewUnits;
+  unitsRegex = lib.concatStringsSep "|" (lib.attrNames cfg.overviewUnits);
+  # One regex mapping per named unit, anchored the way Prometheus anchors the
+  # `units` match, so an entry that is a regex names every unit it matches.
+  namedUnits = lib.filter (unit: cfg.overviewUnits.${unit} != null) (lib.attrNames cfg.overviewUnits);
+  unitMappings = builtins.toJSON (lib.imap0 (index: unit: {
+      type = "regex";
+      options = {
+        pattern = "^(?:${unit})$";
+        result = {
+          text = cfg.overviewUnits.${unit};
+          inherit index;
+        };
+      };
+    })
+    namedUnits);
+  roomJson = builtins.toJSON cfg.room;
   dashboardsPath = toString cfg.dashboards;
   dashboardsInStore =
     builtins.isPath cfg.dashboards
@@ -36,20 +62,31 @@
     then
       pkgs.runCommand "holochain-grafana-dashboards" {
         nativeBuildInputs = [pkgs.jq];
-        inherit unitsRegex;
+        inherit unitsRegex unitMappings roomJson;
       } ''
         cp -rL --no-preserve=mode ${cfg.dashboards} $out
         find $out -type f -name '*.json' | while IFS= read -r f; do
-          jq --arg units "$unitsRegex" '
-            def isUnits: .name == "units" and .type == "textbox";
-            if type == "object" and ((.templating.list // []) | any(isUnits))
-            then .templating.list |= map(
-              if isUnits
-              then .query = $units
-                | .current = {text: $units, value: $units}
-                | .options = [{selected: true, text: $units, value: $units}]
+          jq --arg units "$unitsRegex" --argjson mappings "$unitMappings" --argjson room "$roomJson" '
+            def default($v): .query = $v
+              | .current = {text: $v, value: $v}
+              | .options = [{selected: true, text: $v, value: $v}];
+            def variable:
+              if .type == "textbox" and .name == "units" then default($units)
+              elif $room == null or .type != "constant" then .
+              elif .name == "room_app" then default($room.app)
+              elif .name == "room_part" then default($room.part)
+              elif .name == "room_label" then default($room.label)
               else .
-              end)
+              end;
+            def unitNames:
+              if .matcher == {id: "byName", options: "name"}
+              then .properties = [(.properties // [])[] | select(.id != "mappings")]
+                + [{id: "mappings", value: $mappings}]
+              else .
+              end;
+            if type == "object" and has("panels")
+            then (.templating.list // empty) |= map(variable)
+              | (.. | objects | select(has("fieldConfig")) | .fieldConfig.overrides // empty) |= map(unitNames)
             else .
             end
           ' "$f" > "$f.tmp"
@@ -71,6 +108,45 @@
     if cfg.secretKeyFile != null
     then credential "secret_key"
     else "$__file{${generatedSecretKey}}";
+
+  # Every scrape target with the name its node goes by on the dashboards.
+  # Prometheus attaches `node` (and `site`, when given) to every series it
+  # scrapes from the target, so a node that is down still has its name.
+  loopback = ["127.0.0.1" "localhost" "::1" "[::1]"];
+  nodeOf = address: let
+    hostPort = builtins.match "(.*):[0-9]+" address;
+    host =
+      if hostPort == null
+      then address
+      else builtins.head hostPort;
+  in
+    if builtins.elem host loopback
+    then config.networking.hostName
+    else host;
+  targets =
+    if builtins.isList cfg.scrapeTargets
+    then
+      map (address: {
+        inherit address;
+        node = nodeOf address;
+        site = null;
+      })
+      cfg.scrapeTargets
+    else
+      lib.mapAttrsToList (node: target: {
+        inherit node;
+        inherit (target) address site;
+      })
+      cfg.scrapeTargets;
+  nodeNames = map (target: target.node) targets;
+  sharedNodeNames = lib.filter (name: lib.count (n: n == name) nodeNames > 1) (lib.unique nodeNames);
+
+  # The recording rules the dashboards read (holochain-rules.nix), evaluated
+  # as often as Prometheus scrapes.
+  rulesFile = (pkgs.formats.yaml {}).generate "holochain-rules.yml" (import ./holochain-rules.nix {
+    interval = cfg.scrapeInterval;
+    inherit (cfg) states;
+  });
 in {
   options.services.holochain-grafana = {
     enable = lib.mkEnableOption "Prometheus + Grafana observability for Holochain fleet";
@@ -88,13 +164,104 @@ in {
     };
 
     scrapeTargets = lib.mkOption {
-      type = lib.types.listOf lib.types.str;
+      type = lib.types.either (lib.types.listOf lib.types.str) (lib.types.attrsOf (lib.types.submodule {
+        options = {
+          address = lib.mkOption {
+            type = lib.types.str;
+            example = "edgenode-01:9100";
+            description = "The node's node_exporter, as host:port.";
+          };
+          site = lib.mkOption {
+            type = lib.types.nullOr lib.types.str;
+            default = null;
+            example = "Sensorica lab";
+            description = "Where the node is, shown beside its name. Left out of its series when null.";
+          };
+        };
+      }));
       default = [];
-      description = "Prometheus node_exporter targets across the fleet (host:port).";
-      example = lib.literalExpression ''
-        [ "edgenode-01:9100" "edgenode-02:9100" "edgenode-03:9100"
-          "edgenode-04:9100" "edgenode-05:9100" ]
+      description = ''
+        The node_exporter of every node Prometheus scrapes, and the name each
+        node goes by on the dashboards. Prometheus attaches the name to every
+        series from the target as the `node` label, so a node that is down is
+        still shown by its name, and the dashboards never show an address.
+
+        As an attribute set, each key is the node's name, and the value gives
+        its `address` (host:port) and, optionally, its `site`, which becomes a
+        `site` label. As a list of host:port strings, each node is named after
+        the host part of its address, except that a loopback address
+        (127.0.0.1, localhost, ::1) takes this machine's
+        `networking.hostName`.
+
+        No two targets may go by the same name: the dashboards aggregate by
+        `node`, so two targets named alike would read as one machine. Two
+        list entries on one host (two ports of a loopback, say) need the
+        attribute set form.
       '';
+      example = lib.literalExpression ''
+        {
+          lab-1 = { address = "edgenode-01:9100"; site = "Sensorica lab"; };
+          lab-2 = { address = "edgenode-02:9100"; site = "Sensorica lab"; };
+          homelab.address = "100.64.0.7:9100";
+        }
+      '';
+    };
+
+    states = {
+      staleAfterSeconds = lib.mkOption {
+        type = lib.types.ints.positive;
+        default = 90;
+        description = ''
+          How old a conductor's readings may get before every DHT of it reads
+          "No fresh readings" and its conductor state reads stale. The default
+          covers the metrics timer's 30 s interval plus the 15 s scrape, with
+          margin; raise it with `conductorMetrics.interval`.
+        '';
+      };
+
+      silentAfterSeconds = lib.mkOption {
+        type = lib.types.ints.positive;
+        default = 600;
+        description = ''
+          How long a DHT that knows peers may go without gossiping with any of
+          them before it reads "Lost contact".
+        '';
+      };
+
+      inStepShare = lib.mkOption {
+        type = lib.types.numbers.between 0 1;
+        default = 0.95;
+        description = ''
+          The share of its best peer's data a connected DHT must hold, on
+          average over `shareWindow`, to read "In step" rather than "Catching
+          up". A healthy DHT rarely holds everything its best peer does, since
+          new data is always on its way, so 1 would read a working network as
+          behind for good; 0.95 is what the Sensorica Moss node's DHTs held on
+          2026-09-27.
+        '';
+      };
+
+      shareWindow = lib.mkOption {
+        type = lib.types.strMatching "[0-9]+(ms|s|m|h|d|w|y)";
+        default = "10m";
+        description = ''
+          The window, as a Prometheus duration, the held share is averaged
+          over, so a DHT does not flap between "In step" and "Catching up" at
+          every write.
+        '';
+      };
+
+      historyWindow = lib.mkOption {
+        type = lib.types.strMatching "[0-9]+(ms|s|m|h|d|w|y)";
+        default = "24h";
+        description = ''
+          How far back, as a Prometheus duration, a DHT with no peer is
+          remembered to have had one. Within it the DHT reads "Lost contact";
+          a DHT that had nobody in all of it, on a DNA no other node of the
+          fleet runs, reads "No one else yet", which is normal for a node that
+          is alone.
+        '';
+      };
     };
 
     scrapeInterval = lib.mkOption {
@@ -201,64 +368,121 @@ in {
         A directory in the Nix store (a path in your flake, or a directory
         inside a flake input or package such as `"''${inputs.x}/dashboards"`)
         has every dashboard's `units` textbox variable set from
-        `overviewUnits` on its way in. A directory outside the store, or a
+        `overviewUnits` on its way in, every field override matched by name
+        to `name` given the units' names as value mappings, and the
+        `room_app`, `room_part` and `room_label` constants set from `room`
+        when that is set. A directory outside the store, or a
         store path written as a bare string that carries no Nix string
         context, is provisioned as it is.
       '';
     };
 
     overviewUnits = lib.mkOption {
-      type = lib.types.listOf lib.types.str;
-      default = [
-        "holochain-conductor.service"
-        "holochain-happ-installer.service"
-        "holochain-conductor-metrics.timer"
-        "holochain-http-gateway.service"
-        "(podman|docker)-wind-tunnel-runner.service"
-        "prometheus.service"
-        "prometheus-node-exporter.service"
-        "grafana.service"
-        "sshd.service"
-        "tailscaled.service"
-        "nix-daemon.socket"
-      ];
+      # A list is what this option took before units had names; each of its
+      # entries becomes a unit without one.
+      type =
+        lib.types.coercedTo (lib.types.listOf lib.types.str) (units: lib.genAttrs units (_: null))
+        (lib.types.attrsOf (lib.types.nullOr lib.types.str));
+      default = {
+        "holochain-conductor.service" = "Holochain conductor";
+        "holochain-happ-installer.service" = "App installer";
+        "holochain-conductor-metrics.timer" = "Holochain readings (timer)";
+        "holochain-http-gateway.service" = "HTTP gateway";
+        "(podman|docker)-wind-tunnel-runner.service" = "Wind Tunnel runner";
+        "prometheus.service" = "Metrics database";
+        "prometheus-node-exporter.service" = "Machine readings";
+        "grafana.service" = "Dashboards";
+        "sshd.service" = "Remote login";
+        "tailscaled.service" = "Private network (Tailscale)";
+        "nix-daemon.socket" = "Nix";
+      };
       example = lib.literalExpression ''
-        [ "holochain-conductor.service" "holochain-happ-installer.service"
-          "sshd.service" "caddy.service" "restic-backups-.*" ]
+        {
+          "holochain-conductor.service" = "Holochain conductor";
+          "caddy.service" = "Web server";
+          "restic-backups-.*" = "Backups";
+        }
       '';
       description = ''
-        systemd units the dashboard's Services panel shows for every node,
-        read from node_exporter's systemd collector (`node_systemd_unit_state`).
+        systemd units the dashboards watch on every node, read from
+        node_exporter's systemd collector (`node_systemd_unit_state`), each
+        with the name a person reads for it. The keys are units, the values
+        their names; a unit whose name is null, or an entry of a plain list of
+        units, is shown by its unit name.
+
         The default covers the long-running units the nixos-holochain modules
-        create, plus the services a fleet node usually runs beside them. Two
-        one-shot helpers are left out: `holochain-conductor-metrics.service`
-        sits idle between runs, so its timer is listed instead, and
-        `grafana-secret-key.service` runs once at boot; if either fails, the
-        Fleet status panel counts it. The Nix daemon is listed by its socket:
-        NixOS starts `nix-daemon.service` on demand, so the service is
-        inactive on an idle node that is perfectly healthy.
+        create, plus the services a fleet node usually runs beside them. It
+        holds only units that stay active while all is well: long-running
+        services, timers, sockets, and the app installer, a one-shot that
+        remains active once it has run. Two one-shot helpers are left out:
+        `holochain-conductor-metrics.service` sits idle between runs, so its
+        timer is listed instead, and `grafana-secret-key.service` runs once at
+        boot; if either fails, the Fleet status panel counts it. The Nix
+        daemon is listed by its socket: NixOS starts `nix-daemon.service` on
+        demand, so the service is inactive on an idle node that is perfectly
+        healthy.
 
-        The panel has one row per node and one column per unit that some
-        selected node has. A unit one node runs and another does not shows as
-        absent on the second node's row; a unit no selected node runs has no
-        column at all, so one list serves a whole fleet whose machines run
-        different things.
+        The names reach a dashboard as value mappings: every field override
+        matched by name to `name` (the unit label) in a provisioned dashboard
+        gets one regex mapping per named unit.
 
-        Each entry is a regular expression Prometheus matches against the
-        whole unit name, suffix included, so `restic-backups-.*` works. The
-        entries are joined with `|` into the default of the dashboard's
-        `units` variable; a viewer can type another regex in the browser,
-        which lives in that page's URL and is never saved to the dashboard.
+        The fleet dashboard's Services panel has one row per node and one
+        column per unit that some selected node has. A unit one node runs and
+        another does not shows as absent on the second node's row; a unit no
+        selected node runs has no column at all, so one set serves a whole
+        fleet whose machines run different things.
 
-        Setting this option replaces the default list. To add a unit and keep
-        the defaults, define it with `lib.mkOptionDefault`, which merges with
-        the default instead of overriding it:
-        `overviewUnits = lib.mkOptionDefault [ "caddy.service" ];`.
+        Each key is a regular expression Prometheus matches against the whole
+        unit name, suffix included, so `restic-backups-.*` works, and its name
+        is given to every unit it matches. The keys are joined with `|` into
+        the default of the dashboard's `units` variable; a viewer can type
+        another regex in the browser, which lives in that page's URL and is
+        never saved to the dashboard.
 
-        This list only picks what the Services panel draws. The Fleet status
-        panel counts every failed unit on the node whatever is listed here,
-        except device, scope and slice units, which the node_exporter flags
-        these modules set leave out.
+        Setting this option replaces the default. To add a unit and keep the
+        defaults, define it with `lib.mkOptionDefault`, which merges with the
+        default instead of overriding it:
+        `overviewUnits = lib.mkOptionDefault { "caddy.service" = "Web server"; };`
+        (a list, `lib.mkOptionDefault [ "caddy.service" ]`, merges the same
+        way).
+
+        This only picks what the Services panel draws. The Fleet status panel
+        counts every failed unit on the node whatever is listed here, except
+        device, scope and slice units, which the node_exporter flags these
+        modules set leave out.
+      '';
+    };
+
+    room = lib.mkOption {
+      type = lib.types.nullOr (lib.types.submodule {
+        options = {
+          app = lib.mkOption {
+            type = lib.types.str;
+            example = "requests-and-offers";
+            description = "The installed_app_id of an app this module's fleet installs from Nix.";
+          };
+          part = lib.mkOption {
+            type = lib.types.str;
+            example = "requests_and_offers";
+            description = "The role of the app whose writes the room follows.";
+          };
+          label = lib.mkOption {
+            type = lib.types.str;
+            example = "Requests & Offers";
+            description = "The name the room screen gives that app.";
+          };
+        };
+      });
+      default = null;
+      description = ''
+        The one app part a room screen follows writes in. Rendered into the
+        constant variables `room_app`, `room_part` and `room_label` of every
+        provisioned dashboard that declares them; when null, those variables
+        keep the defaults their dashboard gives them.
+
+        An app installed by hand in Moss is not a good choice: its id changes
+        with every installation and holds `$`, which Grafana reads as a
+        variable.
       '';
     };
 
@@ -370,13 +594,34 @@ in {
 
       globalConfig.scrape_interval = cfg.scrapeInterval;
 
+      # One static config per target, so each carries its own node's name.
+      # Exporters never write a `node` label of their own: with honor_labels
+      # off, Prometheus would keep the target's and rename theirs.
       scrapeConfigs = [
         {
           job_name = "holochain-nodes";
-          static_configs = [{targets = cfg.scrapeTargets;}];
+          static_configs =
+            map (target: {
+              targets = [target.address];
+              labels =
+                {inherit (target) node;}
+                // lib.optionalAttrs (target.site != null) {inherit (target) site;};
+            })
+            targets;
         }
       ];
+
+      ruleFiles = [rulesFile];
     };
+
+    assertions = [
+      {
+        assertion = sharedNodeNames == [];
+        message = ''
+          services.holochain-grafana.scrapeTargets: more than one target goes by the node name ${lib.concatMapStringsSep ", " (name: "\"${name}\"") sharedNodeNames}. The dashboards aggregate by node, so they would read as one machine. Name each target with the attribute set form: scrapeTargets = { <name> = { address = "host:port"; }; }.
+        '';
+      }
+    ];
 
     # Monitor node also exports its own system metrics. `mkDefault` throughout,
     # because a monitor node that is also an edgenode has these set by
