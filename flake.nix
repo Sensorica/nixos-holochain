@@ -1183,18 +1183,9 @@
             self.nixosModules.holochain-edgenode
             self.nixosModules.holochain-grafana
             self.nixosModules.holochain-windtunnel
-            {
-              _module.args = {
-                fleetLine = {
-                  holochain = holonix06.holochain;
-                  hc = holonix06.hc;
-                };
-                fleetHapps = import ./examples/sensorica-fleet/happs.nix {
-                  inherit pkgs;
-                  hc = holonix06.hc;
-                };
-              };
-            }
+            # The line, hApps and seed, from the same export the fleet's
+            # `fleetModules` import (#33).
+            self.nixosModules.sensorica-event-node
             ./examples/sensorica-fleet/hosts/edgenode-01/configuration.nix
             "${inputs.nixpkgs}/nixos/modules/testing/test-instrumentation.nix"
           ];
