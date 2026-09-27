@@ -452,6 +452,26 @@ in {
       };
     };
 
+    binaryCache.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Declare the Holochain Foundation's binary cache
+        (`https://holochain-ci.cachix.org`) in the host's `nix.settings`, so
+        `holochain` and `hc` are downloaded prebuilt instead of compiled from
+        source. A flake's own `nixConfig` does not reach a downstream flake
+        that imports this module, and without the cache a first
+        `nixos-rebuild switch` compiles the whole Holochain workspace
+        (seen on a homelab rehearsal, 2026-09-26).
+
+        The setting lands in `nix.conf` only once a switch has activated it,
+        so the very first switch that brings it still builds from source
+        unless it is run with
+        `--option extra-substituters https://holochain-ci.cachix.org
+        --option extra-trusted-public-keys <key>`; see docs/deployment.md.
+      '';
+    };
+
     openFirewall = lib.mkOption {
       type = lib.types.bool;
       default = false;
@@ -468,6 +488,11 @@ in {
     warnings =
       lib.optional (!isPre07 && cfg.signalUrl != null)
       "services.holochain-edgenode.signalUrl is set, but network.signal_url was removed from the Holochain 0.7 config schema and is ignored. Use services.holochain-edgenode.relayUrl instead.";
+
+    nix.settings = lib.mkIf cfg.binaryCache.enable {
+      extra-substituters = ["https://holochain-ci.cachix.org"];
+      extra-trusted-public-keys = ["holochain-ci.cachix.org-1:5IUSkZc0aoRS53rfkvH9Kid40NpyjwCMCzwRTXy+QN8="];
+    };
 
     users.users.${cfg.user} = {
       isSystemUser = true;
