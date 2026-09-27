@@ -728,8 +728,8 @@
         {
           "refId": "A",
           "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
-          "expr": "min by (app, role) (holochain_dht_peers{instance=~\"$instance\"})",
-          "legendFormat": "{{app}} {{role}}"
+          "expr": "min by (app_id, role) (holochain_dht_peers{instance=~\"$instance\"})",
+          "legendFormat": "{{app_id}} {{role}}"
         }
       ],
       "fieldConfig": {
@@ -757,14 +757,14 @@
         {
           "refId": "A",
           "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
-          "expr": "min by (app, role) (holochain_dht_local_ops{instance=~\"$instance\"})",
-          "legendFormat": "{{app}} {{role}} held here"
+          "expr": "min by (app_id, role) (holochain_dht_local_ops{instance=~\"$instance\"})",
+          "legendFormat": "{{app_id}} {{role}} held here"
         },
         {
           "refId": "B",
           "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
-          "expr": "max by (app, role) (holochain_dht_peer_ops{instance=~\"$instance\"})",
-          "legendFormat": "{{app}} {{role}} best peer"
+          "expr": "max by (app_id, role) (holochain_dht_peer_ops{instance=~\"$instance\"})",
+          "legendFormat": "{{app_id}} {{role}} best peer"
         }
       ],
       "fieldConfig": {
@@ -792,8 +792,8 @@
         {
           "refId": "A",
           "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
-          "expr": "max by (app, role) (holochain_dht_seconds_since_gossip{instance=~\"$instance\"})",
-          "legendFormat": "{{app}} {{role}}",
+          "expr": "max by (app_id, role) (holochain_dht_seconds_since_gossip{instance=~\"$instance\"})",
+          "legendFormat": "{{app_id}} {{role}}",
           "instant": true,
           "range": false
         }
