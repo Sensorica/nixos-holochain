@@ -61,7 +61,7 @@
       "id": 2,
       "type": "table",
       "title": "Fleet status",
-      "description": "One row per node, and every cell that is not plain text turns orange or red when something needs looking at. Node is Prometheus's own up series for the scrape target. Conductor is holochain_conductor_up, read together with how fresh it is: stale means the metrics timer has not written for over 120 s, so the last value it wrote no longer says anything; textfile error means node_exporter rejected a file in its textfile directory and the holochain_* series are gone; unknown means the node itself is not answering. A blank Conductor cell is a node that does not export conductor metrics at all. Apps are the installed hApps by status; Apps not enabled turns red on any app that is installed but not running. Failed units counts every systemd unit in the failed state, not only the ones listed under Services (device, scope and slice units excepted). Disk is the fullest filesystem, Memory the share of RAM in use, Temp the hottest hardware sensor (blank on a machine without sensors, such as a VM). Uptime turns orange for the first hour after a boot, so an unplanned reboot shows. Metrics age is how long ago the conductor metrics timer last wrote its textfile; its 120 s and 300 s thresholds assume conductorMetrics.interval at its 30 s default, and an interval above about 90 s needs them raised. A node that does not answer the scrape keeps its row with Node down.",
+      "description": "One row per node, and every cell that is not plain text turns orange or red when something needs looking at. Node is Prometheus's own up series for the scrape target. Conductor is holochain_conductor_up of the node's worst conductor, read together with how fresh it is: stale means the metrics timer has not written for over 120 s, so the last value it wrote no longer says anything; textfile error means node_exporter rejected a file in its textfile directory and the holochain_* series are gone; unknown means the node itself is not answering. A blank Conductor cell is a node that does not export conductor metrics at all. Apps are the installed hApps by status; Apps not enabled turns red on any app that is installed but not running. Failed units counts every systemd unit in the failed state, not only the ones listed under Services (device, scope and slice units excepted). Disk is the fullest filesystem, Memory the share of RAM in use, Temp the hottest hardware sensor (blank on a machine without sensors, such as a VM). Uptime turns orange for the first hour after a boot, so an unplanned reboot shows. Metrics age is how long ago the conductor metrics timer last wrote its textfile; its 120 s and 300 s thresholds assume conductorMetrics.interval at its 30 s default, and an interval above about 90 s needs them raised. A node that does not answer the scrape keeps its row with Node down.",
       "gridPos": {"h": 8, "w": 24, "x": 0, "y": 1},
       "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
       "targets": [
@@ -84,7 +84,7 @@
         {
           "refId": "C",
           "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
-          "expr": "(max by (instance) (holochain_conductor_up{instance=~\"$instance\"}) + on (instance) (2 * (max by (instance) (time() - holochain_conductor_metrics_scrape_timestamp_seconds{instance=~\"$instance\"}) > bool 120))) or on (instance) (4 * (max by (instance) (node_textfile_scrape_error{instance=~\"$instance\"}) > 0)) or on (instance) (5 + 0 * max by (instance) (up{job=\"holochain-nodes\", instance=~\"$instance\"} == 0))",
+          "expr": "(min by (instance) (holochain_conductor_up{instance=~\"$instance\"}) + on (instance) (2 * (max by (instance) (time() - holochain_conductor_metrics_scrape_timestamp_seconds{instance=~\"$instance\"}) > bool 120))) or on (instance) (4 * (max by (instance) (node_textfile_scrape_error{instance=~\"$instance\"}) > 0)) or on (instance) (5 + 0 * max by (instance) (up{job=\"holochain-nodes\", instance=~\"$instance\"} == 0))",
           "format": "table",
           "instant": true,
           "range": false
@@ -496,14 +496,14 @@
       "id": 5,
       "type": "stat",
       "title": "Conductors up",
-      "description": "holochain_conductor_up per node, written by the holochain-conductor-metrics timer from dump-network-stats, read the same way as the Conductor column of Fleet status: down means the node is reporting but its conductor did not answer; stale means the timer has not written for over 120 s; textfile error means node_exporter rejected the textfile; unknown means the node itself is not answering. This is the value now, not the last one seen.",
+      "description": "holochain_conductor_up per node, the worst conductor when a node runs more than one (an edgenode and a Moss node, say), written by the holochain-conductor-metrics timer from dump-network-stats, read the same way as the Conductor column of Fleet status: down means the node is reporting but its conductor did not answer; stale means the timer has not written for over 120 s; textfile error means node_exporter rejected the textfile; unknown means the node itself is not answering. This is the value now, not the last one seen.",
       "gridPos": {"h": 6, "w": 6, "x": 0, "y": 19},
       "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
       "targets": [
         {
           "refId": "A",
           "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
-          "expr": "(max by (instance) (holochain_conductor_up{instance=~\"$instance\"}) + on (instance) (2 * (max by (instance) (time() - holochain_conductor_metrics_scrape_timestamp_seconds{instance=~\"$instance\"}) > bool 120))) or on (instance) (4 * (max by (instance) (node_textfile_scrape_error{instance=~\"$instance\"}) > 0)) or on (instance) (5 + 0 * max by (instance) (up{job=\"holochain-nodes\", instance=~\"$instance\"} == 0))",
+          "expr": "(min by (instance) (holochain_conductor_up{instance=~\"$instance\"}) + on (instance) (2 * (max by (instance) (time() - holochain_conductor_metrics_scrape_timestamp_seconds{instance=~\"$instance\"}) > bool 120))) or on (instance) (4 * (max by (instance) (node_textfile_scrape_error{instance=~\"$instance\"}) > 0)) or on (instance) (5 + 0 * max by (instance) (up{job=\"holochain-nodes\", instance=~\"$instance\"} == 0))",
           "legendFormat": "{{instance}}",
           "instant": true,
           "range": false
@@ -551,19 +551,19 @@
           "refId": "A",
           "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
           "expr": "holochain_conductor_peer_urls{instance=~\"$instance\"}",
-          "legendFormat": "{{instance}} peer urls"
+          "legendFormat": "{{instance}} {{conductor}} peer urls"
         },
         {
           "refId": "B",
           "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
           "expr": "holochain_conductor_peer_connections{instance=~\"$instance\"}",
-          "legendFormat": "{{instance}} connections"
+          "legendFormat": "{{instance}} {{conductor}} connections"
         },
         {
           "refId": "C",
           "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
           "expr": "holochain_conductor_direct_peer_connections{instance=~\"$instance\"}",
-          "legendFormat": "{{instance}} direct"
+          "legendFormat": "{{instance}} {{conductor}} direct"
         }
       ],
       "fieldConfig": {
@@ -591,13 +591,13 @@
           "refId": "A",
           "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
           "expr": "rate(holochain_conductor_network_sent_bytes_total{instance=~\"$instance\"}[2m])",
-          "legendFormat": "{{instance}} sent"
+          "legendFormat": "{{instance}} {{conductor}} sent"
         },
         {
           "refId": "B",
           "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
           "expr": "rate(holochain_conductor_network_received_bytes_total{instance=~\"$instance\"}[2m])",
-          "legendFormat": "{{instance}} received"
+          "legendFormat": "{{instance}} {{conductor}} received"
         }
       ],
       "fieldConfig": {
@@ -625,7 +625,7 @@
           "refId": "A",
           "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
           "expr": "time() - holochain_conductor_metrics_scrape_timestamp_seconds{instance=~\"$instance\"}",
-          "legendFormat": "{{instance}}",
+          "legendFormat": "{{instance}} {{conductor}}",
           "instant": true,
           "range": false
         }
@@ -666,13 +666,13 @@
           "refId": "A",
           "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
           "expr": "rate(holochain_conductor_network_sent_messages_total{instance=~\"$instance\"}[2m])",
-          "legendFormat": "{{instance}} sent"
+          "legendFormat": "{{instance}} {{conductor}} sent"
         },
         {
           "refId": "B",
           "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
           "expr": "rate(holochain_conductor_network_received_messages_total{instance=~\"$instance\"}[2m])",
-          "legendFormat": "{{instance}} received"
+          "legendFormat": "{{instance}} {{conductor}} received"
         }
       ],
       "fieldConfig": {
@@ -700,7 +700,7 @@
           "refId": "A",
           "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
           "expr": "increase(holochain_conductor_blocked_messages_total{instance=~\"$instance\"}[5m])",
-          "legendFormat": "{{instance}}"
+          "legendFormat": "{{instance}} {{conductor}}"
         }
       ],
       "fieldConfig": {
@@ -721,15 +721,15 @@
       "id": 20,
       "type": "timeseries",
       "title": "DHT peers",
-      "description": "Peers the conductor keeps gossip state for in each DHT (holochain_dht_peers), one line per app and role. The line is the fewest any selected node has, so one node cut off from a DHT pulls it to zero; pick a single instance to see that node's own count. Five nodes sharing an app should each see at least the other four.",
+      "description": "Peers the conductor keeps gossip state for in each DHT (holochain_dht_peers), one line per network, named by the network_label of holochain_dht_info. The line is the fewest any selected node has, so one node cut off from a DHT pulls it to zero; pick a single instance to see that node's own count. Five nodes sharing an app should each see at least the other four.",
       "gridPos": {"h": 8, "w": 8, "x": 0, "y": 32},
       "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
       "targets": [
         {
           "refId": "A",
           "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
-          "expr": "min by (app_id, role) (holochain_dht_peers{instance=~\"$instance\"})",
-          "legendFormat": "{{app_id}} {{role}}"
+          "expr": "min by (network_label) (holochain_dht_peers{instance=~\"$instance\"} * on (instance, conductor, app_id, role, dna) group_left (network_label) holochain_dht_info{instance=~\"$instance\"})",
+          "legendFormat": "{{network_label}}"
         }
       ],
       "fieldConfig": {
@@ -750,21 +750,21 @@
       "id": 21,
       "type": "timeseries",
       "title": "DHT ops held here vs best peer",
-      "description": "For each app and role, held here is the fewest DHT operations any selected node holds (holochain_dht_local_ops), and best peer is the largest count any peer reported to them (holochain_dht_peer_ops). A node that is in sync holds about as many as its best peer; a held-here line that stays under its best-peer line is a node that is not catching up. Best peer reads 0 while a DHT has no peer. Pending fetches and gossip timeouts per DHT are exported too, as holochain_dht_pending_fetches and holochain_dht_peer_timeouts_total.",
+      "description": "For each network (the network_label of holochain_dht_info), held here is the fewest DHT operations any selected node holds (holochain_dht_local_ops), and best peer is the largest count any peer reported to them (holochain_dht_peer_ops). A node that is in sync holds about as many as its best peer; a held-here line that stays under its best-peer line is a node that is not catching up. Best peer reads 0 while a DHT has no peer. Pending fetches and gossip timeouts per DHT are exported too, as holochain_dht_pending_fetches and holochain_dht_peer_timeouts_total.",
       "gridPos": {"h": 8, "w": 8, "x": 8, "y": 32},
       "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
       "targets": [
         {
           "refId": "A",
           "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
-          "expr": "min by (app_id, role) (holochain_dht_local_ops{instance=~\"$instance\"})",
-          "legendFormat": "{{app_id}} {{role}} held here"
+          "expr": "min by (network_label) (holochain_dht_local_ops{instance=~\"$instance\"} * on (instance, conductor, app_id, role, dna) group_left (network_label) holochain_dht_info{instance=~\"$instance\"})",
+          "legendFormat": "{{network_label}} held here"
         },
         {
           "refId": "B",
           "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
-          "expr": "max by (app_id, role) (holochain_dht_peer_ops{instance=~\"$instance\"})",
-          "legendFormat": "{{app_id}} {{role}} best peer"
+          "expr": "max by (network_label) (holochain_dht_peer_ops{instance=~\"$instance\"} * on (instance, conductor, app_id, role, dna) group_left (network_label) holochain_dht_info{instance=~\"$instance\"})",
+          "legendFormat": "{{network_label}} best peer"
         }
       ],
       "fieldConfig": {
@@ -785,15 +785,15 @@
       "id": 22,
       "type": "bargauge",
       "title": "DHT seconds since last gossip",
-      "description": "Seconds since the last gossip round with any peer in each DHT, as of now, for the selected node that has gone longest without one (holochain_dht_seconds_since_gossip), one bar per app and role. never means no selected node has a gossip timestamp for any peer in that DHT, which is what a node alone on its network shows. The 300 s and 900 s thresholds are a starting point for a quiet but healthy DHT, not a Holochain figure.",
+      "description": "Seconds since the last gossip round with any peer in each DHT, as of now, for the selected node that has gone longest without one (holochain_dht_seconds_since_gossip), one bar per network, named by the network_label of holochain_dht_info. never means no selected node has a gossip timestamp for any peer in that DHT, which is what a node alone on its network shows. The 300 s and 900 s thresholds are a starting point for a quiet but healthy DHT, not a Holochain figure.",
       "gridPos": {"h": 8, "w": 8, "x": 16, "y": 32},
       "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
       "targets": [
         {
           "refId": "A",
           "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
-          "expr": "max by (app_id, role) (holochain_dht_seconds_since_gossip{instance=~\"$instance\"})",
-          "legendFormat": "{{app_id}} {{role}}",
+          "expr": "max by (network_label) (holochain_dht_seconds_since_gossip{instance=~\"$instance\"} * on (instance, conductor, app_id, role, dna) group_left (network_label) holochain_dht_info{instance=~\"$instance\"})",
+          "legendFormat": "{{network_label}}",
           "instant": true,
           "range": false
         }

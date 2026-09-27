@@ -968,8 +968,10 @@
           # The whole exporter, run for an edgenode-shaped and a Moss-shaped
           # conductor on captured replies (tests/metrics.nix): the two files
           # declare every shared family with the same bytes and a real
-          # node_exporter keeps both, and no name a dashboard shows is a hash.
-          inherit (metricsChecks) metricsHelpAgreement metricsNameShape;
+          # node_exporter keeps both, and no name a dashboard shows is a hash;
+          # then the fleet dashboard's conductor and DHT queries on both files
+          # at once, as the homelab's one instance serves them.
+          inherit (metricsChecks) metricsHelpAgreement metricsNameShape fleetDashboardQueries;
 
           # The edgenode module's own names wiring, which the checks above
           # only mimic by hand: an evaluated system's metrics unit, run with
@@ -1368,18 +1370,26 @@
               apps = by_instance(target_expr("Fleet status", "I"), "q-fleet-apps")
               assert apps == {"127.0.0.1:9100": "1"}, apps
 
-              # The per-DHT panels in this node's terms: every DHT is the one
-              # app's, and a node alone on its network has no peer and has
-              # never gossiped.
+              # The per-DHT panels in this node's terms: one line per DHT of
+              # the one app, each named by its network_label and never by a
+              # key, and a node alone on its network has no peer and has never
+              # gossiped.
               def by_dht(title, ref, name):
                   return {
-                      (r["metric"]["app_id"], r["metric"]["role"]): r["value"][1]
+                      r["metric"]["network_label"]: r["value"][1]
                       for r in prom_query(prom_file(target_expr(title, ref), name))["data"]["result"]
                   }
 
+              dht_names = {
+                  r["metric"]["network_label"]
+                  for r in prom_query(prom_file(
+                      'holochain_dht_info{app_id="dino-adventure"}', "q-dht-names"
+                  ))["data"]["result"]
+              }
               dht_peers = by_dht("DHT peers", "A", "q-dht-peers")
-              machine.log("DHT peers: " + json.dumps({f"{a} {r}": v for (a, r), v in dht_peers.items()}))
-              assert dht_peers and {a for a, _ in dht_peers} == {"dino-adventure"}, dht_peers
+              machine.log("DHT peers: " + json.dumps(dht_peers))
+              assert dht_peers and dht_peers.keys() == dht_names, (dht_peers, dht_names)
+              assert all(n and "$" not in n and "uhC" not in n for n in dht_names), dht_names
               assert set(dht_peers.values()) == {"0"}, dht_peers
               gossip = by_dht("DHT seconds since last gossip", "A", "q-dht-gossip")
               assert gossip.keys() == dht_peers.keys() and set(gossip.values()) == {"-1"}, gossip
