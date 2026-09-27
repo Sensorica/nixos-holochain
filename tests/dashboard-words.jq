@@ -46,6 +46,8 @@ def expected: [
   {uid: "holochain-node", title: "Is each app part connected, complete and recent?", field: "Last heard", value: 1000000000, text: "never", color: "red"},
   {uid: "holochain-node", title: "Is each app part connected, complete and recent?", field: "Last heard", value: null, text: "nobody else yet", color: grey},
   {uid: "holochain-node", title: "Is each app part connected, complete and recent?", field: "Holds", value: null, text: "nobody to compare", color: grey},
+  # A network one node runs: the lab's first Holoport, alone.
+  {uid: "holochain-network", title: "Same data everywhere", field: null, value: -1, text: "only one node", color: grey},
   # A real figure must not be taken for a stand-in.
   {uid: "holochain-node", title: "Is each app part connected, complete and recent?", field: "Last heard", value: 42, text: null, color: null},
   {uid: "holochain-now", title: "Are these readings current?", field: null, value: 12, text: null, color: null}
