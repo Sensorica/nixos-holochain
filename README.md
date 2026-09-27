@@ -172,7 +172,7 @@ Eight NixOS VM tests, all built in CI:
 | `vmTest` / `vmTest-0_6` | A bare conductor comes up and answers `list-apps` on 0.7.0 and on 0.6.3 |
 | `vmTestWithHapp` / `vmTestWithHapp-0_6` | A hApp installs once, stays enabled, and survives a cold boot on both lines, and every one of its cells has its `holochain_dht_*` series on `/metrics` |
 | `vmTestConductorMetrics-0_6` | The conductor's gauges appear on `/metrics` on the 0.6 line |
-| `vmTestGrafana` | Conductor and per-DHT series reach Prometheus, the four dashboards are provisioned with their data source and the room screen is Grafana's home page, every panel query answers through Grafana's own query API (temperatures excepted, which a VM has no sensor for), and the pages name a failed unit, a dead node and a stale, silent or unreadable conductor as such |
+| `vmTestGrafana` | Conductor and per-DHT series reach Prometheus, the four dashboards are provisioned with their data source and the room screen is Grafana's home page, every panel query answers through Grafana's own query API (three are only required not to error: the two temperature panels, since a VM has no sensor, and "Same data everywhere", which needs two nodes), and the pages name a failed unit, a dead node and a stale, silent or unreadable conductor as such |
 | `vmTestGateway` | A zome read answers 200 with JSON through the HTTP gateway, and a function outside the allow list answers 403 |
 | `vmTestWindtunnel` | The generated container unit carries the flags the runner requires, and stays stopped when `autoStart = false` |
 

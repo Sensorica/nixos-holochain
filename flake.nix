@@ -997,11 +997,14 @@
           inherit (metricsChecks) metricsHelpAgreement metricsNameShape;
 
           # The provisioned dashboards, with no VM (tests/dashboards.nix): no
-          # label but a human one reaches a legend, a display name or a table
-          # column, every panel is described and every uid is its own; and
+          # label but a human one reaches a legend, a display name, a table
+          # column or a stat's field, no text shows a variable holding a key,
+          # every panel is described and every uid is its own; every stand-in
+          # value (1e9, an empty cell) reads as its word in its colour; and
           # every Holochain query of every dashboard answers, through the rule
           # file, on the homelab's two conductors plus a clone cell, the node
-          # reading its worst conductor. Each is also run on broken input and
+          # reading its worst conductor, with every series it reads there and
+          # every rule it names recorded. Each is also run on broken input and
           # must then fail.
           inherit
             (import ./tests/dashboards.nix {
@@ -1010,6 +1013,7 @@
               inherit (metricsChecks) runs;
             })
             dashboardLabels
+            dashboardWords
             dashboardQueries
             ;
 
@@ -1293,19 +1297,30 @@
 
 
               # Exactly the four, and nothing else wearing their tag.
+              def the_four(path):
+                  uids = sorted(d["uid"] for d in grafana(path))
+                  machine.log(f"{path}: " + json.dumps(uids))
+                  return uids == ["holochain-fleet", "holochain-network", "holochain-node", "holochain-now"]
+
+
               tagged = sorted(d["uid"] for d in grafana("/api/search?tag=holochain"))
-              machine.log("dashboards tagged holochain: " + json.dumps(tagged))
-              assert tagged == ["holochain-fleet", "holochain-network", "holochain-node", "holochain-now"], tagged
+              assert the_four("/api/search?tag=holochain"), tagged
+              # The same test on an answer Grafana gives with one short must fail.
+              assert not the_four("/api/search?tag=holochain&limit=3")
 
               # Grafana's home page is the room screen. Grafana answers with
               # the dashboard itself, or with a redirect to it when the home
               # page is a saved preference.
+              def is_room(answer):
+                  uid = answer.get("dashboard", {}).get("uid")
+                  machine.log(f"dashboard: uid {uid!r}, redirect {answer.get('redirectUri')!r}")
+                  return uid == "holochain-now" or "/d/holochain-now" in answer.get("redirectUri", "")
+
+
               home = grafana("/api/dashboards/home")
-              home_uid = home.get("dashboard", {}).get("uid")
-              machine.log(f"home dashboard: uid {home_uid!r}, redirect {home.get('redirectUri')!r}")
-              assert home_uid == "holochain-now" or "/d/holochain-now" in home.get("redirectUri", ""), (
-                  "the home page is not the room screen: " + json.dumps(home)[:500]
-              )
+              assert is_room(home), "the home page is not the room screen: " + json.dumps(home)[:500]
+              # Another dashboard, in the same shape of answer, must not pass.
+              assert not is_room(grafana("/api/dashboards/uid/holochain-fleet"))
 
               # A provisioned dashboard that Grafana cannot bind to a data
               # source renders empty panels, which a search hit would not show.
@@ -1555,10 +1570,14 @@
               # All for the multi-value ones, this node, the connected Moss
               # chat for the network page, the rewritten units and room
               # constants. Each must come back without an error and with at
-              # least one frame holding a value. Two may be empty here and
-              # must still not error: temperatures, since QEMU exposes no
-              # hwmon sensor, and "Same data everywhere", which needs two
-              # nodes on one network.
+              # least one frame holding a value. Three may be empty here and
+              # must still not error: the two temperature panels, since QEMU
+              # exposes no hwmon sensor, and "Same data everywhere", which
+              # needs two nodes on one network (checks.dashboardQueries still
+              # requires the rule it reads to be recorded). A query that
+              # answers through an "or vector()" fallback answers here
+              # whatever its left side reads; checks.dashboardQueries requires
+              # every series its left side reads to be there.
               network = next(
                   r["metric"]["dna"]
                   for r in wait_non_empty(
@@ -1615,7 +1634,7 @@
               # No sensor, but the collector that would read one runs.
               wait_non_empty('node_scrape_collector_success{collector="hwmon"} == 1', "q-hwmon")
               may_be_empty = {"Same data everywhere"}
-              swept = 0
+              answered_labels, empty_allowed = [], []
               for uid in tagged:
                   for p in panels[uid]:
                       for target in p.get("targets", []):
@@ -1626,6 +1645,7 @@
                           if "node_hwmon_temp_celsius" in expr or p["title"] in may_be_empty:
                               machine.succeed(f"{command} | jq -e '.results.A.error == null'")
                               machine.log(f"{label}: no error (may be empty here)")
+                              empty_allowed.append(label)
                           else:
                               try:
                                   machine.wait_until_succeeds(f"{command} | jq -e '{answered}'", timeout=120)
@@ -1633,9 +1653,19 @@
                                   machine.log(f"{label} did not answer: " + machine.succeed(command)[:2000])
                                   raise
                               machine.log(f"{label}: answered")
-                          swept += 1
-              machine.log(f"{swept} panel queries answered through /api/ds/query")
-              assert swept >= 70, swept
+                              answered_labels.append(label)
+              # Counted apart, so the log says how many were required to
+              # answer; the ones let off are exactly these three.
+              machine.log(
+                  f"{len(answered_labels)} panel queries answered through /api/ds/query;"
+                  f" {len(empty_allowed)} only required not to error: " + json.dumps(empty_allowed)
+              )
+              assert sorted(empty_allowed) == [
+                  "holochain-fleet / Hottest sensor [A]",
+                  "holochain-network / Same data everywhere [A]",
+                  "holochain-node / Temperatures [A]",
+              ], empty_allowed
+              assert len(answered_labels) >= 70, len(answered_labels)
 
               # The same test on a query that cannot answer must fail, or the
               # sweep above proves nothing.
@@ -1699,7 +1729,8 @@
 
               # A textfile node_exporter cannot parse drops every series in
               # it: the problem list says so, and the room screen's readings
-              # tile reads 1e9, which it shows as "No readings". The timer
+              # tile reads 1e9, which its mapping shows as "No readings" in red
+              # (checks.dashboardWords holds the mapping). The timer
               # stops first, or its next run would replace the file.
               machine.succeed("systemctl stop holochain-conductor-metrics.timer")
               machine.succeed(

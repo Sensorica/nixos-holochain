@@ -68,6 +68,53 @@ in {
       touch $out
     '';
 
+  # The words a person reads where a query answers with a stand-in (1e9 for
+  # no readings or never heard, an empty cell for nobody else yet or nobody
+  # to compare), resolved through each field's mappings as Grafana resolves
+  # them (tests/dashboard-words.jq).
+  dashboardWords =
+    pkgs.runCommand "dashboard-words" {
+      nativeBuildInputs = [pkgs.jq];
+    } ''
+      check() { jq -n -r -f ${./dashboard-words.jq} "$@"; }
+      check ${dashboards}/*.json
+
+      broken() {
+        local reason=$1 file=$2 edit=$3 says=$4
+        rm -rf copy && cp -r --no-preserve=mode ${dashboards} copy
+        jq "$edit" "copy/$file" > copy/edited && mv copy/edited "copy/$file"
+        if cmp -s "${dashboards}/$file" "copy/$file"; then
+          echo "the edit for $reason changed nothing" >&2
+          exit 1
+        fi
+        if check copy/*.json > broken.log 2>&1; then
+          echo "still passes with $reason" >&2
+          exit 1
+        fi
+        if ! grep -qF -- "$says" broken.log; then
+          echo "failed, but without saying $says:" >&2
+          cat broken.log >&2
+          exit 1
+        fi
+        echo "fails as it should: $reason"
+      }
+      broken "the readings tile without its No readings range" holochain-now.json \
+        '(.. | objects | select(.title? == "Are these readings current?") | .fieldConfig.defaults.mappings) = []' \
+        '"Are these readings current?" shows 1000000000 as "the bare value"'
+      broken "never recoloured green" holochain-network.json \
+        '(.. | objects | select(.title? == "Last heard from others, per node") | .fieldConfig.defaults.mappings[0].options.result.color) = "green"' \
+        'shows 1000000000 as {"text":"never","color":"green"'
+      broken "an empty Last heard cell with no word" holochain-node.json \
+        '(.. | objects | select(.title? == "Is each app part connected, complete and recent?") | .fieldConfig.overrides[]
+          | select(.matcher.options == "Last heard") | .properties[] | select(.id == "mappings") | .value) |= map(select(.type != "special"))' \
+        'column "Last heard" shows null as "the bare value"'
+      broken "a never range that swallows real figures" holochain-node.json \
+        '(.. | objects | select(.title? == "Is each app part connected, complete and recent?") | .fieldConfig.overrides[]
+          | select(.matcher.options == "Last heard") | .properties[] | select(.id == "mappings") | .value[0].options.from) = 0' \
+        'column "Last heard" shows 42 as {"text":"never"'
+      touch $out
+    '';
+
   # Every query of every dashboard that reads Holochain series, with its
   # variables filled as Grafana fills them, must answer on the homelab's shape
   # (Workshop and Moss on one instance, plus a conductor with a clone cell,
