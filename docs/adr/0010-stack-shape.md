@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-08-28
-- **Source:** [#1](https://github.com/Sensorica/nixos-holochain/issues/1), issue description, section "Decisions (ADRs, continuing the numbering of the May design doc)"; the slice order and the gate are the sections "Slice order (a real dependency chain)" and "Gate" of the same description
+- **Source:** [#1](https://github.com/Sensorica/nixos-holochain/issues/1), issue description, section "Decisions (ADRs, continuing the numbering of the May design doc)"
 
 ## Context
 
@@ -16,7 +16,13 @@ From #1:
 
 ## Consequences
 
-The slice order, from #1:
+The record states no consequences beyond the decision itself.
+
+## Related record in #1
+
+#1 records the slice order, the gate and an amendment to the gate in their own sections, not as part of ADR-010. They are copied here because they describe the same stack.
+
+The slice order, from #1, section "Slice order (a real dependency chain)":
 
 | Slice | Branch | Base | Closes |
 |---|---|---|---|
@@ -28,15 +34,11 @@ The slice order, from #1:
 
 > Slice 2 depends on 1 (the flake must evaluate before a VM test can build). 3 depends on 2 (metrics need a running conductor). 4 depends on 3 (README truth needs the modules real). 5 depends on 4 (materials reference the final layout and template).
 
-The gate, from #1:
+The gate, from #1, section "Gate":
 
 > The child slice's PR is published only after the parent's PR carries a `PM review: APPROVE` comment and the child branch contains the parent's current head (`git merge-base --is-ancestor <parent> HEAD`). Local work ahead of the verdict is fine; publishing it is not.
 
-## Amendments
-
-### 2026-08-28: verdicts are PR comments (amends the gate)
-
-From #1, section "Amendments", entry timed 01:58:
+The amendment to the gate, from #1, section "Amendments", entry timed 01:58 (the entry names the gate, not ADR-010):
 
 > Verdicts are PR comments, not GitHub review approvals: both sessions act under the principal's account and GitHub refuses "approve your own pull request". The gate reads the `PM review: APPROVE` comment; the principal's merge is the release.
 

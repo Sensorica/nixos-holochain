@@ -13,7 +13,7 @@ The architectural bet is simple. HolOS gives you a minimal Buildroot image to fl
 
 ## Design record
 
-The decisions behind this layout are recorded one per file in [`adr/`](adr/README.md), from ADR-001 (in-process lair keystore) to ADR-017 (the Holoport as a legacy-BIOS target), with their amendments. When this document cites an ADR by number, that is where its full text lives.
+The decisions behind this layout are recorded one per file in [`adr/`](adr/README.md), from ADR-005 (the fleet becomes an example) to ADR-017 (the Holoport as a legacy-BIOS target), with their amendments. ADR-001 to ADR-004 belong to an earlier design document that is not in the repository. When this document cites an ADR by number, that is where its full text lives.
 
 ## Module hierarchy
 

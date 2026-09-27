@@ -14,7 +14,7 @@ From the state of the repository recorded in #1 when the decision was taken (ver
 
 > The hApp installer service uses `hc client call --port ${adminPort} install-app`, `enable-app`, `add-app-ws`, verified against the real binary in a NixOS VM test. The May design's Node.js fallback (§4.5) is dropped.
 
-The May design's installer is [ADR-004](0004-happ-installer-admin-websocket-client.md), which this decision supersedes.
+The May design and its §4.5 are not in this repository. §4.5 was the Node.js fallback (a helper using `@holochain/client`) of the May design's installer decision, ADR-004, which is not published here (see the [index](README.md)).
 
 ## Consequences
 

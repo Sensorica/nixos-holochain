@@ -14,8 +14,6 @@ From the state of the repository recorded in #1 when the decision was taken (ver
 
 > hApp bundles are fetched by hash (`pkgs.fetchurl`), never committed. SSH public keys stay under the gitignored `secrets/` with a committed `.example`.
 
-The bundle half of this decision supersedes [ADR-002](0002-happ-bundles-in-repo.md).
-
 ## Consequences
 
 The record states no consequences beyond the decision itself.
