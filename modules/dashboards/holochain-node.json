@@ -505,7 +505,7 @@
       "id": 6,
       "type": "table",
       "title": "Is each app part connected, complete and recent?",
-      "description": "One row per part of each app on this machine: its state, how many other computers it sees, what share of its best peer's data it holds, when it last heard from anyone, how many items it is still fetching, and how many exchanges timed out in the last 15 minutes. Click an app to see its network across every machine.",
+      "description": "One row per part of each app on this machine: its state, how many other computers it sees, what share of its best peer's data it holds, when it last heard from anyone, how many items it is still fetching, and how many exchanges timed out in the last 15 minutes. A part nobody else runs yet reads grey in every column, not red. Click an app to see its network across every machine.",
       "datasource": {
         "type": "prometheus",
         "uid": "holochain-prometheus"
@@ -556,7 +556,7 @@
             "type": "prometheus",
             "uid": "holochain-prometheus"
           },
-          "expr": "holochain:dht_heard:named{node=\"$node\", conductor=~\"$conductor\"}",
+          "expr": "holochain:dht_heard:named{node=\"$node\", conductor=~\"$conductor\"} unless on (instance, conductor, app_id, role, dna) (holochain:dht_state == 3)",
           "format": "table",
           "instant": true,
           "range": false
@@ -594,7 +594,6 @@
           "options": {
             "include": {
               "names": [
-                "conductor",
                 "app_name",
                 "part_name",
                 "dna",
@@ -613,19 +612,17 @@
           "options": {
             "excludeByName": {},
             "indexByName": {
-              "conductor": 0,
-              "app_name": 1,
-              "part_name": 2,
-              "dna": 3,
-              "Value #A": 4,
-              "Value #B": 5,
-              "Value #C": 6,
-              "Value #D": 7,
-              "Value #E": 8,
-              "Value #F": 9
+              "app_name": 0,
+              "part_name": 1,
+              "dna": 2,
+              "Value #A": 3,
+              "Value #B": 4,
+              "Value #C": 5,
+              "Value #D": 6,
+              "Value #E": 7,
+              "Value #F": 8
             },
             "renameByName": {
-              "conductor": "Conductor",
               "app_name": "App",
               "part_name": "Part",
               "Value #A": "State",
@@ -785,6 +782,22 @@
                 "value": "nobody to compare"
               },
               {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "null",
+                      "result": {
+                        "text": "nobody to compare",
+                        "color": "#8e8e8e",
+                        "index": 0
+                      }
+                    }
+                  }
+                ]
+              },
+              {
                 "id": "thresholds",
                 "value": {
                   "mode": "absolute",
@@ -860,6 +873,17 @@
                         "index": 0
                       }
                     }
+                  },
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "null",
+                      "result": {
+                        "text": "nobody else yet",
+                        "color": "#8e8e8e",
+                        "index": 1
+                      }
+                    }
                   }
                 ]
               },
@@ -917,7 +941,7 @@
               },
               {
                 "id": "description",
-                "value": "A clamped difference over 15 minutes rather than increase(): the counter drops when a peer is forgotten."
+                "value": "Exchanges with other computers on this part that got no answer in the last 15 minutes. It can read low for a while after Holochain forgets a computer, since that computer's count goes with it."
               },
               {
                 "id": "thresholds",

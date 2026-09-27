@@ -602,7 +602,7 @@
               "Value #C": "Not in step",
               "Value #D": "Problems",
               "Value #E": "Oldest reading",
-              "Value #F": "Up since"
+              "Value #F": "Up for"
             }
           }
         }
@@ -813,7 +813,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Up since"
+              "options": "Up for"
             },
             "properties": [
               {

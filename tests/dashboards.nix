@@ -52,6 +52,12 @@ in {
       broken "has no description" holochain-node.json '(.. | objects | select(.title? == "Conductors") | .description) = ""'
       broken "display name shows the label dna" holochain-node.json \
         '(.. | objects | select(.title? == "Conductors") | .fieldConfig.defaults.displayName) = "''${__field.labels.dna}"'
+      broken "display name shows the label every label" holochain-now.json \
+        '(.. | objects | select(.title? == "Which machines are on?") | .fieldConfig.defaults.displayName) = "''${__field.labels}"'
+      broken "shows the variable network, whose value is not a name" holochain-network.json \
+        '(.. | objects | select(.title? == "Did it reach everyone? Data held on each node") | .title) = "Did ''${network} reach everyone?"'
+      broken "shows the field instance" holochain-now.json \
+        '(.. | objects | select(.title? == "Which machines are on?") | .options.reduceOptions) |= (.fields = "/^instance$/" | .values = true)'
       broken "keeps every label" holochain-fleet.json \
         '(.. | objects | select(.title? == "Which node needs attention?") | .transformations) |= map(select(.id != "filterFieldsByName"))'
       broken "shows the column instance" holochain-fleet.json \
@@ -69,9 +75,14 @@ in {
   # join on fewer labels than the full key is many-to-many). The node's
   # status must be its worst conductor's, and the part table must have one row
   # per DHT, clone included.
+  #
+  # Answering is not enough for a query with a fallback, such as
+  # `count(x == 1) or vector(0)`, which answers 0 whatever x is. So every
+  # series selector a query reads (tests/query-selectors.jq) must also select
+  # something here, and every rule it names must be recorded by the rule file.
   dashboardQueries =
     pkgs.runCommand "dashboard-queries" {
-      nativeBuildInputs = [pkgs.jq pkgs.prometheus.cli];
+      nativeBuildInputs = [pkgs.jq pkgs.prometheus.cli pkgs.yq-go];
     } ''
       # A third conductor with one app in two DHTs of one role, the second a
       # clone, through the same jq the exporter runs.
@@ -132,14 +143,30 @@ in {
 
       # The Holochain queries: a query on node_exporter's own series (a
       # metric named node_*, not a rule such as holochain:node_state) has none
-      # of them here, and vmTestGrafana runs those. "Same data everywhere"
-      # needs two nodes on one DNA, which one instance cannot have.
-      jq '[.[] | select(.expr | test("holochain")) | select(.expr | test("(^|[^a-z_:])node_[a-z]") | not)
-           | select(.title != "Same data everywhere")]' targets.json > holochain.json
+      # of them here, and vmTestGrafana runs those.
+      jq '[.[] | select(.expr | test("holochain")) | select(.expr | test("(^|[^a-z_:])node_[a-z]") | not)]' \
+        targets.json > holochain.json
       echo "Holochain queries: $(jq length holochain.json) of $(jq length targets.json)"
 
+      # The rules the rule file records.
+      yq -o json '[.groups[].rules[] | select(has("record")) | .record]' ${rules} > records.json
+      echo "recorded rules: $(jq length records.json)"
+
+      # The promtool tests for a list of targets, after the rule names its
+      # queries read are checked against the rule file. "Same data
+      # everywhere" needs two nodes on one DNA, which one instance cannot
+      # have: its query is left out of the answering test and its rule may
+      # select nothing here, but the rule it names must still be recorded.
       tests() {
-        jq -n --slurpfile targets "$1" --slurpfile up up.json --slurpfile down down.json '
+        jq -f ${./query-selectors.jq} "$1" > selectors.json
+        jq -r --slurpfile records records.json \
+          '.[] | capture("^(?<name>[A-Za-z_:][A-Za-z0-9_:]*)").name | select(contains(":"))
+           | select(IN($records[0][]) | not) | "\(.) is not a recorded rule"' selectors.json > unrecorded.txt
+        if [ -s unrecorded.txt ]; then
+          cat unrecorded.txt >&2
+          return 1
+        fi
+        jq -n --slurpfile targets "$1" --slurpfile selectors selectors.json --slurpfile up up.json --slurpfile down down.json '
           {
             rule_files: ["${rules}"],
             evaluation_interval: "1m",
@@ -148,8 +175,16 @@ in {
                 name: "every Holochain query answers",
                 interval: "1m",
                 input_series: $up[0],
-                promql_expr_test: [$targets[0][]
+                promql_expr_test: [$targets[0][] | select(.title != "Same data everywhere")
                   | {expr: "count(\(.expr)) > bool 0", eval_time: "30m",
+                     exp_samples: [{labels: "{}", value: 1}]}]
+              },
+              {
+                name: "every series a query reads is there",
+                interval: "1m",
+                input_series: $up[0],
+                promql_expr_test: [$selectors[0][] | select(startswith("holochain:dna_same_data") | not)
+                  | {expr: "count(\(.)) > bool 0", eval_time: "30m",
                      exp_samples: [{labels: "{}", value: 1}]}]
               },
               {
@@ -159,9 +194,11 @@ in {
                 promql_expr_test: [
                   ($targets[0][] | select(.dashboard == "holochain-node" and .title == "Is each app part connected, complete and recent?")
                     # Holds exists only for the parts that have a peer: three
-                    # of the Moss group and two of the connected chat.
+                    # of the Moss group and two of the connected chat. Last
+                    # heard leaves out the parts nobody else runs yet, which
+                    # read grey rather than a red "never".
                     | {expr: "count(\(.expr))", eval_time: "30m",
-                       exp_samples: [{labels: "{}", value: (if .ref == "C" then 5 else 13 end)}]})
+                       exp_samples: [{labels: "{}", value: ({C: 5, D: 5}[.ref] // 13)}]})
                 ]
               },
               {
@@ -181,13 +218,15 @@ in {
       }
       tests holochain.json > tests.json
       echo "expressions under test: $(jq '[.tests[].promql_expr_test[]] | length' tests.json)"
-      test "$(jq '.tests[1].promql_expr_test | length' tests.json)" = 6
-      test "$(jq '.tests[2].promql_expr_test | length' tests.json)" = 2
+      echo "series selectors read: $(jq length selectors.json)"
+      test "$(jq '.tests[2].promql_expr_test | length' tests.json)" = 6
+      test "$(jq '.tests[3].promql_expr_test | length' tests.json)" = 2
       promtool test rules tests.json
 
-      # Broken on purpose: a rule name misspelt in one query, and a part
-      # table joined on fewer labels than the full key of a DHT. Each must
-      # fail its test.
+      # Broken on purpose: a rule name misspelt in one query, in queries
+      # whose vector fallback answers anyway, a metric and a label filter
+      # behind such a fallback that select nothing, and a part table joined
+      # on fewer labels than the full key of a DHT. Each must fail.
       broken() {
         local reason=$1 edit=$2 says=$3
         jq "$edit" holochain.json > broken-targets.json
@@ -195,8 +234,8 @@ in {
           echo "the edit for $reason changed nothing" >&2
           exit 1
         fi
-        tests broken-targets.json > broken.json
-        if promtool test rules broken.json > broken.log 2>&1; then
+        if tests broken-targets.json > broken.json 2> broken.log \
+          && promtool test rules broken.json >> broken.log 2>&1; then
           echo "still passes with $reason" >&2
           exit 1
         fi
@@ -209,7 +248,19 @@ in {
       }
       broken "a misspelt rule" \
         'map(if .title == "Is each app working on each node?" then .expr |= sub("holochain:app_state:named"; "holochain:app_state:nammed") else . end)' \
-        "got: nil"
+        "holochain:app_state:nammed is not a recorded rule"
+      broken "a misspelt rule behind a vector fallback" \
+        'map(if .title == "Holochain silent" then .expr |= sub("holochain:conductor_state"; "holochain:conductor_stat") else . end)' \
+        "holochain:conductor_stat is not a recorded rule"
+      broken "a misspelt rule in the query the answering test leaves out" \
+        'map(if .title == "Same data everywhere" then .expr |= sub("holochain:dna_same_data"; "holochain:dna_same_dat") else . end)' \
+        "holochain:dna_same_dat is not a recorded rule"
+      broken "a misspelt metric behind a vector fallback" \
+        'map(if .title == "Apps" and .ref == "A" then .expr |= sub("holochain_app_info"; "holochain_app_infos") else . end)' \
+        'count(holochain_app_infos{'
+      broken "a label filter that selects nothing behind a vector fallback" \
+        'map(if .dashboard == "holochain-network" and .title == "Lost contact" then .expr |= sub("dna=\""; "dna=\"no-such-") else . end)' \
+        'count(holochain:dht_state{dna=\"no-such-'
       broken "a join on part of the key" \
         'map(if .title == "Is each app part connected, complete and recent?" then .expr |= gsub("instance, conductor, app_id, role, dna"; "instance, conductor, app_id, role") else . end)' \
         "many-to-many"

@@ -46,15 +46,15 @@
     },
     {
       "type": "link",
-      "title": "This node",
+      "title": "One node in detail",
       "url": "/d/holochain-node/holochain-node",
       "asDropdown": false,
-      "includeVars": true,
+      "includeVars": false,
       "keepTime": true,
       "targetBlank": false,
       "icon": "dashboard",
       "tags": [],
-      "tooltip": ""
+      "tooltip": "The node page, for one machine at a time"
     },
     {
       "type": "dashboards",
@@ -405,7 +405,7 @@
     {
       "id": 5,
       "type": "timeseries",
-      "title": "Did ${network:text} reach everyone? Data held on each node",
+      "title": "Did it reach everyone? Data held on each node",
       "description": "One line per machine: how much of this network's data it holds. After a write, every line should step up by the same amount within about a minute; a line that stays flat has not received it. Holochain stores each message as several pieces, so watch the steps, not the number. The dashed line is the most any machine's best peer has seen.",
       "datasource": {
         "type": "prometheus",
@@ -679,7 +679,7 @@
       "id": 8,
       "type": "bargauge",
       "title": "Last heard from others, per node",
-      "description": "How long since each machine last exchanged data with anyone on this network.",
+      "description": "How long since each machine last exchanged data with anyone on this network. A machine nobody else has joined here yet is left out, so a lone machine shows no bar rather than a red one.",
       "datasource": {
         "type": "prometheus",
         "uid": "holochain-prometheus"
@@ -697,7 +697,7 @@
             "type": "prometheus",
             "uid": "holochain-prometheus"
           },
-          "expr": "max by (node) (holochain:dht_heard:named{dna=\"$network\", node=~\"$node\", conductor!=\"\"})",
+          "expr": "max by (node) (holochain:dht_heard:named{dna=\"$network\", node=~\"$node\", conductor!=\"\"} unless on (instance, conductor, app_id, role, dna) (holochain:dht_state == 3))",
           "legendFormat": "{{node}}",
           "instant": true,
           "range": false
@@ -742,7 +742,8 @@
                 }
               }
             }
-          ]
+          ],
+          "noValue": "Nobody else runs this app yet"
         },
         "overrides": []
       },

@@ -1,7 +1,8 @@
 # What a person can read on the provisioned dashboards, checked from their
-# JSON: no label outside the human ones reaches a legend, a display name or a
-# table column, every panel says what it answers, and no two dashboards share
-# a uid. Prints one line per dashboard and fails, listing every offence, when
+# JSON: no label outside the human ones reaches a legend, a display name, a
+# table column or a stat's picked field, no text shows a variable whose value
+# is a machine key, every panel says what it answers, and no two dashboards
+# share a uid. Prints one line per dashboard and fails, listing every offence, when
 # anything is off.
 #
 # Input: every dashboard file as a separate JSON document (jq -n with inputs),
@@ -20,12 +21,38 @@ def human: ["node", "site", "conductor", "app_name", "app_kind", "part_name", "n
 def value_field: test("^Value( #[A-Z]+)?$");
 def exempt: "Identity, for bug reports";
 
+# Labels that are machine keys, which a stat must not pick as its shown field.
+def machine_keys: ["__name__", "instance", "job", "app_id", "role", "dna"];
+# Variables whose raw value is a name a person reads. Any other variable
+# (network holds a DNA hash, room_app an installed app id) may be shown only
+# through its text, and only when it is a query variable, whose text can
+# differ from its value.
+def named_variables: ["node", "site", "conductor", "room_label"];
+
 def panels: .panels[]? | ., (.panels // [])[];
 # Every {{label}} in a legend and every ${__field.labels.label} or {{label}} in
-# a display name.
+# a display name. A bare ${__field.labels} prints every label at once, and
+# counts as the label "every label".
 def legend_labels: [scan("\\{\\{ *([A-Za-z_][A-Za-z0-9_]*) *\\}\\}") | .[0]];
 def display_labels: legend_labels + [scan("__field\\.labels\\.([A-Za-z_][A-Za-z0-9_]*)") | .[0]]
-  + [scan("__field\\.labels\\[\"([^\"]+)\"\\]") | .[0]];
+  + [scan("__field\\.labels\\[\"([^\"]+)\"\\]") | .[0]]
+  + [scan("__field\\.labels(?![.\\[A-Za-z0-9_])") | "every label"];
+# Every dashboard variable a string shows, as {name, format}: $name,
+# ${name}, ${name:format} and [[name]]. Grafana's own (__all, __field...)
+# are left to the rules above.
+def variables_shown:
+  [(scan("\\$\\{([A-Za-z_][A-Za-z0-9_]*)(?::([A-Za-z]+))?\\}"),
+    scan("\\[\\[([A-Za-z_][A-Za-z0-9_]*)(?::([A-Za-z]+))?\\]\\]"),
+    (scan("\\$([A-Za-z_][A-Za-z0-9_]*)") | . + [null]))
+   | {name: .[0], format: .[1]} | select(.name | startswith("__") | not)];
+# What a stat, gauge or bar gauge shows when it picks fields itself: the
+# machine keys its reduceOptions.fields (a name, or a /regex/) would pick.
+def picked_keys:
+  (.options.reduceOptions.fields // "") as $fields
+  | if $fields == "" then empty
+    elif ($fields | test("^/.*/$")) then ($fields[1:-1]) as $re | machine_keys[] | select(test($re))
+    else machine_keys[] | select(. == $fields)
+    end;
 
 # The columns a table shows: the row and column of a matrix, or the fields a
 # filterFieldsByName transform keeps, less those an override hides. A table
@@ -41,10 +68,20 @@ def shown_fields:
     end;
 
 def offences($file):
-  panels as $p
+  ([.templating.list[]? | {(.name): .type}] | add // {}) as $types
+  | panels as $p
   | ($p.title // "") as $title
   | "\($file): panel \($title | tojson)" as $at
-  | if $p.type == "row" then empty
+  # Text a person reads that may name a variable: titles, descriptions, a
+  # text panel's content, legends and display names.
+  | ([$p.title, $p.description, $p.options.content?, ($p.targets // [] | .[].legendFormat),
+      ($p.fieldConfig.defaults.displayName?),
+      ($p.fieldConfig.overrides[]?.properties[]? | select(.id == "displayName" or .id == "description") | .value)]
+     | map(strings) | .[] | variables_shown[]
+     | select(IN(.name; named_variables[]) | not)
+     | select(.format != "text" or $types[.name] != "query")
+     | "\($at) shows the variable \(.name)\(if .format then ":" + .format else "" end), whose value is not a name"),
+    if $p.type == "row" then empty
     else
       (if ($p.description // "" | test("\\S")) then empty else "\($at) has no description" end),
       (if $title == exempt then empty else
@@ -60,6 +97,7 @@ def offences($file):
           | (if has("displayName") then .displayName elif .id? == "displayName" then .value else empty end)
           | strings | display_labels[] | select(IN(human[]) | not)
           | "\($at) display name shows the label \(.)"),
+        ($p | picked_keys | "\($at) shows the field \(.)"),
         (if $p.type == "table" then
           ($p | shown_fields) as $shown
           | if $shown.ok | not then "\($at) is a table that keeps every label: give it a filterFieldsByName include list"
