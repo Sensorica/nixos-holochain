@@ -25,6 +25,7 @@ flake.nix
 │   ├── dashboards/                ← provisioned Grafana dashboards
 │   ├── holochain-windtunnel.nix   ← optional: donate the machine to the Foundation's Nomad cluster
 │   ├── holochain-http-gateway.nix ← optional: HTTP gateway in front of the conductor
+│   ├── holochain-bootstrap.nix    ← optional: Kitsune2 bootstrap and relay server
 │   └── default.nix                ← aggregator
 ├── packages/
 │   └── holochain-http-gateway.nix ← the hc-http-gw build, one release per Holochain line
@@ -48,6 +49,7 @@ Modules are independent. Import only what you need.
 | `prometheus.service` | simple | `holochain-grafana.enable` |
 | `holochain-http-gateway.service` | simple, `DynamicUser`, restarts until the conductor answers | `holochain-http-gateway.enable` |
 | `podman-wind-tunnel-runner.service` | simple, from `virtualisation.oci-containers` | `holochain-windtunnel.enable` |
+| `holochain-bootstrap.service` | simple, `DynamicUser`, no state directory | `holochain-bootstrap.enable` |
 
 ## Service dependency graph
 
@@ -163,6 +165,17 @@ network:
 
 The full set of top-level keys the 0.7.0 schema accepts is `admin_interfaces`, `data_root_path`, `db_max_readers`, `db_sync_level`, `incoming_request_concurrency_limit`, `keystore`, `network`, `restore_chain_quorum`, `tracing_override`, `tracing_scope`, `tuning_params` and `wasm_backend`.
 
+Four more options add keys only when set, so the default config above is unchanged by them:
+
+| Option | Renders | Lines |
+|---|---|---|
+| `relayAllowPlainText` | `network.advanced: {"irohTransport":{"relayAllowPlainText":true}}`, merged by the conductor under the keys it sets itself | both |
+| `requestTimeoutS` | `network.request_timeout_s` | both |
+| `dbSyncLevel` | top-level `db_sync_level` (`Full`, `Normal`, `Off`) | 0.7 only; warned and dropped below it |
+| `wasmBackend` | top-level `wasm_backend` (`cranelift`, `LLVM`, `wasmi`) | 0.7 only; warned and dropped below it |
+
+The `edgenodeConfigRender` check renders all four on each line and starts that line's conductor on the result. The holonix 0.7.0 binary is built with cranelift only: given `wasm_backend: LLVM` it exits with "Conductor is configured to use the LLVM WASM backend but this binary does not support it", which is also how that check was shown able to fail.
+
 ### `dataDir` has a length limit
 
 The lair keystore listens on a unix socket at `${dataDir}/ks/socket`, and unix socket paths are capped at `SUN_LEN`, 108 bytes. A deep `dataDir` makes the conductor exit during startup with a message that never mentions the config:
@@ -274,7 +287,7 @@ Each entry of `connections` carries `pub_key`, `send_message_count`, `send_bytes
 Two properties are worth stating explicitly:
 
 - **A down conductor reports `holochain_conductor_up 0`, it does not disappear.** The script writes the file whether or not the call succeeded, so a dead node is visible on the dashboard rather than absent from it. This is the difference between a panel that says "one node is down" and a panel that quietly draws four lines instead of five.
-- **The byte and message counters only go up.** The reply counts per open connection, so its plain sum drops whenever a peer disconnects, and `rate()` reads any drop as a counter reset: it would draw the whole remaining total as a burst of traffic that never happened. So the timer keeps the counts it last saw per connection, keyed by `pub_key` and `opened_at_s`, and the running totals, in `conductor-metrics-counters.json` under the conductor's `dataDir`, and adds each connection's growth since the previous run (`modules/conductor-counters.jq`). What a connection moves between the timer's last look and its closing is not counted, so the totals undercount by at most one interval of a closing connection. Losing the state file restarts them from zero, which Prometheus handles as the reset it is.
+- **The byte and message counters only go up.** The reply counts per open connection, so its plain sum drops whenever a peer disconnects, and `rate()` reads any drop as a counter reset: it would draw the whole remaining total as a burst of traffic that never happened. So the timer keeps the counts it last saw per connection, keyed by `pub_key` and `opened_at_s`, and the running totals, in `conductor-metrics-counters.json` under the conductor's `dataDir`, and adds each connection's growth since the previous run (`modules/conductor-counters.jq`). What a connection moves between the timer's last look and its closing is not counted, so the totals undercount by at most one interval of a closing connection. A run the conductor does not answer leaves the state as it was, so a connection that outlives a timeout is not counted a second time from zero. Losing the state file restarts them from zero, which Prometheus handles as the reset it is.
 
 #### Per-DHT series
 
@@ -514,4 +527,4 @@ See GitHub issues for outstanding implementation decisions:
 - Secrets management for network seeds (sops-nix integration?)
 - DHT data persistence across config changes
 - Conductor version upgrade paths without state loss
-- A production bootstrap and relay pair for either line, once the Foundation documents one
+- A production bootstrap and relay pair for either line, once the Foundation documents one. The `holochain-bootstrap` module runs your own; it is tested over plain HTTP on a LAN, not yet with TLS.
