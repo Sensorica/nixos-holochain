@@ -132,9 +132,10 @@ in {
       users.sensorica = {
         home.stateVersion = "26.05";
 
-        # An icon on the desktop that opens the fleet's Grafana home. Plasma
-        # runs a .desktop file from ~/Desktop without asking only when it is
-        # executable.
+        # An icon on the desktop that opens the fleet's Grafana home page on
+        # this Holoport: the monitor's bare / would open on the monitor.
+        # Plasma runs a .desktop file from ~/Desktop without asking only when
+        # it is executable.
         home.file."Desktop/grafana.desktop" = {
           executable = true;
           text = ''
@@ -143,7 +144,7 @@ in {
             Name=Grafana
             Comment=The fleet's dashboards on ${lib.removePrefix "http://" cfg.grafanaUrl}
             Icon=office-chart-area
-            URL=${cfg.grafanaUrl}/
+            URL=${cfg.grafanaUrl}/d/holochain-home?var-node=${host}
           '';
         };
 
