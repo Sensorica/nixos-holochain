@@ -22,14 +22,19 @@
 # `happs.hrea.networkSeed = mkDefault ...;`, one pair per hApp) rather than as
 # one `happs = mkDefault {...};`: `attrsOf (submodule ...)` merges each hApp's
 # fields as independent options, and a whole-set `mkDefault` does not survive
-# a host overriding a sibling field (verified empirically — a host setting
+# a host overriding a sibling field (verified empirically: a host setting
 # only `happs.hrea.networkSeed` left `happs.hrea.src` "accessed but has no
 # value defined", since NixOS's module merge does not push an outer
 # `mkDefault` recursively through a raw nested attribute set here). Per-leaf
 # `mkDefault` has no such gap: each field stands on its own default,
-# independent of what a host does to any other field. A host that wants a
-# different hApp set entirely still reassigns `happs` as a whole, which beats
-# every one of these per-leaf defaults the same way. `services.holochain-
+# independent of what a host does to any other field.
+#
+# The same merge means a plain reassignment cannot trim the hApp set. `happs`
+# is `attrsOf`, so a host writing `happs = { hrea = ...; };` is unioned with
+# this profile's keys, and the per-leaf defaults still fill in kando and
+# requests-and-offers. To drop one app, set `happs.<app>.installed = false;`
+# (the installer then skips it and its bundle is never built). To replace the
+# set entirely, write `happs = lib.mkForce { ... };`. `services.holochain-
 # edgenode.enable` is left to the host: this module carries the workshop's
 # content shape, not whether the service runs at all.
 {
