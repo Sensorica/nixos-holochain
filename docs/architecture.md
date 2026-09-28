@@ -21,6 +21,7 @@ The decisions behind this layout are recorded one per file in [`adr/`](adr/READM
 flake.nix
 ├── modules/
 │   ├── holochain-edgenode.nix     ← core: conductor + lair + hApp installer + metrics
+│   ├── families.jq                ← the one place a holochain_* family's HELP and TYPE are written
 │   ├── conductor-metrics.jq       ← dump-network-stats → Prometheus text
 │   ├── conductor-counters.jq      ← running byte and message totals across closed connections
 │   ├── dht-metrics.jq             ← list-apps + dump-network-metrics → per-DHT Prometheus text
@@ -31,9 +32,15 @@ flake.nix
 │   ├── holochain-windtunnel.nix   ← optional: donate the machine to the Foundation's Nomad cluster
 │   ├── holochain-http-gateway.nix ← optional: HTTP gateway in front of the conductor
 │   ├── holochain-bootstrap.nix    ← optional: Kitsune2 bootstrap and relay server
-│   └── default.nix                ← aggregator
+│   ├── holochain-moss-node.nix    ← optional: a Moss group's always-online node (not in default)
+│   ├── moss-node-names.jq         ← the Moss node's names file for the exporter
+│   ├── dashboards-moss/           ← the Moss node's Grafana page
+│   ├── sensorica-event-node.nix   ← the Sensorica workshop profile (not in default)
+│   ├── sensorica-happs.nix        ← the three workshop hApps, fetched by hash
+│   └── default.nix                ← aggregator: edgenode, grafana, windtunnel, http-gateway, bootstrap
 ├── packages/
 │   ├── holochain-http-gateway.nix ← the hc-http-gw build, one release per Holochain line
+│   ├── holochain-conductor-exporter.nix ← the one program that writes holochain_* series, for any conductor
 │   └── wdocker.nix                ← Moss wdocker, with the Holochain it pins
 └── templates/
     ├── minimal/                   ← nix flake init -t …#minimal: one edgenode
@@ -58,6 +65,8 @@ Modules are independent. Import only what you need.
 | `holochain-bootstrap.service` | simple, `DynamicUser`, no state directory | `holochain-bootstrap.enable` |
 | `holochain-service-health.service` | oneshot, driven by the timer: runs every declared health check and writes `holochain-service-health.prom` | a health check is declared (the bootstrap server declares one) and `services.holochain-services.textfileDirectory` is set |
 | `holochain-service-health.timer` | `OnBootSec` / `OnUnitActiveSec` = 30 s | as above |
+| `moss-node.service` | simple, its own `moss-node` user, the password as a credential | `holochain-moss-node.enable` ([moss-node.md](moss-node.md#as-a-nixos-service)) |
+| `moss-node-metrics.service`, `moss-node-metrics.timer` | oneshot driven by a 30 s timer: the conductor exporter under the name `Moss` | `holochain-moss-node.enable` |
 
 ## Service dependency graph
 

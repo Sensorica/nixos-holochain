@@ -13,9 +13,9 @@
 |------|---------|------|
 | 0:00 to 0:30 | **Conceptual intro** | Declarative vs imperative. Why this matters for Holochain. Fractal sovereignty framing if the room is receptive. |
 | 0:30 to 1:15 | **Flake walkthrough** | Open the repo in Kate. Walk through `flake.nix`, the module, a host config. Show option discovery via `nix repl`. |
-| 1:15 to 2:15 | **First deploy** | Each participant boots, clones the repo, runs `nixos-rebuild switch --flake .#minimal`. Conductor visible via `systemctl status`. |
-| 2:15 to 3:15 | **Add Wind Tunnel + observe** | Flip `services.holochain-windtunnel.enable = true`. Redeploy. Open Grafana, watch fleet traffic light up. |
-| 3:15 to 3:45 | **Modify, rollback, join Moss** | Change a hApp property, redeploy, then `nixos-rebuild --rollback`. This is where the "aha" usually lands. Then have participants open Moss on their laptop and join the group hosted by the fleet. |
+| 1:15 to 2:15 | **First deploy** | Each participant boots, clones the repo, runs `sudo nixos-rebuild switch --flake .#sensorica-holoport-0N` from `examples/sensorica-fleet` (`rebuild` on an installed Holoport). Conductor visible via `systemctl status`. |
+| 2:15 to 3:15 | **Observe** | Open Grafana's room screen and watch the fleet's traffic: the five conductors running hREA, Kando and Requests & Offers on one network seed. Wind Tunnel is not part of this: it feeds nothing to Grafana (see docs/architecture.md § What the Wind Tunnel runner is, and is not). |
+| 3:15 to 3:45 | **Modify, rollback, join Moss** | Change a hApp property, redeploy, then `sudo nixos-rebuild switch --rollback`. This is where the "aha" usually lands. Then have participants open Moss on their laptop and join the group hosted by the fleet. |
 | 3:45 to 4:00 | **Q&A + next steps** | How to extend the module. How to contribute back. Where the project goes from here. |
 
 ---
@@ -34,9 +34,9 @@ Workshop nodes ship with KDE Plasma 6 as the desktop. Reasoning:
 ## Facilitation notes
 
 - **Option A vs B trade-off.** Option A (pre-baked module, participants are users) is what this workshop does. Option B (live module authoring) is more interesting but riskier and only works for groups already comfortable with Nix. For 5-machine fleets with mixed audiences, A wins.
-- **Deployment tool.** `colmena apply --on @all` for parallel deploys. Plain `nixos-rebuild switch --target-host` if colmena feels like too much.
+- **Deployment tool.** `colmena apply --impure --on @all` for parallel deploys (`--impure`: see the fleet README). Plain `nixos-rebuild switch --target-host` if colmena feels like too much.
 - **Network reality.** Test the workshop network in advance. The December 2025 HolOS workshop was bitten by this. Bring a dedicated router.
-- **Grafana moment.** This is the high point of the workshop. Make sure Wind Tunnel is generating visible traffic before flipping the dashboard to the big screen.
+- **Grafana moment.** This is the high point of the workshop. Make sure the room screen shows the three hApps In step on every machine before flipping it to the big screen.
 
 ---
 
@@ -44,10 +44,10 @@ Workshop nodes ship with KDE Plasma 6 as the desktop. Reasoning:
 
 | Symptom | Likely cause | Fix |
 |---------|-------------|-----|
-| `holochain-conductor.service` fails immediately | Lair keystore not initialized | Check `journalctl -u holochain-conductor` for lair errors; may need a first-boot init step |
-| `happ-installer.service` fails silently | hApp file not found at path | Verify `happs/` contains the `.happ` files before ISO build |
+| `holochain-conductor.service` fails immediately | Conductor or keystore error | Check `journalctl -u holochain-conductor`; the unit creates its lair passphrase itself on first boot, so no init step is missing |
+| `holochain-happ-installer.service` fails | An app did not install or enable within `installerTimeout` (900 s on the fleet); the first boot compiles three hApps | `journalctl -u holochain-happ-installer`, then `systemctl restart holochain-happ-installer`. Bundles are fetched by hash when the system is built, never read from `happs/` |
 | Participants can't see each other's nodes | Firewall closed | Ensure `openFirewall = true` and router is not blocking DHT traffic |
-| `colmena apply` can't reach nodes | SSH keys not set up | Add facilitator SSH key to each host config before building |
+| `colmena apply` can't reach nodes | SSH keys not set up | Add the facilitator's SSH key to `operatorKeys` in `examples/sensorica-fleet/hosts/common.nix` before building |
 | Live USB drops to emergency mode, "Expecting device /dev/disk/by-label/nixos-graphical-…" | Stick made with Ventoy | Write the ISO with `dd` and check it with `cmp`; see docs/deployment.md § Rescuing an install |
 | Installer fails on `cache.nixos.org … after 0 ms` | Router DNS answers IPv6 only, no IPv6 route | Public DNS on the live session with `nmcli`, then retry; see docs/deployment.md § Rescuing an install |
 | Installer offers only manual partitioning on retry | Previous failed run still mounted | Unmount `/tmp/calamares-root-*` and `swapoff -a`, relaunch |

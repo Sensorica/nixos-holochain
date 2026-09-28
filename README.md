@@ -2,7 +2,7 @@
 
 > A declarative substrate for running Holochain edgenodes, hApps, and developer environments. Built at Sensorica, intended for the Holochain community.
 
-**Status:** the modules work and are VM-tested. A conductor and its hApps come up at boot on both supported Holochain lines (0.7.0 and 0.6.3), a fleet's traffic is on a provisioned Grafana dashboard, and an HTTP gateway serves zome reads over HTTP. Ten NixOS VM tests run in CI. What is still open is hardware: the five-machine fleet has not been deployed to real Holoports yet (issues [#8](https://github.com/Sensorica/nixos-holochain/issues/8) to [#12](https://github.com/Sensorica/nixos-holochain/issues/12)).
+**Status:** the modules work and are VM-tested. A conductor and its hApps come up at boot on both supported Holochain lines (0.7.0 and 0.6.3), a fleet's traffic is on a provisioned Grafana dashboard, and an HTTP gateway serves zome reads over HTTP. Fourteen NixOS VM tests run in CI. What is still open is hardware: one Holoport, `sensorica-holoport-01`, was installed from the [runbook](docs/deployment.md#installing-on-a-holoport-legacy-bios) on 2026-09-27, and the five-machine fleet is not deployed yet (issues [#8](https://github.com/Sensorica/nixos-holochain/issues/8) to [#12](https://github.com/Sensorica/nixos-holochain/issues/12)).
 **License:** [MIT](LICENSE), the license of nixpkgs, so any module here can be reused in other flakes or proposed upstream to nixpkgs as it is. The hApps these modules run keep their own licenses (Holochain itself and Moss are CAL-1.0, hREA is Apache-2.0).
 **Origin:** Successor to the archived [Sensorica/holoports-workshop](https://github.com/Sensorica/holoports-workshop), pivoting from HolOS appliance-image deployment to vanilla NixOS authorship.
 **Documentation:** the book at [sensorica.github.io/nixos-holochain](https://sensorica.github.io/nixos-holochain/), built from `docs/` with mdBook.
@@ -97,44 +97,32 @@ See [`docs/deployment.md`](docs/deployment.md) for the deployment guide, [`docs/
 
 ```
 nixos-holochain/
-├── flake.nix                          # Entry point: inputs, modules, templates, packages, VM checks
-├── modules/
-│   ├── holochain-edgenode.nix         # Core: conductor + lair + hApp installer + metrics
-│   ├── conductor-metrics.jq           # dump-network-stats → Prometheus text
-│   ├── conductor-counters.jq          # running byte and message totals across closed connections
-│   ├── dht-metrics.jq                 # list-apps + dump-network-metrics → per-DHT Prometheus text
-│   ├── holochain-grafana.nix          # Prometheus + Grafana for a fleet
-│   ├── dashboards/                    # Provisioned Grafana dashboards
-│   ├── holochain-windtunnel.nix       # Opt-in: donate the machine to the Foundation's Nomad cluster
-│   ├── holochain-http-gateway.nix     # HTTP gateway in front of the conductor
-│   └── default.nix                    # Module aggregator
-├── packages/
-│   ├── holochain-http-gateway.nix     # hc-http-gw build, one release per Holochain line
-│   └── wdocker.nix                    # Moss always-online node, with the Holochain it expects
+├── flake.nix                          # Entry point: inputs, modules, templates, packages, checks
+├── modules/                           # The NixOS modules, with the exporters, recording rules and dashboards they ship
+├── packages/                          # hc-http-gw per Holochain line, the conductor exporter, Moss wdocker
 ├── templates/
 │   ├── minimal/                       # nix flake init -t …#minimal: one edgenode
 │   └── fleet/                         # nix flake init -t …#fleet: five nodes, Grafana, live ISO
 ├── examples/
-│   └── sensorica-fleet/               # The Sensorica Lab fleet: its own flake, five hosts, ISO, colmena hive
-│       ├── flake.nix
-│       ├── hosts/common.nix           # shared host config, operator SSH keys
-│       ├── hosts/sensorica-holoport-01..05/     # configuration.nix + hardware-configuration.nix per machine
-│       ├── hosts/workshop-iso/        # Live ISO for participants
-│       └── README.md
+│   └── sensorica-fleet/               # The Sensorica Lab fleet: its own flake, five Holoports, ISO, Colmena hive (layout in its README)
+├── tests/                             # Fixtures and the checks that need no VM
 ├── happs/                             # .happ bundles (not committed, see happs/README.md)
 ├── secrets/                           # private material only, gitignored except *.example
 ├── CHANGELOG.md                       # One section per release, published as its release note
 ├── scripts/
-│   └── changelog-section.sh           # Prints one version's CHANGELOG section
+│   ├── changelog-section.sh           # Prints one version's CHANGELOG section
+│   └── holoport-install.sh            # Erases one disk and installs a system that boots on a Holoport
 ├── workshop/
 │   ├── facilitator-guide.md
 │   ├── participant-handout.md
 │   └── preflight-checklist.md
+├── book.toml                          # The documentation book, built from docs/ with mdBook
 └── docs/
-    ├── architecture.md
+    ├── introduction.md                # The book's first page; SUMMARY.md is its table of contents
+    ├── architecture.md                # How the pieces fit, with every file under modules/ and packages/
     ├── module-options.md              # generated by `nix build .#options-doc`
     ├── deployment.md
-    ├── moss-node.md                   # running the packaged Moss node by hand
+    ├── moss-node.md                   # the Moss always-online node, as a service and by hand
     ├── releasing.md                   # How a maintainer cuts a release candidate and a release
     ├── adr/                           # architecture decision records, one per file
     ├── images/                        # dashboard screenshots
@@ -152,6 +140,8 @@ nixos-holochain/
 | `holochain-http-gateway` | `hc-http-gw` in front of the conductor, exposing named zome functions over HTTP. Nothing is exposed by default. |
 | `holochain-windtunnel` | Opt-in, off by default: joins the machine to the Holochain Foundation's Nomad cluster to run their Wind Tunnel scenarios. |
 | `holochain-bootstrap` | The Kitsune2 bootstrap and relay server on your own machine, so a fleet finds itself without the Foundation's test server or the internet. See [Running your own bootstrap and relay](docs/deployment.md#running-your-own-bootstrap-and-relay). |
+| `holochain-moss-node` | A Moss group's always-online node as a service, beside the edgenode, with its readings and its own Grafana page. Not part of `nixosModules.default`, because it runs a second conductor. See [`docs/moss-node.md`](docs/moss-node.md). |
+| `sensorica-event-node` | The Sensorica workshop's profile layered on `holochain-edgenode`: Holochain 0.6.3, hREA, Kando and Requests & Offers on one network seed. Not part of `nixosModules.default`. See [`examples/sensorica-fleet/README.md`](examples/sensorica-fleet/README.md#holochain-line-and-happs). |
 
 Key options for `services.holochain-edgenode`:
 
@@ -168,13 +158,13 @@ Key options for `services.holochain-edgenode`:
 | `conductorMetrics.enable` | `false` | The conductor's own `holochain_*` series |
 | `openFirewall` | `false` | Open firewall ports |
 
-The full reference for all five modules is [`docs/module-options.md`](docs/module-options.md), generated from the declarations by `nix build .#options-doc`.
+The full reference for `holochain-edgenode`, `holochain-grafana`, `holochain-http-gateway`, `holochain-windtunnel`, `holochain-bootstrap` and `holochain-services` (the list of services every module feeds to the dashboards) is [`docs/module-options.md`](docs/module-options.md), generated from the declarations by `nix build .#options-doc`. The Moss node's options are in [`docs/moss-node.md`](docs/moss-node.md#as-a-nixos-service); `sensorica-event-node` declares none.
 
 ---
 
 ## Tests
 
-Ten NixOS VM tests and a conductor config check, all built in CI:
+Fourteen NixOS VM tests, all built in CI: thirteen in the `nix flake check` job, and `vmTestHoloportInstall` in a job of its own because it copies a whole system onto a virtual disk ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
 
 | Check | What it proves |
 |---|---|
@@ -182,11 +172,15 @@ Ten NixOS VM tests and a conductor config check, all built in CI:
 | `vmTestWithHapp` / `vmTestWithHapp-0_6` | A hApp installs once, stays enabled, and survives a cold boot on both lines, and every one of its cells has its `holochain_dht_*` series on `/metrics` |
 | `vmTestConductorMetrics-0_6` | The conductor's gauges appear on `/metrics` on the 0.6 line |
 | `vmTestGrafana` | Conductor and per-DHT series reach Prometheus, the five dashboards are provisioned with their data source and "What is this machine running?" is Grafana's home page, opening on this machine, every service its modules list carries its version, every panel query answers through Grafana's own query API (three are only required not to error: the two temperature panels, since a VM has no sensor, and "Same data everywhere", which needs two nodes), and the pages name a failed unit, a dead node and a stale, silent or unreadable conductor as such |
+| `vmTestServices` / `vmTestServices-noBootstrap` | The node page names exactly the services the enabled modules installed, each Running; a bootstrap server frozen, stopped or failing reads Not answering, Stopped or Failed, and the room screen's tile reads "A service is down"; without the server, the same list less that one |
 | `vmTestGateway` | A zome read answers 200 with JSON through the HTTP gateway, and a function outside the allow list answers 403 |
 | `vmTestWindtunnel` | The generated container unit carries the flags the runner requires, and stays stopped when `autoStart = false` |
 | `vmTestWdocker` | The packaged Moss `wdocker` starts its pinned Holochain 0.6.1 conductor through `wdaemon` in an offline VM, downloads nothing into its `bins` directory, and `wdocker stop` ends the conductor |
+| `vmTestMossNode` | The Moss node service starts with no terminal, reads its password from a credential, survives a restart and reports `holochain_conductor_up{conductor="Moss"} 1`; with no password file it never starts, and an empty one is refused |
 | `vmTestBootstrap` | Two 0.6 edgenodes with no internet find each other through a `holochain-bootstrap` server and its plain-HTTP relay; its falsifier, with one node on the wrong port, must fail |
-| `edgenodeConfigRender` | `relayAllowPlainText`, `requestTimeoutS`, `dbSyncLevel` and `wasmBackend` render on each line, and that line's real conductor starts on the result |
+| `vmTestHoloportInstall` | `holoport-install` lays out an empty SATA disk the ADR-017 way and installs `sensorica-holoport-01` on it; the disk then boots under SeaBIOS, which is legacy BIOS like a Holoport, with GRUB for both firmwares, the conductor active and the three workshop hApps enabled once each |
+
+The checks without a VM are built in the same job: `edgenodeConfigRender` (`relayAllowPlainText`, `requestTimeoutS`, `dbSyncLevel` and `wasmBackend` render on each line, and that line's real conductor starts on the result), the exporter checks (`conductorMetricsJq`, `dhtMetricsJq`, `metricsHelpAgreement`, `metricsNameShape`, `edgenodeNamesWiring`), the Grafana checks (`holochainRules`, `grafanaProvisioning`, `dashboardLabels`, `dashboardWords`, `dashboardQueries`), the Moss checks (`moss-dashboard`, `moss-names`), and `edgenodeBinaryCache`, which `nix flake check` settles at evaluation.
 
 ```bash
 nix flake check --no-build --all-systems
@@ -227,7 +221,7 @@ Each ticked item names the pull request that closed it.
 - [ ] Validated on a physical machine ([#8](https://github.com/Sensorica/nixos-holochain/issues/8))
 
 **Phase 2: workshop ready**
-- [x] `holochain-grafana`: Prometheus and Grafana with the "Holochain Fleet" dashboard and its data source provisioned (#17)
+- [x] `holochain-grafana`: Prometheus and Grafana with the fleet dashboard (`holochain-fleet`) and its data source provisioned (#17)
 - [x] `conductorMetrics`: the conductor's own network stats as `holochain_*` series, on both lines (#17)
 - [x] The example fleet exports metrics on all five nodes, with the Wind Tunnel runner off in writing (#17)
 - [x] `holochain-windtunnel`: the Foundation's runner image, off by default, with what enabling it costs written into the option (#17)
@@ -245,7 +239,7 @@ Each ticked item names the pull request that closed it.
 - [x] `CONTRIBUTING.md` with the VM-test and options-doc rules (#18)
 - [ ] hAppenings Community Substack announcement
 - [ ] hREA module (composable with the edgenode module)
-- [ ] Documentation site
+- [x] Documentation site: the book at [sensorica.github.io/nixos-holochain](https://sensorica.github.io/nixos-holochain/) (#67)
 
 **Phase 4: production hardening**
 - [ ] sops-nix integration for secrets

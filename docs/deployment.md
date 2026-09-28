@@ -33,7 +33,7 @@ Before running `colmena apply` from `examples/sensorica-fleet`, each host must h
 
 1. A real `hardware-configuration.nix` replacing the committed placeholder, generated on the target machine:
    ```bash
-   sudo nixos-generate-config --show-hardware-config > examples/sensorica-fleet/hosts/edgenode-XX/hardware-configuration.nix
+   sudo nixos-generate-config --show-hardware-config > examples/sensorica-fleet/hosts/sensorica-holoport-0N/hardware-configuration.nix
    ```
 2. The facilitator's SSH public key in `examples/sensorica-fleet/hosts/common.nix` in the `operatorKeys` list at the top (used for the `sensorica` account and for root, which Colmena connects as; public keys are committed, a flake never sees untracked files).
 
@@ -168,7 +168,7 @@ journalctl -u holochain-happ-installer --no-pager | grep 'Enabled app'
 curl -s -u "admin:NEW_PASSWORD" 'localhost:3000/api/search?query=Holochain'
 ```
 
-The first boot compiles three hApps, so `holochain-happ-installer` can take several minutes to finish on a Holoport (about a minute in the VM check). The conductor and the Moss node should each answer `active`; the journal should end with `hc-sandbox: Enabled app: "hrea"`, `"kando"` and `"requests-and-offers"`; and the last line should return the **Holochain Fleet** dashboard, which is also at `http://HOLOPORT_IP:3000` from a laptop on the same network. [Verifying the deployment](#verifying-the-deployment) has the metrics checks.
+The first boot compiles three hApps, so `holochain-happ-installer` can take several minutes to finish on a Holoport (about a minute in the VM check). The conductor and the Moss node should each answer `active`; the journal should end with `hc-sandbox: Enabled app: "hrea"`, `"kando"` and `"requests-and-offers"`; and the last line should list the dashboards whose titles name Holochain, among them the fleet page, **Which Holochain node needs attention?** Grafana is also at `http://HOLOPORT_IP:3000` from a laptop on the same network, where it opens on **What is this machine running?** [Verifying the deployment](#verifying-the-deployment) has the metrics checks.
 
 The Moss node hosts no group until it joins one. Once per machine, as root on the Holoport, run `moss-node join "INVITE_LINK"` with an invite from the Sensorica group in Moss, starting the line with a space so the link stays out of shell history, as described in [Moss always-online node](moss-node.md#as-a-nixos-service); `moss-node status` then lists the group.
 
@@ -364,7 +364,7 @@ On the monitor node:
 # every configured scrape target should be "health":"up"
 curl -s localhost:9090/api/v1/targets | jq '.data.activeTargets[] | {scrapeUrl, health, lastError}'
 
-# the four provisioned dashboards should be there
+# the five provisioned dashboards should be there, six where the Moss page is
 # export GRAFANA_ADMIN_PASSWORD first; on a node that kept the module
 # default it is the workshop password
 curl -s -u "admin:$GRAFANA_ADMIN_PASSWORD" 'localhost:3000/api/search?tag=holochain' | jq -r '.[].uid'
@@ -446,7 +446,7 @@ Next to a conductor's gigabyte this is noise, so one Holoport can carry the serv
 
 ```bash
 # Roll back to the previous NixOS generation
-sudo nixos-rebuild --rollback
+sudo nixos-rebuild switch --rollback
 
 # List all generations
 sudo nix-env --list-generations --profile /nix/var/nix/profiles/system
