@@ -639,8 +639,11 @@ running totals kept in ` conductor-metrics-counters.json ` under
 calls ` dump-network-metrics --include-dht-summary ` and writes one
 ` holochain_dht_* ` series set per DHT the conductor is in (peers, ops
 held here and by the best peer, pending fetches, seconds since the
-last gossip, completed rounds and timeouts), labelled ` app `, ` role `
-and ` dna `\. Requires ` metricsExporter.enable `
+last gossip, completed rounds and timeouts), labelled ` app_id `,
+` role ` and ` dna `, and names every app and DHT in ` holochain_app_info `
+and ` holochain_dht_info ` from ` displayName ` and ` roleNames `\. Every
+line carries ` conductor `, from ` name `\. Requires
+` metricsExporter.enable `
 \.
 
 
@@ -698,6 +701,41 @@ string
 
 ```nix
 "1min"
+```
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
+## services\.holochain-edgenode\.conductorMetrics\.name
+
+
+
+The ` conductor ` label on every ` holochain_* ` series this node
+writes, and the name dashboards show for the conductor\. It keeps
+two conductors on one machine apart (this one and a Moss node, say),
+so give each its own\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+
+```nix
+"Holochain"
+```
+
+
+
+*Example:*
+
+```nix
+"Workshop"
 ```
 
 *Declared by:*
@@ -803,6 +841,43 @@ attribute set of (submodule)
 
 
 
+## services\.holochain-edgenode\.happs\.\<name>\.displayName
+
+
+
+What dashboards call this app, as ` app_name ` on the
+` holochain_app_info ` and ` holochain_dht_info ` series\. ` null `
+falls back to the bundle’s own name from ` list-apps `, with
+underscores and dashes read as spaces and the first letter
+capitalised (` requests_and_offers ` reads “Requests and
+offers”)\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+"Requests & Offers"
+```
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
 ## services\.holochain-edgenode\.happs\.\<name>\.installed
 
 
@@ -846,6 +921,46 @@ null or string
 
 ```nix
 null
+```
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
+## services\.holochain-edgenode\.happs\.\<name>\.roleNames
+
+
+
+What dashboards call each part of this app, keyed by DNA role,
+as ` part_name ` on ` holochain_dht_info `\. A role left out reads
+as nothing when the app has one role, so its network is shown
+by the app’s name alone, and otherwise as the role id with a
+one-letter prefix dropped and underscores read as spaces
+(` rFiles ` reads “Files”)\.
+
+
+
+*Type:*
+attribute set of string
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+
+
+*Example:*
+
+```nix
+{
+  hrea = "Accounting";
+  requests_and_offers = "Listings";
+}
 ```
 
 *Declared by:*

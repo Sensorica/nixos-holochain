@@ -10,6 +10,9 @@
 # number at any depth: a line that is not a number would make node_exporter
 # drop the whole file, holochain_conductor_up included.
 #
+# $conductor names the conductor, and every line carries it as a label: one
+# machine can run more than one conductor (an edgenode's own next to a Moss
+# node), and their series must not merge.
 # $up is 1 when the admin interface answered and 0 when it did not, so the
 # series never disappears from the dashboard when a conductor is down.
 # $now is the scrape time in seconds since the epoch.
@@ -20,64 +23,37 @@
 # case no holochain_conductor_apps line is written rather than a false zero.
 # Every installed app counts under its status type; enabled and disabled are
 # always written, so an empty conductor reads 0 rather than nothing.
+#
+# The HELP and TYPE lines come from families.jq, shared with dht-metrics.jq.
 
-def metric($name; $help; $type; $value):
-  "# HELP \($name) \($help)",
-  "# TYPE \($name) \($type)",
-  "\($name) \($value)";
+include "families";
+
+def conductor: "conductor=\"\($conductor | escape)\"";
+
+def metric($name; $value):
+  family($name), "\($name){\(conductor)} \($value)";
 
 def apps:
   if $apps == null then empty
   else
     ([$apps[] | .status.type // "unknown" | tostring | ascii_downcase | gsub("[^a-z_]"; "_")]
       | reduce .[] as $s ({enabled: 0, disabled: 0}; .[$s] += 1)) as $by
-    | "# HELP holochain_conductor_apps Installed apps, by status type from list-apps.",
-      "# TYPE holochain_conductor_apps gauge",
-      ($by | to_entries[] | "holochain_conductor_apps{status=\"\(.key)\"} \(.value)")
+    | family("holochain_conductor_apps"),
+      ($by | to_entries[] | "holochain_conductor_apps{\(conductor),status=\"\(.key)\"} \(.value)")
   end;
 
 (.transport_stats // {}) as $t
 | ($t.connections // []) as $c
 | ($t.peer_urls // []) as $u
 | (.blocked_message_counts // {}) as $b
-| metric(
-    "holochain_conductor_up";
-    "1 when the conductor admin interface answered dump-network-stats, 0 otherwise.";
-    "gauge"; $up),
-  metric(
-    "holochain_conductor_peer_connections";
-    "Transport connections the conductor currently holds to other peers.";
-    "gauge"; ($c | length)),
-  metric(
-    "holochain_conductor_direct_peer_connections";
-    "Peer connections that upgraded from the relay to a direct connection.";
-    "gauge"; ([$c[] | select(.is_direct)] | length)),
-  metric(
-    "holochain_conductor_peer_urls";
-    "Peer URLs this conductor can currently be reached at.";
-    "gauge"; ($u | length)),
-  metric(
-    "holochain_conductor_network_sent_bytes_total";
-    "Bytes sent to peers since the counter state was created, including closed connections.";
-    "counter"; ($totals.send_bytes // 0)),
-  metric(
-    "holochain_conductor_network_received_bytes_total";
-    "Bytes received from peers since the counter state was created, including closed connections.";
-    "counter"; ($totals.recv_bytes // 0)),
-  metric(
-    "holochain_conductor_network_sent_messages_total";
-    "Messages sent to peers since the counter state was created, including closed connections.";
-    "counter"; ($totals.send_message_count // 0)),
-  metric(
-    "holochain_conductor_network_received_messages_total";
-    "Messages received from peers since the counter state was created, including closed connections.";
-    "counter"; ($totals.recv_message_count // 0)),
-  metric(
-    "holochain_conductor_blocked_messages_total";
-    "Messages the conductor blocked, incoming and outgoing, summed over every block reason.";
-    "counter"; ([$b | .. | numbers] | add // 0)),
-  metric(
-    "holochain_conductor_metrics_scrape_timestamp_seconds";
-    "Unix time at which this textfile was written.";
-    "gauge"; $now),
+| metric("holochain_conductor_up"; $up),
+  metric("holochain_conductor_peer_connections"; ($c | length)),
+  metric("holochain_conductor_direct_peer_connections"; ([$c[] | select(.is_direct)] | length)),
+  metric("holochain_conductor_peer_urls"; ($u | length)),
+  metric("holochain_conductor_network_sent_bytes_total"; ($totals.send_bytes // 0)),
+  metric("holochain_conductor_network_received_bytes_total"; ($totals.recv_bytes // 0)),
+  metric("holochain_conductor_network_sent_messages_total"; ($totals.send_message_count // 0)),
+  metric("holochain_conductor_network_received_messages_total"; ($totals.recv_message_count // 0)),
+  metric("holochain_conductor_blocked_messages_total"; ([$b | .. | numbers] | add // 0)),
+  metric("holochain_conductor_metrics_scrape_timestamp_seconds"; $now),
   apps
