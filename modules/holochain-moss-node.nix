@@ -67,6 +67,12 @@
     case $cmd in
       join)
         [ $# -eq 1 ] || { usage >&2; exit 2; }
+        # join-group talks to the running conductor; without it, it asks every
+        # question and only then fails on "No port file found".
+        if ! systemctl is-active --quiet moss-node.service; then
+          echo "moss-node: the node is not running; check 'moss-node logs' (is the password file written?) and join once it says 'Daemon ready.'" >&2
+          exit 1
+        fi
         ${asNode} join-group "$name" "$1"
         echo "Restarting the node so Moss sees it online in the new group..."
         systemctl restart moss-node.service
@@ -240,8 +246,13 @@ in {
           StateDirectoryMode = "0700";
           WorkingDirectory = stateDir;
           LoadCredential = "password:${cfg.passwordFile}";
+          # An empty password file is refused before wdaemon sees it: given an
+          # empty password, wdaemon creates the conductor with it and exits 0
+          # (sensorica-holoport-01, 2026-09-27).
+          ExecStartPre = "${pkgs.runtimeShell} -c 'test -s \"$CREDENTIALS_DIRECTORY/password\" || { echo \"moss-node: ${cfg.passwordFile} is empty; write the conductor password into it\" >&2; exit 1; }'";
           ExecStart = "${pkgs.runtimeShell} -c 'exec ${cfg.package}/bin/wdaemon ${lib.escapeShellArg cfg.name} < \"$CREDENTIALS_DIRECTORY/password\"'";
-          Restart = "on-failure";
+          # An always-online node comes back whichever way the daemon ended.
+          Restart = "always";
           RestartSec = "30s";
           # The conductor alone takes about 900 MB; the daemon checks the
           # group's tools every five minutes.

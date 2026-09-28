@@ -342,9 +342,13 @@
                     name = "vmtest";
                     passwordFile = "/etc/moss-node-password";
                   };
-                  environment.etc = lib.mkIf password {
+                  # "yes": the password; "empty": an empty file; "no": none.
+                  environment.etc = lib.mkIf (password != "no") {
                     "moss-node-password" = {
-                      text = "vmtest";
+                      text =
+                        if password == "yes"
+                        then "vmtest"
+                        else "";
                       mode = "0400";
                     };
                   };
@@ -353,8 +357,9 @@
                 pkgs.testers.nixosTest {
                   name = "moss-node-service";
                   nodes = {
-                    machine = node true;
-                    nopassword = node false;
+                    machine = node "yes";
+                    nopassword = node "no";
+                    emptypassword = node "empty";
                   };
                   testScript = ''
                     machine.wait_for_unit("moss-node.service")
@@ -379,6 +384,12 @@
                     nopassword.sleep(20)
                     journal = nopassword.succeed("journalctl -u moss-node --no-pager")
                     assert "Daemon ready." not in journal, "the daemon started without its password"
+
+                    # An empty file is refused before wdaemon sees it, so no
+                    # conductor is created with an empty password.
+                    emptypassword.wait_until_succeeds(
+                        "journalctl -u moss-node --no-pager | grep -q 'is empty; write the conductor password'", timeout=120)
+                    emptypassword.fail("ls /var/lib/moss-node/.local/share/wdocker/0.15.x/conductors/vmtest")
                   '';
                 };
 
