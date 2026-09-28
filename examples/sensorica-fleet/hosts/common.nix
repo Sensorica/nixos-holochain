@@ -1,6 +1,6 @@
 # Shared by every fleet host. Per-machine files set the hostname, import
 # their hardware-configuration.nix and add roles (sensorica-holoport-01 adds Grafana).
-{pkgs, ...}: let
+{lib, ...}: let
   # Pasted once, used for the sensorica account and for root below.
   operatorKeys = [
     # "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... operator@laptop"
@@ -77,13 +77,12 @@ in {
     hybrid-sleep.enable = false;
   };
 
-  services.desktopManager.plasma6.enable = true;
-  services.displayManager.sddm.enable = true;
-
-  environment.systemPackages = with pkgs; [git kdePackages.kate kdePackages.konsole firefox];
+  # The screen, keyboard and desktop are desk.nix's: `sensorica.desktop`
+  # picks KDE Plasma (the default), GNOME or none, per host.
 
   services.holochain-edgenode = {
-    enable = true;
+    # On by default; each host's switches block can turn it off.
+    enable = lib.mkDefault true;
     openFirewall = true;
 
     # Package, hApps, network seed, installer timeout and the two metrics

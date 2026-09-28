@@ -40,13 +40,26 @@ It runs `sudo nixos-rebuild switch --flake /etc/nixos-holochain/examples/sensori
 
 `hosts/common.nix` disables the `sleep`, `suspend`, `hibernate` and `hybrid-sleep` targets, so no desktop, logind idle action or key can suspend a Holoport. Plasma's power management suspended `sensorica-holoport-01` from its login screen on 2026-09-27 and took its conductors and dashboards with it; `systemctl start suspend.target` now answers that the unit is masked.
 
+## Switches, per Holoport
+
+Each `hosts/sensorica-holoport-0N/configuration.nix` opens with a switches block. Change a value in a text editor (Kate on the desk, `nano` over SSH), save, run `rebuild`. No other file needs to change, and every earlier generation stays in the boot menu, so `sudo nixos-rebuild switch --rollback` undoes a switch that goes wrong.
+
+| Switch | Values | What it does |
+| --- | --- | --- |
+| `sensorica.desktop` | `"plasma"` (default), `"gnome"`, `"none"` | KDE Plasma with the operator panel, GNOME with the same launchers in the dock, or no graphical session at all (text console and SSH). The node's services run the same either way. |
+| `sensorica.eventMode.enable` | `false` (default), `true` | Logs in without a password and opens the room dashboard full screen at boot. Needs a desktop. |
+| `services.holochain-edgenode.enable` | `true` (default), `false` | The Holochain conductor and the event's hApps. |
+
+`sensorica-holoport-01` also enables Grafana (`services.holochain-grafana`) and the Moss node (`services.holochain-moss-node`) further down its file; `enable = false` on either turns it off.
+
 ## The operator desk
 
 `hosts/desk.nix` is what a person at a Holoport's own screen gets when they log in as `sensorica`. It is self-contained on purpose: copy the file and its two inputs (home-manager `release-26.05` and plasma-manager, both in this flake only; the modules stay desktop-free) to give another NixOS machine the same kind of desk.
 
-- Five launchers, pinned to the panel and in the menu under System: Fleet dashboard, This node (the node page for this hostname), Holochain logs (the conductor's journal), Moss node (attaches the `moss` tmux session or opens it) and Rebuild.
-- A Plasma session declared with plasma-manager: a bottom panel with the menu, the launchers, Konsole, Dolphin and Firefox, a CPU and RAM monitor, the tray and the clock; Breeze Dark; no screen lock and no suspend or display-off on AC. The layout is applied at the next login.
-- `tmux`, `btop` and the Holochain 0.6 `hc` on PATH.
+- One Grafana entry, on the desktop and in the panel, that opens Grafana's home page: what this Holoport runs, with links to the fleet, node, network and Moss pages.
+- Launchers pinned to the panel (the dock on GNOME) and in the menu under System: Grafana, Holochain logs (the conductor's journal), Moss node logs (on the host that runs one) and Rebuild, then Konsole and Dolphin.
+- On Plasma, a session declared with plasma-manager: that bottom panel on every screen, a CPU and RAM monitor, the tray and the clock; Breeze Dark; no screen lock and no suspend or display-off on AC. The layout is applied at the next login. On GNOME, the same no-lock, no-blank settings through dconf.
+- `tmux`, `btop` and the Holochain 0.6 `hc` on PATH, whichever desktop.
 - Avahi, so `sensorica-holoport-01.local` resolves on every Holoport and laptop in the lab without a DNS server. The launchers reach Grafana through `sensorica.grafanaUrl`, `http://sensorica-holoport-01.local:3000` by default, and open on its login page.
 
 **Event mode**, off by default and set per host:
