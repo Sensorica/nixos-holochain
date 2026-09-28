@@ -65,6 +65,9 @@
       # get it, so a `colmena apply` and a `nixos-rebuild switch` install the
       # same bundles from the same conductor.
       nixos-holochain.nixosModules.sensorica-event-node
+      # Off unless a host enables it; sensorica-holoport-01 hosts the
+      # Sensorica Moss group's always-online node.
+      nixos-holochain.nixosModules.holochain-moss-node
       # What a person at the Holoport's own screen gets: launchers, a laid-out
       # Plasma session and the off-by-default event mode.
       inputs.home-manager.nixosModules.home-manager

@@ -1,0 +1,1289 @@
+{
+  "uid": "sensorica-moss-node",
+  "title": "Sensorica group on the homelab",
+  "description": "Is the Sensorica group served by this Moss node? Whether the always-online node is up, reaches the group and each of its tools, holds what the others hold, and whether any tool has been left with nobody.",
+  "tags": [
+    "holochain",
+    "moss",
+    "sensorica"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "graphTooltip": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "links": [
+    {
+      "type": "link",
+      "title": "This node in detail",
+      "url": "/d/holochain-node/holochain-node?${node:queryparam}&var-conductor=Moss",
+      "asDropdown": false,
+      "includeVars": false,
+      "keepTime": true,
+      "targetBlank": false,
+      "icon": "dashboard",
+      "tags": [],
+      "tooltip": ""
+    },
+    {
+      "type": "link",
+      "title": "Fleet",
+      "url": "/d/holochain-fleet/holochain-fleet",
+      "asDropdown": false,
+      "includeVars": false,
+      "keepTime": true,
+      "targetBlank": false,
+      "icon": "dashboard",
+      "tags": [],
+      "tooltip": ""
+    },
+    {
+      "type": "link",
+      "title": "Room view",
+      "url": "/d/holochain-now/holochain-now",
+      "asDropdown": false,
+      "includeVars": false,
+      "keepTime": true,
+      "targetBlank": false,
+      "icon": "dashboard",
+      "tags": [],
+      "tooltip": ""
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "node",
+        "label": "Moss node",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "holochain-prometheus"
+        },
+        "definition": "label_values(holochain_conductor_up{conductor=\"Moss\"}, node)",
+        "query": {
+          "query": "label_values(holochain_conductor_up{conductor=\"Moss\"}, node)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "hide": 0,
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": []
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Readings",
+      "description": "How old the Moss exporter's latest reading is. It writes every 30 s and Prometheus collects every 15 s, so up to about 45 s is normal. If this is not green, nothing below is current.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "max(time() - holochain_conductor_metrics_scrape_timestamp_seconds{conductor=\"Moss\", node=~\"$node\"}) or vector(1e9)",
+          "legendFormat": "Oldest reading",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "s",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 90
+              },
+              {
+                "color": "red",
+                "value": 300
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "range",
+              "options": {
+                "from": 100000000.0,
+                "to": null,
+                "result": {
+                  "text": "No readings",
+                  "color": "red",
+                  "index": 0
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "value",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Moss node",
+      "description": "Whether the Moss conductor on each node answers, with fresh readings. The node runs in its owner's session, not as a system service, so this is the only place it shows as down.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "holochain:conductor_state{conductor=\"Moss\", node=~\"$node\"}",
+          "legendFormat": "{{node}}",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "Not answering",
+                  "color": "red",
+                  "index": 0
+                },
+                "2": {
+                  "text": "No fresh readings",
+                  "color": "orange",
+                  "index": 1
+                },
+                "3": {
+                  "text": "Running",
+                  "color": "green",
+                  "index": 2
+                }
+              }
+            }
+          ],
+          "noValue": "No Moss node reported"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "value_and_name",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Group reaches others",
+      "description": "How many other computers the node reaches in the Sensorica group itself, counting its weakest part. 0 means nobody else in the group is online, or the node cannot reach them.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "min(holochain:dht_peers:named{conductor=\"Moss\", node=~\"$node\", app_kind=\"Group\"})",
+          "legendFormat": "Others in the group",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "noValue": "No group reported"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "value",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Group data held",
+      "description": "What share of the best-informed peer's group data the node holds, averaged over 10 minutes, for its weakest part. Holochain never quite reaches 100% on a healthy network; at least 95% is in step. With nobody online to compare with there is no share. When the node reports no group at all, the Moss node tile says why.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "min(holochain:dht_share:named{conductor=\"Moss\", node=~\"$node\", app_kind=\"Group\"}) or (min(holochain:dht_peers:named{conductor=\"Moss\", node=~\"$node\", app_kind=\"Group\"}) * 0 - 1)",
+          "legendFormat": "Share held",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "percentunit",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 0.85
+              },
+              {
+                "color": "green",
+                "value": 0.95
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "-1": {
+                  "text": "nobody to compare",
+                  "color": "#8e8e8e",
+                  "index": 0
+                }
+              }
+            }
+          ],
+          "noValue": "No group reported"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "value",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Tools hosted",
+      "description": "How many of the group's tools, not counting the group itself, are installed and running on the node.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "count(holochain_app_info{conductor=\"Moss\", node=~\"$node\", app_kind!=\"Group\", status=\"enabled\"}) or vector(0)",
+          "legendFormat": "Tools",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "value",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Tools with nobody else online",
+      "description": "How many tools have a part with nobody to talk to: lost contact, or no one else has opened it yet. A tool only the node runs keeps its data safe but shares it with nobody. A tool that is not running is not counted here; the Moss node tile and the timeline below show it.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "count(holochain:app_state:named{conductor=\"Moss\", node=~\"$node\", app_kind!=\"Group\"} == 2 or holochain:app_state:named{conductor=\"Moss\", node=~\"$node\", app_kind!=\"Group\"} == 3) or vector(0)",
+          "legendFormat": "Tools alone",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "value",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "id": 7,
+      "type": "table",
+      "title": "Is each tool connected and complete?",
+      "description": "One row per part of each tool and of the group, by the names members use: its state, how many other computers it sees, what share of its best peer's data it holds, when it last heard from anyone, and how many items it is still fetching. A part nobody else has opened reads grey, not red. Click a tool to see this machine in detail.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "holochain:dht_state:named{conductor=\"Moss\", node=~\"$node\"} + 0",
+          "format": "table",
+          "instant": true,
+          "range": false
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "holochain:dht_peers:named{conductor=\"Moss\", node=~\"$node\"} + 0",
+          "format": "table",
+          "instant": true,
+          "range": false
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "holochain:dht_share:named{conductor=\"Moss\", node=~\"$node\"} + 0",
+          "format": "table",
+          "instant": true,
+          "range": false
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "(holochain:dht_heard:named{conductor=\"Moss\", node=~\"$node\"} unless on (instance, conductor, app_id, role, dna) (holochain:dht_state == 3)) + 0",
+          "format": "table",
+          "instant": true,
+          "range": false
+        },
+        {
+          "refId": "E",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "holochain_dht_pending_fetches{conductor=\"Moss\", node=~\"$node\"} * on (instance, conductor, app_id, role, dna) group_left (app_name, app_kind, part_name, network_label) holochain:dht_names",
+          "format": "table",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "app_name",
+                "app_kind",
+                "part_name",
+                "node",
+                "Value #A",
+                "Value #B",
+                "Value #C",
+                "Value #D",
+                "Value #E"
+              ]
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "indexByName": {
+              "app_name": 0,
+              "app_kind": 1,
+              "part_name": 2,
+              "node": 3,
+              "Value #A": 4,
+              "Value #B": 5,
+              "Value #C": 6,
+              "Value #D": 7,
+              "Value #E": 8
+            },
+            "renameByName": {
+              "app_name": "Tool",
+              "app_kind": "Kind",
+              "part_name": "Part",
+              "Value #A": "State",
+              "Value #B": "Others",
+              "Value #C": "Holds",
+              "Value #D": "Heard",
+              "Value #E": "Waiting"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          },
+          "noValue": "No tool reported: the Moss node tile above says why"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "node"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Tool"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "This machine in detail",
+                    "url": "/d/holochain-node/holochain-node?var-node=${__data.fields.node}&var-conductor=Moss&${__url_time_range}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "State"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "Not running",
+                        "color": "red",
+                        "index": 0
+                      },
+                      "1": {
+                        "text": "No fresh readings",
+                        "color": "orange",
+                        "index": 1
+                      },
+                      "2": {
+                        "text": "Lost contact",
+                        "color": "red",
+                        "index": 2
+                      },
+                      "3": {
+                        "text": "No one else yet",
+                        "color": "#8e8e8e",
+                        "index": 3
+                      },
+                      "4": {
+                        "text": "Catching up",
+                        "color": "#EAB839",
+                        "index": 4
+                      },
+                      "5": {
+                        "text": "In step",
+                        "color": "green",
+                        "index": 5
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Others"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "#8e8e8e",
+                      "value": null
+                    },
+                    {
+                      "color": "green",
+                      "value": 1
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Holds"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "noValue",
+                "value": "nobody to compare"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "null",
+                      "result": {
+                        "text": "nobody to compare",
+                        "color": "#8e8e8e",
+                        "index": 0
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "#EAB839",
+                      "value": 0.85
+                    },
+                    {
+                      "color": "green",
+                      "value": 0.95
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Heard"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 120
+                    },
+                    {
+                      "color": "red",
+                      "value": 600
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "range",
+                    "options": {
+                      "from": 100000000.0,
+                      "to": null,
+                      "result": {
+                        "text": "never",
+                        "color": "red",
+                        "index": 0
+                      }
+                    }
+                  },
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "null",
+                      "result": {
+                        "text": "nobody else yet",
+                        "color": "#8e8e8e",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Waiting"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "text",
+                      "value": null
+                    },
+                    {
+                      "color": "#EAB839",
+                      "value": 1
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "State",
+            "desc": false
+          }
+        ]
+      }
+    },
+    {
+      "id": 8,
+      "type": "state-timeline",
+      "title": "Has each tool stayed connected?",
+      "description": "For each tool and the group, over the time range: alone, catching up or in step. A tool takes the state of its worst part.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 13,
+        "w": 24,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "min by (app_name) (holochain:app_state:named{conductor=\"Moss\", node=~\"$node\"})",
+          "legendFormat": "{{app_name}}",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#8e8e8e",
+                "value": null
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Not running",
+                  "color": "red",
+                  "index": 0
+                },
+                "1": {
+                  "text": "No fresh readings",
+                  "color": "orange",
+                  "index": 1
+                },
+                "2": {
+                  "text": "Lost contact",
+                  "color": "red",
+                  "index": 2
+                },
+                "3": {
+                  "text": "No one else yet",
+                  "color": "#8e8e8e",
+                  "index": 3
+                },
+                "4": {
+                  "text": "Catching up",
+                  "color": "#EAB839",
+                  "index": 4
+                },
+                "5": {
+                  "text": "In step",
+                  "color": "green",
+                  "index": 5
+                }
+              }
+            }
+          ],
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 0
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "mergeValues": true,
+        "showValue": "auto",
+        "alignValue": "left",
+        "rowHeight": 0.9,
+        "legend": {
+          "showLegend": false,
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "row",
+      "title": "Details",
+      "collapsed": true,
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [
+        {
+          "id": 10,
+          "type": "timeseries",
+          "title": "Share held, per part",
+          "description": "What share of its best peer's data each connected part held, averaged over 10 minutes. A part with nobody to compare with draws no line.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 21,
+            "w": 8,
+            "h": 8
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "holochain-prometheus"
+              },
+              "expr": "holochain:dht_share:named{conductor=\"Moss\", node=~\"$node\"}",
+              "legendFormat": "{{network_label}}",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "min": 0,
+              "max": 1,
+              "decimals": 0,
+              "color": {
+                "mode": "palette-classic"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "#EAB839",
+                    "value": 0.85
+                  },
+                  {
+                    "color": "transparent",
+                    "value": 0.95
+                  }
+                ]
+              },
+              "custom": {
+                "thresholdsStyle": {
+                  "mode": "area"
+                },
+                "lineWidth": 1,
+                "fillOpacity": 0,
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "showLegend": true,
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 11,
+          "type": "timeseries",
+          "title": "Items still on their way",
+          "description": "How many items the best peer holds that this node does not yet hold, per part. A write elsewhere shows as a rise that falls back. Holochain stores each message as several items, so this is not a count of messages.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "gridPos": {
+            "x": 8,
+            "y": 21,
+            "w": 8,
+            "h": 8
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "holochain-prometheus"
+              },
+              "expr": "holochain:dht_missing:named{conductor=\"Moss\", node=~\"$node\"}",
+              "legendFormat": "{{network_label}}",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "min": 0,
+              "decimals": 0,
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "lineWidth": 1,
+                "fillOpacity": 0
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "showLegend": true,
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 12,
+          "type": "timeseries",
+          "title": "Timed-out exchanges, 15 min",
+          "description": "Exchanges with other computers that got no answer in the last 15 minutes, per part. It can read low for a while after Holochain forgets a computer, since that computer's count goes with it.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "gridPos": {
+            "x": 16,
+            "y": 21,
+            "w": 8,
+            "h": 8
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "holochain-prometheus"
+              },
+              "expr": "clamp_min(holochain_dht_peer_timeouts_total{conductor=\"Moss\", node=~\"$node\"} - (holochain_dht_peer_timeouts_total{conductor=\"Moss\", node=~\"$node\"} offset 15m or holochain_dht_peer_timeouts_total{conductor=\"Moss\", node=~\"$node\"}), 0) * on (instance, conductor, app_id, role, dna) group_left (network_label) holochain:dht_names",
+              "legendFormat": "{{network_label}}",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "min": 0,
+              "decimals": 0,
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "lineWidth": 1,
+                "fillOpacity": 0
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "showLegend": true,
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -128,6 +128,23 @@
           # `holochain-edgenode`. Not part of `default` on purpose; see the
           # comment at the top of the module.
           sensorica-event-node = ./modules/sensorica-event-node.nix;
+
+          # A Moss always-online node as a service, with its readings and page
+          # (#28). Not part of `default`: it runs a second conductor. The
+          # wdocker package comes from this flake, as the bootstrap server's does.
+          holochain-moss-node = {
+            imports = [
+              ./modules/holochain-moss-node.nix
+              ({
+                lib,
+                pkgs,
+                ...
+              }: {
+                services.holochain-moss-node.package =
+                  lib.mkDefault self.packages.${pkgs.stdenv.hostPlatform.system}.wdocker-0_15;
+              })
+            ];
+          };
         };
 
         # The one system in the root flake: a single edgenode with no hApp, so
@@ -217,6 +234,18 @@
             lib,
             ...
           }:
+            let
+              # The Moss page and the names program, checked without a VM.
+              mossChecks = import ./tests/moss.nix {
+                inherit pkgs;
+                nixos-holochain = self;
+                exporter = pkgs.callPackage ./packages/holochain-conductor-exporter.nix {
+                  hc = inputs.holonix-0_6.packages.${system}.hc;
+                };
+                dashboard = ./modules/dashboards-moss/sensorica-moss-node.json;
+                namesJq = ./modules/moss-node-names.jq;
+              };
+            in
             lib.mkIf (system == "x86_64-linux") {
               # wdocker on the Moss 0.15 line, with the Holochain 0.6.1 binary it
               # expects. docs/moss-node.md runs it by hand.
@@ -283,6 +312,79 @@
                     machine.wait_until_fails(f"kill -0 {pid}", timeout=60)
                   '';
                 };
+
+              # The Moss node as a service (nixosModules.holochain-moss-node):
+              # systemd starts the daemon with no terminal, the password comes
+              # from a credential, the node survives a restart, and its
+              # readings reach node_exporter as conductor="Moss". Then the
+              # same machine with the password file gone must not reach
+              # "Daemon ready.": a daemon that starts without its password
+              # proves nothing about the credential.
+              checks.vmTestMossNode = let
+                node = password: {
+                  imports = [
+                    self.nixosModules.holochain-edgenode
+                    self.nixosModules.holochain-moss-node
+                  ];
+                  virtualisation = {
+                    cores = 4;
+                    memorySize = 4096;
+                    diskSize = 8192;
+                  };
+                  services.holochain-edgenode = {
+                    enable = true;
+                    package = inputs.holonix-0_6.packages.${system}.holochain;
+                    hcPackage = inputs.holonix-0_6.packages.${system}.hc;
+                    metricsExporter.enable = true;
+                  };
+                  services.holochain-moss-node = {
+                    enable = true;
+                    name = "vmtest";
+                    passwordFile = "/etc/moss-node-password";
+                  };
+                  environment.etc = lib.mkIf password {
+                    "moss-node-password" = {
+                      text = "vmtest";
+                      mode = "0400";
+                    };
+                  };
+                };
+              in
+                pkgs.testers.nixosTest {
+                  name = "moss-node-service";
+                  nodes = {
+                    machine = node true;
+                    nopassword = node false;
+                  };
+                  testScript = ''
+                    machine.wait_for_unit("moss-node.service")
+                    machine.wait_until_succeeds(
+                        "journalctl -u moss-node --no-pager | grep -q 'Daemon ready.'", timeout=300)
+                    user = machine.succeed("systemctl show moss-node -p User --value").strip()
+                    assert user == "moss-node", user
+                    machine.succeed("moss-node --help | grep -q 'join \"INVITE_LINK\"'")
+                    listing = machine.succeed("moss-node wdocker list")
+                    assert "vmtest" in listing and "running" in listing, listing
+
+                    machine.succeed("systemctl start moss-node-metrics.service")
+                    machine.wait_until_succeeds(
+                        "grep -q 'holochain_conductor_up{conductor=\"Moss\"} 1' /var/lib/prometheus-node-exporter-text-files/moss-node.prom",
+                        timeout=120)
+
+                    machine.succeed("systemctl restart moss-node")
+                    machine.wait_until_succeeds(
+                        "test $(journalctl -u moss-node --no-pager | grep -c 'Daemon ready.') -ge 2", timeout=300)
+
+                    nopassword.wait_for_unit("multi-user.target")
+                    nopassword.sleep(20)
+                    journal = nopassword.succeed("journalctl -u moss-node --no-pager")
+                    assert "Daemon ready." not in journal, "the daemon started without its password"
+                  '';
+                };
+
+              # The Moss page and the names program, without a VM (tests/moss.nix).
+              checks.moss-dashboard = mossChecks.mossDashboard;
+              checks.moss-names = mossChecks.mossNames;
             };
         }
       ];
