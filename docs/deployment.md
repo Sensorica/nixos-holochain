@@ -64,6 +64,76 @@ sudo dd if=result/iso/*.iso of=/dev/sdX bs=4M status=progress
 sync
 ```
 
+## Rescuing an install from another machine
+
+When the graphical installer fails on a machine in front of you (a Holoport, a homelab box), take it over from a laptop on the same network instead of debugging at its console. Every step below was run on 2026-09-26, rescuing a homelab install of NixOS 26.05.
+
+### Making the USB stick
+
+Write the ISO directly to the stick and check it byte for byte. Do not boot a NixOS 26.05 ISO through Ventoy: the initrd waits for the ISO's filesystem label (`/dev/disk/by-label/nixos-graphical-26.05-x86_64`), Ventoy never exposes it, and the boot drops to emergency mode. Ventoy's GRUB2 mode (Ctrl+R) did not help either.
+
+```bash
+sudo dd if=nixos-graphical-26.05-x86_64-linux.iso of=/dev/sdX bs=4M status=progress conv=fsync
+sudo cmp -n "$(stat -c %s nixos-graphical-26.05-x86_64-linux.iso)" nixos-graphical-26.05-x86_64-linux.iso /dev/sdX && echo VERIFIED
+```
+
+`dd` returns only once `conv=fsync` has flushed everything, which on a slow stick is minutes after the copy counter reaches 100%. A red `Failed to start Load Kernel Modules` during the live boot is harmless when the boot carries on.
+
+### Letting the laptop in
+
+The stock installer ships an SSH server but does not start it, and its `nixos` user has no password. On the machine, in a terminal of the live session:
+
+```bash
+passwd
+sudo systemctl start sshd
+ip -br -4 a
+```
+
+On the laptop, with the address from the last command (it asks for that password once):
+
+```bash
+ssh-copy-id -o StrictHostKeyChecking=accept-new nixos@<machine-ip>
+```
+
+If nobody can read the address off the screen, find it from the laptop: on a home network, the installer is usually the only host answering on port 22. Replace `192.168.0` with your network's prefix.
+
+```bash
+for i in $(seq 1 254); do (timeout 1 bash -c "echo > /dev/tcp/192.168.0.$i/22" 2>/dev/null && echo 192.168.0.$i) & done; wait
+```
+
+The workshop ISO (`examples/sensorica-fleet`, `hosts/workshop-iso`) enables `services.openssh` but ships an empty `authorizedKeys` list; putting the facilitator's key there would remove the `passwd` and `ssh-copy-id` steps. Whether its sshd starts at boot has not been checked yet (the upstream installer module keeps sshd out of `multi-user.target`); tracked with the ISO work in #6.
+
+### Reading why the installer failed
+
+The graphical installer (Calamares) logs everything, including `nixos-install`'s output, to a root-only file:
+
+```bash
+ssh nixos@<machine-ip> 'sudo grep -a -n -E "error|onInstallationFailed|Starting job" /root/.cache/calamares/session.log | tail -30'
+```
+
+`lsblk -f` shows whether the partitions were created. A failed run leaves them mounted under `/tmp/calamares-root-*`, with swap active; the installer then offers only manual partitioning.
+
+### Known failure: downloads fail "after 0 ms"
+
+Symptom: `nixos-install` stops on `unable to download 'https://cache.nixos.org/…narinfo': Could not connect to server … after 0 ms`. Seen on a home router whose DNS answered the installer with an IPv6 address only (`getent ahostsv4 cache.nixos.org` empty) while the machine had no IPv6 route. Check and fix in the live session:
+
+```bash
+getent ahostsv4 cache.nixos.org
+c="$(nmcli -g GENERAL.CONNECTION device show <iface>)"; sudo nmcli con mod "$c" ipv4.dns "1.1.1.1 9.9.9.9" ipv4.ignore-auto-dns yes && sudo nmcli con up "$c"
+nix --extra-experimental-features nix-command store info --store https://cache.nixos.org
+```
+
+`<iface>` is the Ethernet interface from `ip -br -4 a` (`enp0s31f6` on the homelab). The connection name is looked up rather than typed because it follows the installer's language: "Wired connection 1" in English, "Connexion filaire 1" in French. On an installed system, a user in the `networkmanager` group can run the two `nmcli` commands without `sudo`. The last line prints `Store URL: https://cache.nixos.org` once the cache is reachable. The installed system asks the same router for DNS, so set `networking.nameservers` in its configuration (or fix the router) before its first `nixos-rebuild`.
+
+### Retrying
+
+Release what the failed run left behind, then relaunch the installer and choose to erase the disk:
+
+```bash
+for m in $(findmnt -rn -o TARGET | grep calamares-root | sort -r); do sudo umount "$m"; done
+sudo swapoff -a
+```
+
 ## Trying it without hardware
 
 The root flake ships a single-node configuration so you can run the module on a laptop before touching a Holoport:
