@@ -24,7 +24,18 @@ The five machines are `sensorica-holoport-01` to `sensorica-holoport-05`, and ea
 
 ## Which nixos-holochain the fleet reads
 
-`flake.nix` pins `nixos-holochain` to `github:Sensorica/nixos-holochain/lab/holoport-session`, the branch the Holoports install from, because it carries the modules the fleet uses (the event profile, the Moss node) and `main` does not yet. A fresh clone of that branch needs only the operator key (below) before the install. Point the input back at `github:Sensorica/nixos-holochain` once the lab branch merges.
+`flake.nix` pins `nixos-holochain` to `github:Sensorica/nixos-holochain`, the `main` branch, and `flake.lock` records the commit. The Holoports install from `main` too: a fresh clone of it needs only the operator key (below) before the install.
+
+Holoports installed before 2026-09-28 came from the `lab/holoport-session` branch, which is now merged into `main`. Their `/etc/nixos-holochain` checkout still has the lab branch checked out, with the operator key as a local commit on top. Switch it to `main` once, keeping that commit:
+
+```bash
+git -C /etc/nixos-holochain fetch origin
+git -C /etc/nixos-holochain checkout -B main
+git -C /etc/nixos-holochain rebase origin/main
+git -C /etc/nixos-holochain branch --set-upstream-to=origin/main
+```
+
+`checkout -B main` puts the name `main` on the commit the checkout is on now, the operator key included, and switches to it. `rebase origin/main` then replays only the commits `origin/main` does not have, which is the operator key commit, since every lab commit is already in `main`. The last line makes `main` track `origin/main`, so the next `git -C /etc/nixos-holochain pull --rebase` follows `main`. `git -C /etc/nixos-holochain log --oneline origin/main..main` should now print the operator key commit and nothing else; run `rebuild` afterwards.
 
 ## Rebuilding a Holoport
 
@@ -112,7 +123,7 @@ nix flake check --no-build
 nix eval .#nixosConfigurations.sensorica-holoport-01.config.system.build.toplevel.drvPath
 ```
 
-The `nixos-holochain` input points at the `lab/holoport-session` branch for now (see above); a downstream fleet writes `github:Sensorica/nixos-holochain`. From a checkout of this repository, evaluate against the checkout instead so local module changes are what gets tested:
+The `nixos-holochain` input points at `main`, as a downstream fleet writes it (see above). From a checkout of this repository, evaluate against the checkout instead so local module changes are what gets tested:
 
 ```bash
 nix flake check --no-build --override-input nixos-holochain "$(git rev-parse --show-toplevel)"
