@@ -201,37 +201,51 @@
 
   textfileDir = cfg.metricsExporter.textfileDirectory;
   conductorMetricsFile = "${textfileDir}/holochain-conductor.prom";
+  # [.] rather than an escaped dot: the flag reaches ExecStart unquoted, and
+  # systemd would parse a backslash as an escape sequence of its own.
+  systemdUnitExclude = ".+[.](device|scope|slice)";
 
-  conductorMetricsScript = pkgs.writeShellApplication {
-    name = "holochain-conductor-metrics";
-    runtimeInputs = [cfg.hcPackage pkgs.coreutils pkgs.jq];
-    text = ''
-      out=${lib.escapeShellArg conductorMetricsFile}
-      tmp="$out.tmp"
-
-      # A conductor that is starting, restarting or wedged must not delete the
-      # series: it reports holochain_conductor_up 0 and leaves every other
-      # gauge at its zero value, which is what makes a dead node visible on the
-      # dashboard rather than absent from it. 15 s is generous for a call over
-      # a loopback websocket; anything slower is a conductor that is not well.
-      if stats=$(timeout 15 ${callPrefix} dump-network-stats 2>/dev/null) \
-        && printf '%s' "$stats" | jq -e . > /dev/null 2>&1; then
-        up=1
-      else
-        up=0
-        stats='{}'
-      fi
-
-      printf '%s' "$stats" \
-        | jq -r --argjson up "$up" --argjson now "$(date +%s)" \
-            -f ${./conductor-metrics.jq} > "$tmp"
-
-      # The collector may read the directory at any moment, so the file is
-      # swapped in whole rather than truncated and rewritten in place.
-      mv -f "$tmp" "$out"
-    '';
+  # The same program a Moss node or any other conductor on the machine runs
+  # (packages/holochain-conductor-exporter.nix), built with this conductor's
+  # `hc` so the admin call matches its line. One program means one set of
+  # HELP texts, which node_exporter needs when two conductors share its
+  # textfile directory.
+  conductorExporter = pkgs.callPackage ../packages/holochain-conductor-exporter.nix {
+    hc = cfg.hcPackage;
   };
+
+  # The admin port never moves on an edgenode; the exporter asks a command
+  # for it because a Moss node's does.
+  adminEndpoint = pkgs.writeShellScript "holochain-admin-endpoint" ''
+    echo ${toString cfg.adminPort}
+  '';
+
+  # What the dashboards call each app and each of its parts, and which apps
+  # Nix manages, so one it manages that the conductor does not list reads as
+  # not running instead of vanishing. See dht-metrics.jq for the fallbacks.
+  happNames = pkgs.writeText "happ-names.json" (builtins.toJSON {
+    apps = lib.mapAttrs (_: happ:
+      lib.optionalAttrs (happ.displayName != null) {name = happ.displayName;}
+      // lib.optionalAttrs (happ.roleNames != {}) {roles = happ.roleNames;})
+    cfg.happs;
+    kinds = {};
+    expected = lib.attrNames (lib.filterAttrs (_: happ: happ.installed) cfg.happs);
+  });
+
+  # systemd expands % specifiers and $ variables inside ExecStart, so the
+  # conductor name, which is free text, goes through a script instead.
+  conductorMetricsScript = pkgs.writeShellScript "holochain-conductor-metrics" ''
+    exec ${lib.getExe conductorExporter} \
+      --conductor ${lib.escapeShellArg cfg.conductorMetrics.name} \
+      --admin ${adminEndpoint} \
+      --names ${happNames} \
+      --out ${lib.escapeShellArg conductorMetricsFile} \
+      --state-dir ${lib.escapeShellArg (toString cfg.dataDir)}
+  '';
 in {
+  # The services this node runs, by name, for the dashboards.
+  imports = [./holochain-services.nix];
+
   options.services.holochain-edgenode = {
     enable = lib.mkEnableOption "Holochain edgenode (conductor + lair + hApp installer)";
 
@@ -457,6 +471,35 @@ in {
             default = null;
             description = "Network seed override for every DNA in this app.";
           };
+          displayName = lib.mkOption {
+            type = lib.types.nullOr lib.types.str;
+            default = null;
+            example = "Requests & Offers";
+            description = ''
+              What dashboards call this app, as `app_name` on the
+              `holochain_app_info` and `holochain_dht_info` series. `null`
+              falls back to the bundle's own name from `list-apps`, with
+              underscores and dashes read as spaces and the first letter
+              capitalised (`requests_and_offers` reads "Requests and
+              offers").
+            '';
+          };
+          roleNames = lib.mkOption {
+            type = lib.types.attrsOf lib.types.str;
+            default = {};
+            example = {
+              requests_and_offers = "Listings";
+              hrea = "Accounting";
+            };
+            description = ''
+              What dashboards call each part of this app, keyed by DNA role,
+              as `part_name` on `holochain_dht_info`. A role left out reads
+              as nothing when the app has one role, so its network is shown
+              by the app's name alone, and otherwise as the role id with a
+              one-letter prefix dropped and underscores read as spaces
+              (`rFiles` reads "Files").
+            '';
+          };
         };
       });
       default = {};
@@ -506,9 +549,31 @@ in {
         This is the fleet dashboard's Holochain data source. It calls
         `dump-network-stats` on the admin interface, which answers with
         Kitsune2's `TransportStats` on both the 0.6 and 0.7 lines, and derives
-        connection, byte and message gauges from it. Requires
+        connection gauges and byte and message counters from it; it also
+        counts installed apps by status from `list-apps`. The counters are
+        running totals kept in `conductor-metrics-counters.json` under
+        `dataDir`, so a peer disconnecting does not pull them down. It also
+        calls `dump-network-metrics --include-dht-summary` and writes one
+        `holochain_dht_*` series set per DHT the conductor is in (peers, ops
+        held here and by the best peer, pending fetches, seconds since the
+        last gossip, completed rounds and timeouts), labelled `app_id`,
+        `role` and `dna`, and names every app and DHT in `holochain_app_info`
+        and `holochain_dht_info` from `displayName` and `roleNames`. Every
+        line carries `conductor`, from `name`. Requires
         `metricsExporter.enable`
       '';
+
+      name = lib.mkOption {
+        type = lib.types.str;
+        default = "Holochain";
+        example = "Workshop";
+        description = ''
+          The `conductor` label on every `holochain_*` series this node
+          writes, and the name dashboards show for the conductor. It keeps
+          two conductors on one machine apart (this one and a Moss node, say),
+          so give each its own.
+        '';
+      };
 
       interval = lib.mkOption {
         type = lib.types.str;
@@ -680,11 +745,49 @@ in {
       }
     ];
 
+    # What the dashboards list among this node's services. The conductor
+    # names its readings' conductor label, so it reads Not answering when the
+    # conductor stops answering although systemd says the unit is active.
+    # Its name carries the conductor's, as the problem sentences ("Holochain
+    # (Workshop) is not answering") and the node page's Conductors stat do, so
+    # the three read as one thing; under the default name it is just
+    # "Holochain conductor".
+    services.holochain-services = {
+      units = {
+        "holochain-conductor.service" = {
+          name =
+            if cfg.conductorMetrics.enable && cfg.conductorMetrics.name != "Holochain"
+            then "Holochain conductor (${cfg.conductorMetrics.name})"
+            else "Holochain conductor";
+          conductor =
+            if cfg.conductorMetrics.enable
+            then cfg.conductorMetrics.name
+            else null;
+        };
+        # A one-shot that remains active once it has run.
+        "holochain-happ-installer.service" = lib.mkIf (cfg.happs != {}) "App installer";
+        # The service sits idle between runs; its timer stays active.
+        "holochain-conductor-metrics.timer" = lib.mkIf cfg.conductorMetrics.enable "Holochain readings (timer)";
+      };
+      textfileDirectory = lib.mkIf cfg.metricsExporter.enable (toString textfileDir);
+    };
+
     services.prometheus.exporters.node = lib.mkIf cfg.metricsExporter.enable {
       enable = true;
       port = cfg.metricsExporter.port;
       enabledCollectors = ["systemd" "textfile"];
-      extraFlags = ["--collector.textfile.directory=${textfileDir}"];
+      extraFlags = [
+        "--collector.textfile.directory=${textfileDir}"
+        # node_exporter leaves mount and automount units out by default, so a
+        # data disk that fails to mount would never reach the dashboard's
+        # failed-unit count. Kept in step with holochain-grafana, which sets
+        # the same flag at mkDefault for a monitor that is not an edgenode:
+        # node_exporter refuses to start when the flag is given twice.
+        "--collector.systemd.unit-exclude=${systemdUnitExclude}"
+        # How often systemd restarted each service on its own, so a service
+        # that keeps failing and restarting reads Failed, not Starting.
+        "--collector.systemd.enable-restarts-metrics"
+      ];
     };
 
     systemd.tmpfiles.rules = lib.mkIf cfg.metricsExporter.enable [
@@ -707,7 +810,7 @@ in {
         StateDirectory = stateDirectory;
         StateDirectoryMode = "0700";
         WorkingDirectory = cfg.dataDir;
-        ExecStart = lib.getExe conductorMetricsScript;
+        ExecStart = "${conductorMetricsScript}";
         TimeoutStartSec = "60s";
       };
     };

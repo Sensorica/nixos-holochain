@@ -73,6 +73,8 @@
           --port ${toString cfg.port}
     '');
 in {
+  imports = [./holochain-services.nix];
+
   options.services.holochain-http-gateway = {
     enable = lib.mkEnableOption "the Holochain HTTP gateway in front of the local conductor";
 
@@ -222,6 +224,8 @@ in {
         '';
       }
     ];
+
+    services.holochain-services.units."holochain-http-gateway.service" = "HTTP gateway";
 
     systemd.services.holochain-http-gateway = {
       description = "Holochain HTTP gateway";

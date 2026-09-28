@@ -1,0 +1,1043 @@
+{
+  "uid": "holochain-network",
+  "title": "Is this app in step on every node?",
+  "description": "One app network across every machine: is every machine in step, and did the latest write reach everyone.",
+  "tags": [
+    "holochain",
+    "nixos-holochain"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "annotations": {
+    "list": []
+  },
+  "links": [
+    {
+      "type": "link",
+      "title": "Back to fleet",
+      "url": "/d/holochain-fleet/holochain-fleet",
+      "asDropdown": false,
+      "includeVars": false,
+      "keepTime": true,
+      "targetBlank": false,
+      "icon": "dashboard",
+      "tags": [],
+      "tooltip": ""
+    },
+    {
+      "type": "link",
+      "title": "Room view",
+      "url": "/d/holochain-now/holochain-now",
+      "asDropdown": false,
+      "includeVars": false,
+      "keepTime": true,
+      "targetBlank": false,
+      "icon": "dashboard",
+      "tags": [],
+      "tooltip": ""
+    },
+    {
+      "type": "link",
+      "title": "One node in detail",
+      "url": "/d/holochain-node/holochain-node",
+      "asDropdown": false,
+      "includeVars": false,
+      "keepTime": true,
+      "targetBlank": false,
+      "icon": "dashboard",
+      "tags": [],
+      "tooltip": "The node page, for one machine at a time"
+    },
+    {
+      "type": "dashboards",
+      "tags": [
+        "holochain"
+      ],
+      "asDropdown": true,
+      "title": "Holochain dashboards",
+      "includeVars": false,
+      "keepTime": true,
+      "targetBlank": false,
+      "icon": "external link",
+      "tooltip": "",
+      "url": ""
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "network",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "holochain-prometheus"
+        },
+        "definition": "query_result(max by (dna, network_label) (holochain:dht_names))",
+        "query": {
+          "query": "query_result(max by (dna, network_label) (holochain:dht_names))",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 2,
+        "regex": "/dna=\"(?<value>[^\"]+)\".*network_label=\"(?<text>[^\"]+)\"/",
+        "sort": 1,
+        "multi": false,
+        "includeAll": false,
+        "hide": 0,
+        "current": {},
+        "options": [],
+        "label": "App network"
+      },
+      {
+        "name": "node",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "holochain-prometheus"
+        },
+        "definition": "label_values(holochain_dht_peers{dna=\"$network\"}, node)",
+        "query": {
+          "query": "label_values(holochain_dht_peers{dna=\"$network\"}, node)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "hide": 0,
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": [],
+        "allValue": ".*",
+        "label": "Node"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Nodes with it",
+      "description": "How many machines this Grafana watches run this app's network.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "count(count by (node) (holochain_dht_peers{dna=\"$network\", node=~\"$node\", conductor!=\"\"}))",
+          "legendFormat": "Nodes",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "decimals": 0,
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "value",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Lost contact",
+      "description": "Whether any machine is cut off from this network, or has lost the others it had.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "count(holochain:dht_state{dna=\"$network\", node=~\"$node\", conductor!=\"\"} == 2) or vector(0)",
+          "legendFormat": "Lost contact",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "decimals": 0,
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "value",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Catching up",
+      "description": "Whether any machine is still missing data its peers have on this network.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "count(holochain:dht_state{dna=\"$network\", node=~\"$node\", conductor!=\"\"} == 4) or vector(0)",
+          "legendFormat": "Catching up",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 1
+              }
+            ]
+          },
+          "decimals": 0,
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "value",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Same data everywhere",
+      "description": "How close the machines are to holding the same amount of this network's data: the least-filled machine's count over the fullest one's. Valid while every machine holds the whole network, which is the case for small networks without sharding.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "holochain:dna_same_data{dna=\"$network\"} or on () vector(-1)",
+          "legendFormat": "Same data",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 0.8
+              },
+              {
+                "color": "green",
+                "value": 0.95
+              }
+            ]
+          },
+          "noValue": "only one node",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "-1": {
+                  "text": "only one node",
+                  "color": "#8e8e8e",
+                  "index": 0
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "value",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Did it reach everyone? Data held on each node",
+      "description": "One line per machine: how much of this network's data it holds. After a write, every line should step up by the same amount within about a minute; a line that stays flat has not received it. Holochain stores each message as several pieces, so watch the steps, not the number. The dashed line is the most any machine's best peer has seen.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "max by (node) (holochain_dht_local_ops{dna=\"$network\", node=~\"$node\", conductor!=\"\"})",
+          "legendFormat": "{{node}}",
+          "instant": false,
+          "range": true
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "max(holochain_dht_peer_ops{dna=\"$network\", node=~\"$node\", conductor!=\"\"})",
+          "legendFormat": "Most any node has seen",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": false,
+            "lineInterpolation": "stepAfter",
+            "axisLabel": "pieces of data"
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "decimals": 0,
+          "unit": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#8e8e8e"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "state-timeline",
+      "title": "Status on each node",
+      "description": "When each machine was alone, catching up or in step on this network.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 13,
+        "w": 24,
+        "h": 6
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "min by (node) (holochain:dht_state{dna=\"$network\", node=~\"$node\", conductor!=\"\"})",
+          "legendFormat": "{{node}}",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#8e8e8e",
+                "value": null
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Not running",
+                  "color": "red",
+                  "index": 0
+                },
+                "1": {
+                  "text": "No fresh readings",
+                  "color": "orange",
+                  "index": 1
+                },
+                "2": {
+                  "text": "Lost contact",
+                  "color": "red",
+                  "index": 2
+                },
+                "3": {
+                  "text": "No one else yet",
+                  "color": "#8e8e8e",
+                  "index": 3
+                },
+                "4": {
+                  "text": "Catching up",
+                  "color": "#EAB839",
+                  "index": 4
+                },
+                "5": {
+                  "text": "In step",
+                  "color": "green",
+                  "index": 5
+                }
+              }
+            }
+          ],
+          "custom": {
+            "lineWidth": 0,
+            "fillOpacity": 80
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "mergeValues": true,
+        "showValue": "auto",
+        "alignValue": "left",
+        "rowHeight": 0.9,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Connected to others, per node",
+      "description": "How many other computers each machine sees on this network. The red area is nobody.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 19,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "min by (node) (holochain_dht_peers{dna=\"$network\", node=~\"$node\", conductor!=\"\"})",
+          "legendFormat": "{{node}}",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": false,
+            "lineInterpolation": "stepAfter",
+            "thresholdsStyle": {
+              "mode": "area"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0,
+          "decimals": 0,
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "transparent",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "type": "bargauge",
+      "title": "Last heard from others, per node",
+      "description": "How long since each machine last exchanged data with anyone on this network. A machine nobody else has joined here yet is left out, so a lone machine shows no bar rather than a red one.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 19,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "max by (node) (holochain:dht_heard:named{dna=\"$network\", node=~\"$node\", conductor!=\"\"} unless on (instance, conductor, app_id, role, dna) (holochain:dht_state == 3))",
+          "legendFormat": "{{node}}",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "max": 900,
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 120
+              },
+              {
+                "color": "red",
+                "value": 600,
+                "fromOption": "silentAfterSeconds"
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "range",
+              "options": {
+                "from": 100000000.0,
+                "to": null,
+                "result": {
+                  "text": "never",
+                  "color": "red",
+                  "index": 0
+                }
+              }
+            }
+          ],
+          "noValue": "Nobody else runs this app yet"
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "valueMode": "color",
+        "namePlacement": "left",
+        "showUnfilled": true,
+        "sizing": "auto",
+        "minVizHeight": 16,
+        "minVizWidth": 8,
+        "maxVizHeight": 300,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 13,
+      "type": "row",
+      "title": "Gossip details",
+      "collapsed": true,
+      "gridPos": {
+        "x": 0,
+        "y": 26,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [
+        {
+          "id": 9,
+          "type": "timeseries",
+          "title": "Waiting for data",
+          "description": "Items each machine is still fetching on this network.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 27,
+            "w": 8,
+            "h": 6
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "holochain-prometheus"
+              },
+              "expr": "max by (node) (holochain_dht_pending_fetches{dna=\"$network\", node=~\"$node\", conductor!=\"\"})",
+              "legendFormat": "{{node}}",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": false
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "min": 0,
+              "decimals": 0,
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 10,
+          "type": "timeseries",
+          "title": "Timed-out exchanges",
+          "description": "Exchanges with a peer that timed out in the last 15 minutes, per machine. Rounds and timeouts are counters that drop when a peer is forgotten, so this is a difference clamped at 0, and a series younger than the window reads 0.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "gridPos": {
+            "x": 8,
+            "y": 27,
+            "w": 8,
+            "h": 6
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "holochain-prometheus"
+              },
+              "expr": "sum by (node) (clamp_min(holochain_dht_peer_timeouts_total{dna=\"$network\", node=~\"$node\", conductor!=\"\"} - (holochain_dht_peer_timeouts_total{dna=\"$network\", node=~\"$node\", conductor!=\"\"} offset 15m or holochain_dht_peer_timeouts_total{dna=\"$network\", node=~\"$node\", conductor!=\"\"}), 0))",
+              "legendFormat": "{{node}}",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": false
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "min": 0,
+              "decimals": 0,
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 11,
+          "type": "timeseries",
+          "title": "Exchanges per minute",
+          "description": "Completed gossip rounds per minute over the last 5 minutes, per machine. Rounds and timeouts are counters that drop when a peer is forgotten, so this is a difference clamped at 0, and a series younger than the window reads 0.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "gridPos": {
+            "x": 16,
+            "y": 27,
+            "w": 8,
+            "h": 6
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "holochain-prometheus"
+              },
+              "expr": "sum by (node) (clamp_min(holochain_dht_completed_rounds_total{dna=\"$network\", node=~\"$node\", conductor!=\"\"} - (holochain_dht_completed_rounds_total{dna=\"$network\", node=~\"$node\", conductor!=\"\"} offset 5m or holochain_dht_completed_rounds_total{dna=\"$network\", node=~\"$node\", conductor!=\"\"}), 0)) / 5",
+              "legendFormat": "{{node}}",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": false
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "min": 0,
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "type": "row",
+      "title": "For bug reports",
+      "collapsed": true,
+      "gridPos": {
+        "x": 0,
+        "y": 27,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [
+        {
+          "id": 12,
+          "type": "table",
+          "title": "Identity, for bug reports",
+          "description": "The exact machine, conductor, installed app id, role and DNA hash of this network, to paste into an issue. The only panel on any Holochain page that shows a hash or an app id.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 34,
+            "w": 24,
+            "h": 6
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "holochain-prometheus"
+              },
+              "expr": "holochain_dht_info{dna=\"$network\"}",
+              "format": "table",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "Value": true,
+                  "__name__": true
+                }
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

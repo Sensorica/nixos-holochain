@@ -128,9 +128,20 @@ jobs:
             .#checks.x86_64-linux.vmTestConductorMetrics-0_6 \
             .#checks.x86_64-linux.vmTestGateway \
             .#checks.x86_64-linux.vmTestWindtunnel \
+            .#checks.x86_64-linux.conductorMetricsJq \
+            .#checks.x86_64-linux.dhtMetricsJq \
+            .#checks.x86_64-linux.metricsHelpAgreement \
+            .#checks.x86_64-linux.metricsNameShape \
+            .#checks.x86_64-linux.edgenodeNamesWiring \
+            .#checks.x86_64-linux.holochainRules \
+            .#checks.x86_64-linux.grafanaProvisioning \
+            .#checks.x86_64-linux.dashboardLabels \
+            .#checks.x86_64-linux.dashboardWords \
+            .#checks.x86_64-linux.dashboardQueries \
             .#checks.x86_64-linux.vmTestBootstrap \
-            .#checks.x86_64-linux.edgenodeConfigRender \
-            .#checks.x86_64-linux.conductorMetricsJq
+            .#checks.x86_64-linux.vmTestServices \
+            .#checks.x86_64-linux.vmTestServices-noBootstrap \
+            .#checks.x86_64-linux.edgenodeConfigRender
 
   # The Holoport install rehearsal copies the event node's whole closure (about
   # 10 GiB, most of it the Plasma desktop) onto a virtual disk, so the runner

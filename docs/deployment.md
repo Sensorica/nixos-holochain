@@ -273,7 +273,7 @@ extra-trusted-public-keys = holochain-ci.cachix.org-1:5IUSkZc0aoRS53rfkvH9Kid40N
 
 The first boot is not fast even so: the conductor takes a minute or more to open its admin port on a VM, and installing a hApp is slower still.
 
-## Seeing the dashboard before deploying a fleet
+## Seeing the dashboards before deploying a fleet
 
 `observability-vm` is the whole observability stack on one machine: an edgenode exporting its conductor's `holochain_*` series, plus Prometheus and Grafana scraping and drawing them. Grafana and Prometheus are forwarded to the host, so a real browser reaches them.
 
@@ -285,9 +285,26 @@ nix build .#nixosConfigurations.observability-vm.config.system.build.vm
 ./result/bin/run-observability-vm-vm
 ```
 
-Then open <http://localhost:13000> (admin / workshop2026) and pick the **Holochain Fleet** dashboard; Prometheus itself is on <http://localhost:19090>. Give it a couple of minutes: the conductor needs a minute or more to come up, the metrics timer fires every 10 seconds in this VM, and the panels need a few points before they draw a line.
+Then open <http://localhost:13000> (admin / workshop2026). Grafana's home page is the room screen, **Is the Holochain network working?**; Prometheus itself is on <http://localhost:19090>. Give it a couple of minutes: the conductor needs a minute or more to come up, the metrics timer fires every 10 seconds in this VM, and the panels need a few points before they draw a line.
 
-The dashboard panels are provisioned, not saved by hand. Editing one in the browser will appear to work and will be discarded on the next rebuild; change `modules/dashboards/holochain-fleet.json` instead.
+Four dashboards ship, all tagged `holochain`, each titled with the one question its reader asks, and each linking to the others:
+
+| Dashboard (uid) | Reader | What it answers |
+|---|---|---|
+| Is the Holochain network working? (`holochain-now`) | The room, on a shared screen (add `?kiosk` to the URL), and anyone opening Grafana for the first time | Are the readings current, which machines are on, is each app working on each machine and connected to how many others, did the latest write in the room's app reach every machine, and how long since each app last heard from anyone |
+| Which Holochain node needs attention? (`holochain-fleet`) | Whoever runs the fleet | How many machines are unreachable, conductors silent or stale, app parts cut off or behind, machine problems; one row per machine, worst first; the problems in words; the watched services that are down; the app matrix; each machine's status over time; and a collapsed Machines row |
+| Is this node working, app by app? (`holochain-node`) | An operator with one machine, or anyone following a link from the fleet page | Each conductor on the machine, its apps, and one row per app part: its state, other computers, the share of its best peer's data it holds, when it last heard from anyone, what it is still fetching; every service the machine runs, by name, with its state; then the machine itself in collapsed rows |
+| Is this app in step on every node? (`holochain-network`) | The facilitator asked "did my message reach the others?", or the operator after a Lost contact | One app network across every machine: how many run it, whether any is cut off or behind, a step chart of the data each holds, and each machine's status over time |
+
+Every app part reads one of six words, worst first: **Not running**, **No fresh readings**, **Lost contact**, **No one else yet** (grey, and normal for a machine alone), **Catching up** and **In step**. The room and fleet pages explain each in a sentence at the bottom. They are computed once, by the recording rules of `modules/holochain-rules.nix`, so no two pages can disagree; a machine reads by its worst conductor, and an app by its worst part. No page shows a hash, an installed app id or a scrape address, except the collapsed "For bug reports" row of the network page, which exists to be pasted into an issue.
+
+Each machine lists the services it runs, from the modules enabled on it: the conductor, the app installer, the readings timer, the HTTP gateway, the local bootstrap and relay, the Wind Tunnel runner, Prometheus and Grafana on the monitor, and beside them node_exporter, sshd, Tailscale and the Nix daemon when they are enabled. The node page lists them by name with their state; the fleet page lists the ones that are not running; a machine's tile on the room screen reads "A service is down" while one has failed, keeps failing and restarting, has stopped or does not answer. The table of every service and where its name and state come from is in [architecture.md](architecture.md#services-from-what-each-node-runs). A machine needs node_exporter's textfile collector for its list to reach the pages; an edgenode and a monitor have it already.
+
+Two options feed the pages. `overviewUnits`, on the monitor, adds units to watch on every machine that runs them, with the name a person reads for each: `overviewUnits = { "caddy.service" = "Web server"; };` (a list, `[ "caddy.service" ]`, still works and shows the unit name). A service of your own on one machine goes in that machine's own list instead: `services.holochain-services.units."caddy.service" = "Web server";`. `room` (`app`, `part`, `label`) picks the one app part whose writes the room screen follows; left unset, that chart says so. Temperatures are empty in this VM and on any machine without hardware sensors; that is expected.
+
+The thresholds behind the words (readings older than 90 s, 10 minutes without contact, 95% of the best peer's data) are `services.holochain-grafana.states`. The provisioned dashboards follow them: every colour step that stands for a state threshold, and every sentence that quotes one, is rewritten from the option on its way into the store. A dashboards directory outside the store is not rewritten, so it keeps the defaults.
+
+The dashboards are provisioned, not saved by hand. Editing one in the browser will appear to work and will be discarded on the next rebuild; change the JSON in `modules/dashboards/` instead, and run `checks.dashboardLabels` and `checks.dashboardQueries`.
 
 ## First boot sequence
 
@@ -317,7 +334,19 @@ systemctl list-timers holochain-conductor-metrics
 curl -s localhost:9100/metrics | grep '^holochain_'
 ```
 
-`holochain_conductor_up 0` means the timer is running and the conductor is not answering; check `journalctl -u holochain-conductor`. No `holochain_` lines at all means the timer has not fired yet, or `conductorMetrics.enable` is off.
+`holochain_conductor_up{conductor="Holochain"} 0` means the timer is running and the conductor is not answering; check `journalctl -u holochain-conductor`. The `conductor` label is `conductorMetrics.name`. No `holochain_` lines at all means the timer has not fired yet, or `conductorMetrics.enable` is off. A `node_textfile_scrape_error` of 1 with another conductor's textfile in the same directory (a Moss node, say) means the two files declare a family differently: both must be written by `holochain-conductor-exporter`, and node_exporter's log names the family.
+
+Each DHT the conductor is in has its own `holochain_dht_*` series, labelled with the conductor, the installed app id (`app_id`), the role and the DNA hash, and one `holochain_dht_info` line that names it for dashboards (see [Names](architecture.md#names)):
+
+```bash
+# one line per cell of every enabled app
+curl -s localhost:9100/metrics | grep '^holochain_dht_peers'
+# the same DHTs as the conductor reports them
+hc sandbox call --running 4444 dump-network-metrics --include-dht-summary   # 0.6 line
+hc client call --port 4444 dump-network-metrics --include-dht-summary       # 0.7 line
+```
+
+A node alone on its network shows `holochain_dht_peers` 0 and `holochain_dht_seconds_since_gossip` -1 for every DHT. No `holochain_dht_` lines while `holochain_conductor_apps{status="enabled"}` is above zero means `dump-network-metrics` did not answer, or answered in a shape the exporter does not read. The second case is logged in `journalctl -u holochain-conductor-metrics`; the first leaves no trace there, so run the call above by hand. A cell whose DNA the reply does not list gets no series rather than zeros.
 
 On the monitor node:
 
@@ -325,11 +354,24 @@ On the monitor node:
 # every configured scrape target should be "health":"up"
 curl -s localhost:9090/api/v1/targets | jq '.data.activeTargets[] | {scrapeUrl, health, lastError}'
 
-# the provisioned dashboard should be there
+# the four provisioned dashboards should be there
 # export GRAFANA_ADMIN_PASSWORD first; on a node that kept the module
 # default it is the workshop password
-curl -s -u "admin:$GRAFANA_ADMIN_PASSWORD" 'localhost:3000/api/search?query=Holochain'
+curl -s -u "admin:$GRAFANA_ADMIN_PASSWORD" 'localhost:3000/api/search?tag=holochain' | jq -r '.[].uid'
+
+# every node by name, with its state (4 is Running, 2 A service is down)
+curl -s --get localhost:9090/api/v1/query \
+  --data-urlencode 'query=holochain:node_state' \
+  | jq '.data.result[] | {node: .metric.node, state: .value[1]}'
+
+# what the problem lists say, one sentence per problem
+# (failed units, mount units included, full disks, silent conductors)
+curl -s --get localhost:9090/api/v1/query \
+  --data-urlencode 'query=holochain:node_problem' \
+  | jq '.data.result[] | {node: .metric.node, problem: .metric.problem}'
 ```
+
+A node missing from the second answer is not scraped (check the targets above). The third answer is empty on a healthy fleet; each entry names what to look at, a failed unit with `systemctl status` on that node.
 
 ## Running your own bootstrap and relay
 
@@ -357,6 +399,8 @@ Check it from any node:
 ```bash
 curl -sf http://bootstrap-host:443/health
 ```
+
+On the dashboards the server is "Local bootstrap and relay", among the services of the machine that runs it. A timer asks its `/health` every 30 seconds, so a server that runs and does not answer reads Not answering, not Running, and turns that machine's tile on the room screen to A service is down. This needs node_exporter's textfile collector on that machine: an edgenode or a monitor has one; on a machine that runs only the server, point `services.holochain-services.textfileDirectory` at the directory its node_exporter reads.
 
 ```bash
 journalctl -u holochain-bootstrap -f

@@ -632,7 +632,17 @@ Whether to enable a timer that exports the conductor’s own network stats as
 This is the fleet dashboard’s Holochain data source\. It calls
 ` dump-network-stats ` on the admin interface, which answers with
 Kitsune2’s ` TransportStats ` on both the 0\.6 and 0\.7 lines, and derives
-connection, byte and message gauges from it\. Requires
+connection gauges and byte and message counters from it; it also
+counts installed apps by status from ` list-apps `\. The counters are
+running totals kept in ` conductor-metrics-counters.json ` under
+` dataDir `, so a peer disconnecting does not pull them down\. It also
+calls ` dump-network-metrics --include-dht-summary ` and writes one
+` holochain_dht_* ` series set per DHT the conductor is in (peers, ops
+held here and by the best peer, pending fetches, seconds since the
+last gossip, completed rounds and timeouts), labelled ` app_id `,
+` role ` and ` dna `, and names every app and DHT in ` holochain_app_info `
+and ` holochain_dht_info ` from ` displayName ` and ` roleNames `\. Every
+line carries ` conductor `, from ` name `\. Requires
 ` metricsExporter.enable `
 \.
 
@@ -691,6 +701,41 @@ string
 
 ```nix
 "1min"
+```
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
+## services\.holochain-edgenode\.conductorMetrics\.name
+
+
+
+The ` conductor ` label on every ` holochain_* ` series this node
+writes, and the name dashboards show for the conductor\. It keeps
+two conductors on one machine apart (this one and a Moss node, say),
+so give each its own\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+
+```nix
+"Holochain"
+```
+
+
+
+*Example:*
+
+```nix
+"Workshop"
 ```
 
 *Declared by:*
@@ -796,6 +841,43 @@ attribute set of (submodule)
 
 
 
+## services\.holochain-edgenode\.happs\.\<name>\.displayName
+
+
+
+What dashboards call this app, as ` app_name ` on the
+` holochain_app_info ` and ` holochain_dht_info ` series\. ` null `
+falls back to the bundle’s own name from ` list-apps `, with
+underscores and dashes read as spaces and the first letter
+capitalised (` requests_and_offers ` reads “Requests and
+offers”)\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+"Requests & Offers"
+```
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
 ## services\.holochain-edgenode\.happs\.\<name>\.installed
 
 
@@ -839,6 +921,46 @@ null or string
 
 ```nix
 null
+```
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
+## services\.holochain-edgenode\.happs\.\<name>\.roleNames
+
+
+
+What dashboards call each part of this app, keyed by DNA role,
+as ` part_name ` on ` holochain_dht_info `\. A role left out reads
+as nothing when the app has one role, so its network is shown
+by the app’s name alone, and otherwise as the role id with a
+one-letter prefix dropped and underscores read as spaces
+(` rFiles ` reads “Files”)\.
+
+
+
+*Type:*
+attribute set of string
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+
+
+*Example:*
+
+```nix
+{
+  hrea = "Accounting";
+  requests_and_offers = "Listings";
+}
 ```
 
 *Declared by:*
@@ -1398,9 +1520,35 @@ string
 
 Directory of Grafana dashboard JSON files to provision\. Everything in
 it is loaded at startup and re-read every 30 seconds\. The module ships
-` holochain-fleet.json ` (uid ` holochain-fleet `), which draws CPU, memory
-and host network from node_exporter and the conductor’s own
-` holochain_* ` series from the edgenode module’s metrics timer\.
+four, each titled with the question it answers and all tagged
+` holochain `: ` holochain-now ` (“Is the Holochain network working?”),
+the room screen and Grafana’s home page; ` holochain-fleet ` (“Which
+Holochain node needs attention?”), for whoever runs the fleet;
+` holochain-node ` (“Is this node working, app by app?”), one machine;
+and ` holochain-network ` (“Is this app in step on every node?”), one
+app network across every machine\. They read the recording rules of
+holochain-rules\.nix, so they agree on every state\.
+
+For a directory in the Nix store, the module sets Grafana’s home page
+(` services.grafana.settings.dashboards.default_home_dashboard_path `,
+at default priority, so a definition of your own wins): its
+` holochain-now.json ` when it has one, otherwise a copy of Grafana’s
+own home page\. The choice is made while building, so a directory
+inside a package is not built during evaluation\.
+
+A directory in the Nix store (a path in your flake, or a directory
+inside a flake input or package such as ` "${inputs.x}/dashboards" `)
+has every dashboard’s ` units ` textbox variable set from
+` overviewUnits ` on its way in, every field override matched by name
+to ` name ` given the units’ names as value mappings, and the
+` room_app `, ` room_part ` and ` room_label ` constants set from ` room `
+when that is set\. Every threshold step that names a ` states ` option
+in its ` fromOption ` key takes that option’s value, and the sentences
+that quote a state’s threshold quote the value given, so the colours
+and the words agree with the state the rules compute\. A directory
+outside the store, or a
+store path written as a bare string that carries no Nix string
+context, is provisioned as it is\.
 
 
 
@@ -1468,6 +1616,76 @@ false
 
 
 
+## services\.holochain-grafana\.overviewUnits
+
+
+
+systemd units to watch on every node on top of the ones each node
+lists itself, each with the name a person reads for it\. The keys are
+units, the values their names; a unit whose name is null, or an entry
+of a plain list of units, is shown by its unit name\.
+
+Every node lists its own services in
+` services.holochain-services.units `, filled from the modules enabled
+on it (the conductor, the HTTP gateway, the local bootstrap and relay,
+the Wind Tunnel runner, Prometheus, Grafana, and the services beside
+them), and publishes that list through node_exporter\. This option is
+for what a node does not list: a machine that does not run these
+modules, or a unit of your own on every machine\. Its default is empty,
+so what is watched follows each node’s configuration\.
+
+Each key is a regular expression Prometheus matches against the whole
+unit name, suffix included, so ` restic-backups-.* ` works, and its name
+is given to every unit it matches\. A unit is watched on each node that
+runs it, and a node that does not run it has no row for it, so one set
+serves a fleet whose machines run different things\. A unit a node
+lists itself keeps the name the node gives it\.
+
+The watched units reach the recording rules (` holochain:service_watched `
+and ` holochain:service_state `), which the node page’s “Is each
+service on this machine running?”, the fleet page’s “Which services
+are not running?” and the room screen’s machine tiles read\. For a dashboard of your own, the
+keys are also joined with ` | ` into the default of any ` units ` textbox
+variable, and every field override matched by name to ` name ` (the
+unit label of ` node_systemd_unit_state `) gets one regex value mapping
+per named unit\.
+
+The ` holochain:node_problem ` rule, which the problem lists read, gives
+every failed unit on the node a sentence of its own whether it is
+watched or not, except device, scope and slice units, which the
+node_exporter flags these modules set leave out, naming it by its
+watched name or, when it has none, by its unit name\.
+
+
+
+*Type:*
+(attribute set of (null or string)) or (list of string) convertible to it
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+
+
+*Example:*
+
+```nix
+{
+  "caddy.service" = "Web server";
+  "restic-backups-.*" = "Backups";
+}
+
+```
+
+*Declared by:*
+ - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+
+
+
 ## services\.holochain-grafana\.prometheusPort
 
 
@@ -1485,6 +1703,109 @@ Port Prometheus listens on\.
 
 ```nix
 9090
+```
+
+*Declared by:*
+ - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+
+
+
+## services\.holochain-grafana\.room
+
+
+
+The one app part a room screen follows writes in\. Rendered into the
+constant variables ` room_app `, ` room_part ` and ` room_label ` of every
+provisioned dashboard that declares them; when null, those variables
+keep the defaults their dashboard gives them\.
+
+An app installed by hand in Moss is not a good choice: its id changes
+with every installation and holds ` $ `, which Grafana reads as a
+variable\.
+
+
+
+*Type:*
+null or (submodule)
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+*Declared by:*
+ - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+
+
+
+## services\.holochain-grafana\.room\.app
+
+
+
+The installed_app_id of an app this module’s fleet installs from Nix\.
+
+
+
+*Type:*
+string
+
+
+
+*Example:*
+
+```nix
+"requests-and-offers"
+```
+
+*Declared by:*
+ - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+
+
+
+## services\.holochain-grafana\.room\.label
+
+
+
+The name the room screen gives that app\.
+
+
+
+*Type:*
+string
+
+
+
+*Example:*
+
+```nix
+"Requests & Offers"
+```
+
+*Declared by:*
+ - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+
+
+
+## services\.holochain-grafana\.room\.part
+
+
+
+The role of the app whose writes the room follows\.
+
+
+
+*Type:*
+string
+
+
+
+*Example:*
+
+```nix
+"requests_and_offers"
 ```
 
 *Declared by:*
@@ -1524,12 +1845,29 @@ string
 
 
 
-Prometheus node_exporter targets across the fleet (host:port)\.
+The node_exporter of every node Prometheus scrapes, and the name each
+node goes by on the dashboards\. Prometheus attaches the name to every
+series from the target as the ` node ` label, so a node that is down is
+still shown by its name\.
+
+As an attribute set, each key is the node’s name, and the value gives
+its ` address ` (host:port) and, optionally, its ` site `, which becomes a
+` site ` label\. As a list of host:port strings, each node is named after
+the host part of its address, except that a loopback address
+(127\.0\.0\.1, localhost, ::1) takes this machine’s
+` networking.hostName `\. A list entry given by an IP address therefore
+goes by that address on every dashboard, and evaluation warns about
+it: give such a node a name with the attribute set form\.
+
+No two targets may go by the same name: the dashboards aggregate by
+` node `, so two targets named alike would read as one machine\. Two
+list entries on one host (two ports of a loopback, say) need the
+attribute set form\.
 
 
 
 *Type:*
-list of string
+(list of string) or attribute set of (submodule)
 
 
 
@@ -1544,8 +1882,11 @@ list of string
 *Example:*
 
 ```nix
-[ "edgenode-01:9100" "edgenode-02:9100" "edgenode-03:9100"
-  "edgenode-04:9100" "edgenode-05:9100" ]
+{
+  lab-1 = { address = "edgenode-01:9100"; site = "Sensorica lab"; };
+  lab-2 = { address = "edgenode-02:9100"; site = "Sensorica lab"; };
+  homelab.address = "100.64.0.7:9100";
+}
 
 ```
 
@@ -1589,6 +1930,141 @@ null
 
 ```nix
 "/var/lib/secrets/grafana-secret-key"
+```
+
+*Declared by:*
+ - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+
+
+
+## services\.holochain-grafana\.states\.historyWindow
+
+
+
+How far back, as a Prometheus duration, a DHT with no peer is
+remembered to have had one\. Within it the DHT reads “Lost contact”;
+a DHT that had nobody in all of it, on a DNA no other node of the
+fleet runs, reads “No one else yet”, which is normal for a node that
+is alone\.
+
+
+
+*Type:*
+string matching the pattern \[0-9]+(ms|s|m|h|d|w|y)
+
+
+
+*Default:*
+
+```nix
+"24h"
+```
+
+*Declared by:*
+ - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+
+
+
+## services\.holochain-grafana\.states\.inStepShare
+
+
+
+The share of its best peer’s data a connected DHT must hold, on
+average over ` shareWindow `, to read “In step” rather than “Catching
+up”\. A healthy DHT rarely holds everything its best peer does, since
+new data is always on its way, so 1 would read a working network as
+behind for good; 0\.95 is what the Sensorica Moss node’s DHTs held on
+2026-09-27\.
+
+
+
+*Type:*
+integer or floating point number between 0 and 1 (both inclusive)
+
+
+
+*Default:*
+
+```nix
+0.95
+```
+
+*Declared by:*
+ - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+
+
+
+## services\.holochain-grafana\.states\.shareWindow
+
+
+
+The window, as a Prometheus duration, the held share is averaged
+over, so a DHT does not flap between “In step” and “Catching up” at
+every write\.
+
+
+
+*Type:*
+string matching the pattern \[0-9]+(ms|s|m|h|d|w|y)
+
+
+
+*Default:*
+
+```nix
+"10m"
+```
+
+*Declared by:*
+ - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+
+
+
+## services\.holochain-grafana\.states\.silentAfterSeconds
+
+
+
+How long a DHT that knows peers may go without gossiping with any of
+them before it reads “Lost contact”\.
+
+
+
+*Type:*
+positive integer, meaning >0
+
+
+
+*Default:*
+
+```nix
+600
+```
+
+*Declared by:*
+ - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+
+
+
+## services\.holochain-grafana\.states\.staleAfterSeconds
+
+
+
+How old a conductor’s readings may get before every DHT of it reads
+“No fresh readings” and its conductor state reads stale\. The default
+covers the metrics timer’s 30 s interval plus the 15 s scrape, with
+margin; raise it with ` conductorMetrics.interval `\.
+
+
+
+*Type:*
+positive integer, meaning >0
+
+
+
+*Default:*
+
+```nix
+90
 ```
 
 *Declared by:*
@@ -1911,6 +2387,275 @@ unsigned integer, meaning >=0
 
 *Declared by:*
  - [modules/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-http-gateway.nix)
+
+
+
+## services\.holochain-services\.healthChecks
+
+
+
+Health checks, keyed by the unit they check, which should also be in
+` units `\. A timer runs every one every 30 seconds and writes
+` holochain_service_healthy ` (1 or 0) and
+` holochain_service_health_timestamp_seconds ` to
+` holochain-service-health.prom ` in ` textfileDirectory `\. A service
+whose unit is active reads Not answering on the dashboards when its
+check fails, and No fresh readings when the last check is older than
+` services.holochain-grafana.states.staleAfterSeconds `\. The bootstrap
+module adds its ` /health ` here\.
+
+
+
+*Type:*
+attribute set of (submodule)
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+*Declared by:*
+ - [modules/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-services.nix)
+
+
+
+## services\.holochain-services\.healthChecks\.\<name>\.insecure
+
+
+
+Accept any TLS certificate\. For a check that reaches a service by
+its loopback address while its certificate names the host\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+*Declared by:*
+ - [modules/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-services.nix)
+
+
+
+## services\.holochain-services\.healthChecks\.\<name>\.timeoutSeconds
+
+
+
+How long the check waits for an answer before it reads the service as not answering\.
+
+
+
+*Type:*
+positive integer, meaning >0
+
+
+
+*Default:*
+
+```nix
+5
+```
+
+*Declared by:*
+ - [modules/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-services.nix)
+
+
+
+## services\.holochain-services\.healthChecks\.\<name>\.url
+
+
+
+A URL that answers with a success status while the service works\.
+
+
+
+*Type:*
+string
+
+
+
+*Example:*
+
+```nix
+"http://127.0.0.1:443/health"
+```
+
+*Declared by:*
+ - [modules/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-services.nix)
+
+
+
+## services\.holochain-services\.textfileDirectory
+
+
+
+The directory node_exporter’s textfile collector reads on this
+machine, where the list of services and the health readings are
+written\. Set by ` services.holochain-edgenode ` when its
+` metricsExporter ` is on, and by ` services.holochain-grafana ` on a
+monitor; on another machine that runs node_exporter with a textfile
+collector of its own (a machine that only runs the bootstrap server,
+say), set it to that collector’s directory\. Null writes nothing, and
+that machine’s services are then missing from the dashboards\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+"/var/lib/prometheus-node-exporter-text-files"
+```
+
+*Declared by:*
+ - [modules/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-services.nix)
+
+
+
+## services\.holochain-services\.units
+
+
+
+The systemd units this node runs that the Holochain dashboards watch,
+each with the name a person reads for it; a value is that name, or
+` { name; conductor; } ` for a unit that runs a conductor\.
+
+Filled from the configuration: every nixos-holochain module that is
+enabled adds the units it creates (the conductor, the app installer
+when there are apps, the conductor readings timer when
+` conductorMetrics ` is on, the HTTP gateway, the local bootstrap and
+relay, the Wind Tunnel runner, and on a monitor Prometheus and
+Grafana), and, on a machine where any of them is enabled, the
+services beside them that are enabled here: node_exporter, sshd,
+Tailscale and the Nix daemon’s socket\. Add a unit of your own the way
+any attribute set option merges; override a name with ` lib.mkForce `
+on that one attribute\.
+
+Published as ` holochain_service_info ` through node_exporter’s textfile
+collector when ` textfileDirectory ` is set\. The node page’s “Is each
+service on this machine running?” lists each of them with its state,
+the fleet page lists the ones that are not running, and the room
+screen’s machine tile reads “A service is down” while one has failed,
+keeps failing and restarting, has stopped or does not answer\. A unit
+systemd does not run has no row; evaluation warns about a listed unit
+this configuration does not define\.
+` services.holochain-grafana.overviewUnits `, on the monitor, adds units
+to watch on every node on top of these\.
+
+
+
+*Type:*
+attribute set of ((submodule) or string convertible to it)
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+
+
+*Example:*
+
+```nix
+{
+  "caddy.service" = "Web server";
+  "moss-node-metrics.timer" = "Moss readings (timer)";
+}
+
+```
+
+*Declared by:*
+ - [modules/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-services.nix)
+
+
+
+## services\.holochain-services\.units\.\<name>\.conductor
+
+
+
+For a unit that runs a Holochain conductor, the ` conductor ` label
+its readings carry (` services.holochain-edgenode.conductorMetrics.name `
+for an edgenode)\. The service then reads Not answering when the
+conductor does not answer its admin interface, and No fresh
+readings when its readings are old, although systemd says the
+unit is active\. A conductor that no listed unit claims is shown
+as a service of its own, “Holochain conductor (\<conductor>)”, as
+the edgenode names the unit that runs a conductor under a name
+other than the default: a Moss node whose readings carry
+` conductor="Moss" ` reads “Holochain conductor (Moss)”\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+"Workshop"
+```
+
+*Declared by:*
+ - [modules/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-services.nix)
+
+
+
+## services\.holochain-services\.units\.\<name>\.name
+
+
+
+The name a person reads for the unit on the dashboards\.
+
+
+
+*Type:*
+string
+
+
+
+*Example:*
+
+```nix
+"Local bootstrap and relay"
+```
+
+*Declared by:*
+ - [modules/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-services.nix)
 
 
 

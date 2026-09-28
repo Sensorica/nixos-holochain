@@ -6,8 +6,7 @@ The worked example behind the `nixos-holochain` modules: five Holochain edgenode
 
 ```
 examples/sensorica-fleet/
-├── flake.nix                      # inputs, the Holochain line, the five nixosConfigurations, the ISO, the colmena hive
-├── happs.nix                      # the three hApp bundles, fetched by hash
+├── flake.nix                      # inputs, the five nixosConfigurations, the ISO, the colmena hive, the parity check
 ├── hosts/
 │   ├── common.nix                 # shared by every host: user, SSH keys, desktop, edgenode service
 │   ├── edgenode-01/
@@ -20,7 +19,9 @@ examples/sensorica-fleet/
 
 ## Holochain line and hApps
 
-The fleet runs **Holochain 0.6.3** (ADR-015), taken from the module repository's own `holochain-0_6` and `hc-0_6` outputs so it cannot drift onto a different 0.6.3 than the one the VM tests ran against. The line is not a preference: each of the three hApps below has a 0.6 release and none has a 0.7 one. The maintainers re-evaluate this seven days before the workshop date.
+The fleet runs **Holochain 0.6.3** (ADR-015) and the three workshop hApps below, all from `nixos-holochain.nixosModules.sensorica-event-node` (#33): the module repository's own event profile, layered onto `holochain-edgenode` by every host in `flake.nix`'s `fleetModules`. It is the same export any other host rehearsing the workshop imports, so this fleet and that host cannot drift apart on the package, the hApp set or the seed; `checks.eventProfileParity` in `flake.nix` fails evaluation if `edgenode-01` ever overrides one of these away from the module's defaults.
+
+The line is not a preference: each of the three hApps below has a 0.6 release and none has a 0.7 one. The maintainers re-evaluate this seven days before the workshop date.
 
 Every node installs all three at boot, on one network seed (`sensorica-workshop-2026`), which is what makes the five machines one DHT per app rather than five isolated ones:
 
@@ -30,9 +31,20 @@ Every node installs all three at boot, on one network seed (`sensorica-workshop-
 | Kando | `v0.17.5` | `kando.happ` |
 | Requests & Offers | `v0.5.2` | `requests_and_offers.webhapp`, unpacked at build time |
 
-Requests & Offers publishes a `.webhapp` and nothing else, and a conductor installs a `.happ`, so `happs.nix` unpacks it in a derivation with `hc web-app unpack` from the same line. Nothing binary is committed: every bundle is `pkgs.fetchurl` by sha256 (ADR-012).
+Requests & Offers publishes a `.webhapp` and nothing else, and a conductor installs a `.happ`, so `modules/sensorica-happs.nix` (in the module repository) unpacks it in a derivation with `hc web-app unpack` from the same line. Nothing binary is committed: every bundle is `pkgs.fetchurl` by sha256 (ADR-012).
 
-Three apps compile their wasm one after another on first boot, which on a Holoport is slow, so `installerTimeout` is 900 s. The installer polls for the result rather than trusting any single admin call, so that is a bound on each of its waits (per hApp, the install and then the enable settling), not on one call; the unit has no start timeout of its own.
+Three apps compile their wasm one after another on first boot, which on a Holoport is slow, so `installerTimeout` is 900 s (also from the profile). The installer polls for the result rather than trusting any single admin call, so that is a bound on each of its waits (per hApp, the install and then the enable settling), not on one call; the unit has no start timeout of its own.
+
+## Consuming the event profile from another host
+
+Any other flake that rehearses the same workshop node (as Soushi's homelab does) builds from the same export instead of repeating it:
+
+```nix
+# inputs: holonix-0_6.follows = "nixos-holochain/holonix-0_6";
+modules = [nixos-holochain.nixosModules.holochain-edgenode nixos-holochain.nixosModules.sensorica-event-node];
+```
+
+That is the whole profile: package, the three hApps, the network seed, the installer timeout and the two metrics options. A host can still override any single value (a different seed, a longer timeout) with an ordinary assignment, because the profile sets each one with `mkDefault`. Trimming the hApp set is different: `happs` is an attribute set of submodules, so a plain `happs = { hrea = ...; };` is merged with the profile's three apps rather than replacing them. Drop one app with `happs.kando.installed = false;`, or replace the whole set with `happs = lib.mkForce { ... };`. The comment at the top of `modules/sensorica-event-node.nix` explains both.
 
 ## Evaluate
 
