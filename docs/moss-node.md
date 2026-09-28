@@ -18,14 +18,14 @@ services.holochain-moss-node = {
 
 The options:
 
-- `enable`: the node, its readings timer and its unit names on the dashboards.
+- `enable`: the node, its readings timer and its unit names on the dashboards. The home page ("What is this machine running?") lists the node as "Moss node" with wdocker's version, and its conductor "Moss" with the Holochain wdocker brings (0.15.8 and 0.6.1 for the flake's `wdocker-0_15`), both read from the package, not from the running node.
 - `name`: the wdocker conductor's name, a local label (default `moss-node`).
 - `passwordFile`: a root-only file holding the conductor password, with no trailing newline. Only the path reaches the Nix store; systemd passes the file to the daemon as a credential (`LoadCredential`) and the daemon reads it on stdin. When the file is missing the unit fails with `status=243/CREDENTIALS` and retries every 30 s.
 - `group`: what the dashboards call the Moss group itself (every `group#` app), from the exporter's second run on.
 - `appletNames`: what the dashboards call each tool, keyed by its installed_app_id (`applet#...`, as `moss-node status` prints it). A named tool is also expected, so it reads "Not running" when the conductor stops listing it; a tool left out reads by its kind and a number (Vines 1, Vines 2).
 - `partNames`: what the dashboards call each part (DNA role) of each kind of Moss app, keyed by kind. The defaults name the group's `group`, `foyer` and `assets` roles and Vines' `rVines` and `rFiles`.
 - `dashboard.enable`: provision the Moss page in this machine's Grafana. It defaults to `config.services.grafana.enable`, so the monitor node gets the page even when it runs no Moss node; the page lists every Moss node its Prometheus scrapes.
-- `dashboard.title`: the page's title. The page's uid is `sensorica-moss-node`.
+- `dashboard.title`: the page's title. The page's uid is `sensorica-moss-node`; it is tagged `moss`, which is how the home page finds it to link to it.
 
 What it runs:
 
