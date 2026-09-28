@@ -8,7 +8,7 @@
     # A checkout of this repository overrides it with
     #   --override-input nixos-holochain <path-to-checkout>
     # (that is what CI and the review commands do).
-    nixos-holochain.url = "github:Sensorica/nixos-holochain";
+    nixos-holochain.url = "github:Sensorica/nixos-holochain/lab/holoport-session";
     # The fleet pins its own nixpkgs, as any downstream fleet does; the
     # Holochain toolchain comes from the module repository.
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
