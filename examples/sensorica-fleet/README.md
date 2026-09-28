@@ -8,14 +8,58 @@ The worked example behind the `nixos-holochain` modules: five Holochain edgenode
 examples/sensorica-fleet/
 ├── flake.nix                      # inputs, the five nixosConfigurations, the ISO, the colmena hive, the parity check
 ├── hosts/
-│   ├── common.nix                 # shared by every host: user, SSH keys, desktop, edgenode service
+│   ├── common.nix                 # shared by every host: user, SSH keys, desktop, never-sleep, rebuild alias, edgenode service
+│   ├── desk.nix                   # the operator desk: launchers, Plasma layout, tools, Avahi, event mode
 │   ├── sensorica-holoport-01/
-│   │   ├── configuration.nix      # monitor node: adds Grafana/Prometheus
+│   │   ├── configuration.nix      # monitor node: adds Grafana/Prometheus and the Moss node
 │   │   └── hardware-configuration.nix   # placeholder, replace per machine (below)
 │   ├── sensorica-holoport-02 … 05/          # peer nodes: hostname + hardware only
 │   └── workshop-iso/configuration.nix   # KDE Plasma live ISO with the repo cloned on boot
 └── README.md
 ```
+
+## Host names
+
+The five machines are `sensorica-holoport-01` to `sensorica-holoport-05`, and each flake output carries its hostname. A NixOS Holoport runs more than a Holochain edgenode (a Moss node, Grafana, a bootstrap server), so the machine is named for what it is and the edgenode stays a role. `sensorica-holoport-01` is the monitor node: Grafana and Prometheus for the whole fleet, and the Sensorica Moss group's always-online node. `02` to `05` are peer nodes, hostname and hardware only.
+
+## Which nixos-holochain the fleet reads
+
+`flake.nix` pins `nixos-holochain` to `github:Sensorica/nixos-holochain/lab/holoport-session`, the branch the Holoports install from, because it carries the modules the fleet uses (the event profile, the Moss node) and `main` does not yet. A fresh clone of that branch needs only the operator key (below) before the install. Point the input back at `github:Sensorica/nixos-holochain` once the lab branch merges.
+
+## Rebuilding a Holoport
+
+Every Holoport has a `rebuild` alias, for root and for `sensorica`:
+
+```bash
+rebuild
+```
+
+It runs `sudo nixos-rebuild switch --flake /root/nixos-holochain/examples/sensorica-fleet`, from the checkout the install leaves in `/root/nixos-holochain`; the output matching the hostname is picked without a fragment. It does not pull: that checkout carries the operator key as a local commit, so updating it is a separate `git -C /root/nixos-holochain pull --rebase`. Only one switch can run at a time; a second one fails with "nixos-rebuild-switch-to-configuration.service was already loaded" and changes nothing.
+
+## A Holoport never sleeps
+
+`hosts/common.nix` disables the `sleep`, `suspend`, `hibernate` and `hybrid-sleep` targets, so no desktop, logind idle action or key can suspend a Holoport. Plasma's power management suspended `sensorica-holoport-01` from its login screen on 2026-09-27 and took its conductors and dashboards with it; `systemctl start suspend.target` now answers that the unit is masked.
+
+## The operator desk
+
+`hosts/desk.nix` is what a person at a Holoport's own screen gets when they log in as `sensorica`. It is self-contained on purpose: copy the file and its two inputs (home-manager `release-26.05` and plasma-manager, both in this flake only; the modules stay desktop-free) to give another NixOS machine the same kind of desk.
+
+- Five launchers, pinned to the panel and in the menu under System: Fleet dashboard, This node (the node page for this hostname), Holochain logs (the conductor's journal), Moss node (attaches the `moss` tmux session or opens it) and Rebuild.
+- A Plasma session declared with plasma-manager: a bottom panel with the menu, the launchers, Konsole, Dolphin and Firefox, a CPU and RAM monitor, the tray and the clock; Breeze Dark; no screen lock and no suspend or display-off on AC. The layout is applied at the next login.
+- `tmux`, `btop` and the Holochain 0.6 `hc` on PATH.
+- Avahi, so `sensorica-holoport-01.local` resolves on every Holoport and laptop in the lab without a DNS server. The launchers reach Grafana through `sensorica.grafanaUrl`, `http://sensorica-holoport-01.local:3000` by default, and open on its login page.
+
+**Event mode**, off by default and set per host:
+
+```nix
+sensorica.eventMode.enable = true;
+```
+
+It logs `sensorica` in without a password and opens the room dashboard full screen (Firefox in kiosk mode on the `holochain-now` page) at every boot. On the monitor node it also lets Grafana show dashboards to anonymous viewers with the Viewer role, so the screens need no login; the admin login is unchanged. Turn it on for the day of an event and off again after.
+
+## The Moss node
+
+`sensorica-holoport-01` hosts the Sensorica Moss group's always-online node through `nixos-holochain.nixosModules.holochain-moss-node`, which every host imports and only `01` enables. `docs/moss-node.md` in the module repository describes the service. Two steps per machine, once, both at a terminal as root: write the conductor password to `/var/lib/secrets/moss-node-password`, then ` moss-node join "INVITE_LINK"` with an invite from the Sensorica group in Moss. The Moss page in Grafana is titled "Is the Sensorica group always online?".
 
 ## Holochain line and hApps
 
@@ -54,7 +98,7 @@ nix flake check --no-build
 nix eval .#nixosConfigurations.sensorica-holoport-01.config.system.build.toplevel.drvPath
 ```
 
-The `nixos-holochain` input points at `github:Sensorica/nixos-holochain`, which is what a downstream fleet writes. From a checkout of this repository, evaluate against the checkout instead so local module changes are what gets tested:
+The `nixos-holochain` input points at the `lab/holoport-session` branch for now (see above); a downstream fleet writes `github:Sensorica/nixos-holochain`. From a checkout of this repository, evaluate against the checkout instead so local module changes are what gets tested:
 
 ```bash
 nix flake check --no-build --override-input nixos-holochain "$(git rev-parse --show-toplevel)"
