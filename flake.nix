@@ -2679,8 +2679,10 @@
               # it: the problem list says so, and the room screen's readings
               # tile reads 1e9, which its mapping shows as "No readings" in red
               # (checks.dashboardWords holds the mapping). The timer
-              # stops first, or its next run would replace the file.
-              machine.succeed("systemctl stop holochain-conductor-metrics.timer")
+              # stops first, or its next run would replace the file, and so
+              # does a run the timer already started, which would otherwise
+              # finish after the write and overwrite the bad file.
+              machine.succeed("systemctl stop holochain-conductor-metrics.timer holochain-conductor-metrics.service")
               machine.succeed(
                   "echo 'not a metric line' > /var/lib/prometheus-node-exporter-text-files/holochain-conductor.prom"
               )
