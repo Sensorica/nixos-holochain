@@ -145,12 +145,13 @@ nix copy --to "ssh://root@HOLOPORT_IP?remote-store=/mnt" "$(readlink -f sensoric
 
 ### 3. Before the first boot
 
-`/mnt` is still mounted when the script ends. sensorica-holoport-01 runs Grafana with its admin password read from a file, which has to exist before Grafana first starts; `NEW_PASSWORD` is the one you choose:
+`/mnt` is still mounted when the script ends. sensorica-holoport-01 runs Grafana with its admin password read from a file, which has to exist before Grafana first starts; `NEW_PASSWORD` is the one you choose. It also runs the [Moss node](moss-node.md), whose conductor password is read from a file too: without it `moss-node.service` fails with `status=243/CREDENTIALS`, retries every 30 s, and the machine reads "A service is down". The `systemd-ask-password` line asks for a new Moss conductor password and writes it with no trailing newline:
 
 ```bash
 install -d -m 0700 /mnt/var/lib/secrets
 install -m 0400 /dev/null /mnt/var/lib/secrets/grafana-admin-password
 printf '%s' 'NEW_PASSWORD' > /mnt/var/lib/secrets/grafana-admin-password
+printf '%s' "$(systemd-ask-password 'Moss conductor password:')" | install -m 0400 /dev/stdin /mnt/var/lib/secrets/moss-node-password
 umount -R /mnt && swapoff -a && reboot
 ```
 
@@ -161,13 +162,15 @@ Remove the USB stick while the Holoport restarts. It boots from its disk through
 On the Holoport, or over SSH as `sensorica` or root with the key from `operatorKeys`:
 
 ```bash
-systemctl is-active holochain-conductor
+systemctl is-active holochain-conductor moss-node
 systemctl status holochain-happ-installer
 journalctl -u holochain-happ-installer --no-pager | grep 'Enabled app'
 curl -s -u "admin:NEW_PASSWORD" 'localhost:3000/api/search?query=Holochain'
 ```
 
-The first boot compiles three hApps, so `holochain-happ-installer` can take several minutes to finish on a Holoport (about a minute in the VM check). The conductor should answer `active`; the journal should end with `hc-sandbox: Enabled app: "hrea"`, `"kando"` and `"requests-and-offers"`; and the last line should return the **Holochain Fleet** dashboard, which is also at `http://HOLOPORT_IP:3000` from a laptop on the same network. [Verifying the deployment](#verifying-the-deployment) has the metrics checks.
+The first boot compiles three hApps, so `holochain-happ-installer` can take several minutes to finish on a Holoport (about a minute in the VM check). The conductor and the Moss node should each answer `active`; the journal should end with `hc-sandbox: Enabled app: "hrea"`, `"kando"` and `"requests-and-offers"`; and the last line should return the **Holochain Fleet** dashboard, which is also at `http://HOLOPORT_IP:3000` from a laptop on the same network. [Verifying the deployment](#verifying-the-deployment) has the metrics checks.
+
+The Moss node hosts no group until it joins one. Once per machine, as root on the Holoport, run `moss-node join "INVITE_LINK"` with an invite from the Sensorica group in Moss, starting the line with a space so the link stays out of shell history, as described in [Moss always-online node](moss-node.md#as-a-nixos-service); `moss-node status` then lists the group.
 
 ## Rescuing an install from another machine
 
