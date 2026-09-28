@@ -130,4 +130,5 @@ jobs:
             .#checks.x86_64-linux.vmTestWindtunnel \
             .#checks.x86_64-linux.vmTestBootstrap \
             .#checks.x86_64-linux.edgenodeConfigRender \
-            .#checks.x86_64-linux.conductorMetricsJq
+            .#checks.x86_64-linux.conductorMetricsJq \
+            .#checks.x86_64-linux.dhtMetricsJq

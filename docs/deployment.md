@@ -193,7 +193,7 @@ The dashboard reads top to bottom, from "is anything wrong" to "why":
 | Row | Panels | What it answers |
 |---|---|---|
 | Overview | Fleet status, Services | Per node, one row each: is the node scraped (`up`), is the conductor answering and is that answer fresh (`holochain_conductor_up` read against the metrics age), how many hApps are enabled and how many are installed but not, how many systemd units have failed, the fullest disk, memory in use, the hottest sensor, time since boot, and how old the conductor metrics are; then the state of every deployed service on every node, from `node_systemd_unit_state`. Anything that needs looking at turns orange or red |
-| Holochain | Conductors up, Conductor peers, Conductor network throughput, Conductor metrics age, Conductor messages, Blocked messages | What each conductor is doing, from the `holochain_*` series the metrics timer writes |
+| Holochain | Conductors up, Conductor peers, Conductor network throughput, Conductor metrics age, Conductor messages, Blocked messages, DHT peers, DHT ops held here vs best peer, DHT seconds since last gossip | What each conductor is doing, from the `holochain_*` series the metrics timer writes; the three DHT panels draw one line or bar per app and role, so five nodes sharing one app still read as one line per DHT, and a node that falls behind pulls its DHT's line down (on the gossip panel, the node silent longest sets the bar, and one that never gossiped reads never) |
 | Host health | CPU busy, Memory used, Load average, Disk space used, Disk IO, Temperatures, Host network throughput, Pressure | Whether the machine under the conductor is healthy, from node_exporter, one line per node where the per-device detail is not what you scan for |
 
 Two variables at the top narrow it down. **Instance** picks nodes (All by default, which also takes in nodes that join later). **Units** is the regular expression the Services panel matches unit names against; its default is `services.holochain-grafana.overviewUnits`. Setting that option replaces the default list, so to add a service and keep the rest, write `overviewUnits = lib.mkOptionDefault [ "caddy.service" ];`. The Services panel has a row per node and a column for every listed unit that at least one selected node has: a node that lacks it shows absent in that column, and a unit no selected node has gets no column at all. A node Prometheus cannot reach gets a red cell in a `node unreachable` column. Temperatures, and the Temp column of Fleet status, are empty in this VM and on any machine without hardware sensors; that is expected.
@@ -231,6 +231,18 @@ curl -s localhost:9100/metrics | grep '^holochain_'
 ```
 
 `holochain_conductor_up 0` means the timer is running and the conductor is not answering; check `journalctl -u holochain-conductor`. No `holochain_` lines at all means the timer has not fired yet, or `conductorMetrics.enable` is off.
+
+Each DHT the conductor is in has its own `holochain_dht_*` series, labelled with the app, the role and the DNA hash:
+
+```bash
+# one line per cell of every enabled app
+curl -s localhost:9100/metrics | grep '^holochain_dht_peers'
+# the same DHTs as the conductor reports them
+hc sandbox call --running 4444 dump-network-metrics --include-dht-summary   # 0.6 line
+hc client call --port 4444 dump-network-metrics --include-dht-summary       # 0.7 line
+```
+
+A node alone on its network shows `holochain_dht_peers` 0 and `holochain_dht_seconds_since_gossip` -1 for every DHT. No `holochain_dht_` lines while `holochain_conductor_apps{status="enabled"}` is above zero means `dump-network-metrics` did not answer, or answered in a shape the exporter does not read. The second case is logged in `journalctl -u holochain-conductor-metrics`; the first leaves no trace there, so run the call above by hand. A cell whose DNA the reply does not list gets no series rather than zeros.
 
 On the monitor node:
 
