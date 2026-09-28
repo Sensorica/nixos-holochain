@@ -35,14 +35,14 @@
       desktopName = "Fleet dashboard";
       comment = "Which Holochain node needs attention, across the whole fleet";
       icon = "office-chart-area";
-      exec = "${firefox} --new-window ${cfg.grafanaUrl}/d/holochain-fleet";
+      exec = "${firefox} --new-window \"${cfg.grafanaUrl}/d/holochain-fleet\"";
     })
     (launcher {
       name = "holoport-node";
       desktopName = "This node";
       comment = "Is this Holoport working, app by app";
       icon = "computer";
-      exec = "${firefox} --new-window ${cfg.grafanaUrl}/d/holochain-node?var-node=${host}";
+      exec = "${firefox} --new-window \"${cfg.grafanaUrl}/d/holochain-node?var-node=${host}\"";
     })
     (launcher {
       name = "holoport-logs";
@@ -72,7 +72,7 @@
     desktopName = "Event screen";
     comment = "The room dashboard, full screen";
     icon = "office-chart-area";
-    exec = "${firefox} --kiosk ${cfg.grafanaUrl}/d/holochain-now?kiosk";
+    exec = "${firefox} --kiosk \"${cfg.grafanaUrl}/d/holochain-now?kiosk\"";
   };
 in {
   options.sensorica = {
