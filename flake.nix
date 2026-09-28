@@ -900,6 +900,23 @@
               grep -qx 'holochain_conductor_network_sent_bytes_total 177' out.prom
               grep -qx 'holochain_conductor_apps{status="enabled"} 0' out.prom
               grep -qx 'holochain_conductor_apps{status="disabled"} 0' out.prom
+
+              # ...and the connections it held survive the silence: when it
+              # answers again, only what moved since counts. a sent 5 more
+              # bytes and c 3 more, so 177 + 8, not 177 + a's and c's whole
+              # lifetimes.
+              cat > grown.json <<'EOF'
+              {"transport_stats":{"backend":"iroh","peer_urls":["u1"],
+                "connections":[
+                  {"pub_key":"a","send_message_count":5,"send_bytes":125,"recv_message_count":4,"recv_bytes":200,"opened_at_s":1,"is_direct":true},
+                  {"pub_key":"c","send_message_count":2,"send_bytes":10,"recv_message_count":0,"recv_bytes":0,"opened_at_s":9,"is_direct":false}]},
+               "blocked_message_counts":{}}
+              EOF
+              run grown.json "$(cat state.json)" null > out.prom
+              cat out.prom
+              grep -qx 'holochain_conductor_network_sent_bytes_total 185' out.prom
+              grep -qx 'holochain_conductor_network_sent_messages_total 12' out.prom
+              grep -qx 'holochain_conductor_network_received_bytes_total 210' out.prom
               touch $out
             '';
 

@@ -12,6 +12,11 @@
 # $prev: the previous state, {} on the first run or after the file was lost.
 # Output: the new state, {connections: {key: counts}, totals: counts}.
 #
+# A reply without transport_stats is no reading at all, not a conductor with
+# no connections, so the previous state comes back unchanged. Forgetting the
+# connections there would count every surviving one again, in full, on the
+# next reply that does answer.
+#
 # A connection is keyed by pub_key and opened_at_s, so a peer that reconnects is
 # a new connection counted from zero. A count lower than last time can only mean
 # the same key was reused for a fresh connection, and is also counted from zero.
@@ -24,7 +29,10 @@ def fields: ["send_bytes", "recv_bytes", "send_message_count", "recv_message_cou
 
 ($prev.connections // {}) as $was
 | ($prev.totals // {}) as $total
-| [(.transport_stats.connections // [])[]
+| if .transport_stats == null
+  then {connections: $was, totals: (reduce fields[] as $f ({}; .[$f] = ($total[$f] // 0)))}
+  else
+  [(.transport_stats.connections // [])[]
     | {key: "\(.pub_key)@\(.opened_at_s)",
        value: (. as $c | reduce fields[] as $f ({}; .[$f] = ($c[$f] // 0)))}]
 | from_entries as $now
@@ -38,3 +46,4 @@ def fields: ["send_bytes", "recv_bytes", "send_message_count", "recv_message_cou
             | if $n >= $w then $n - $w else $n end]
            | add // 0))))
   }
+  end
