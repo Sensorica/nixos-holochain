@@ -1620,54 +1620,41 @@ false
 
 
 
-systemd units the dashboards watch on every node, read from
-node_exporter’s systemd collector (` node_systemd_unit_state `), each
-with the name a person reads for it\. The keys are units, the values
-their names; a unit whose name is null, or an entry of a plain list of
-units, is shown by its unit name\.
+systemd units to watch on every node on top of the ones each node
+lists itself, each with the name a person reads for it\. The keys are
+units, the values their names; a unit whose name is null, or an entry
+of a plain list of units, is shown by its unit name\.
 
-The default covers the long-running units the nixos-holochain modules
-create, plus the services a fleet node usually runs beside them\. It
-holds only units that stay active while all is well: long-running
-services, timers, sockets, and the app installer, a one-shot that
-remains active once it has run\. Two one-shot helpers are left out:
-` holochain-conductor-metrics.service ` sits idle between runs, so its
-timer is listed instead, and ` grafana-secret-key.service ` runs once at
-boot; if either fails, the fleet page’s problem list names it\. The Nix
-daemon is listed by its socket: NixOS starts ` nix-daemon.service ` on
-demand, so the service is inactive on an idle node that is perfectly
-healthy\.
-
-The names reach a dashboard as value mappings: every field override
-matched by name to ` name ` (the unit label) in a provisioned dashboard
-gets one regex mapping per named unit\.
-
-The fleet page’s “Which watched services are down?” and the node
-page’s Background jobs list the watched units that are not active, one
-row per unit and machine, and nothing else: a unit a machine does not
-run is not listed, so one set serves a whole fleet whose machines run
-different things\.
+Every node lists its own services in
+` services.holochain-services.units `, filled from the modules enabled
+on it (the conductor, the HTTP gateway, the local bootstrap and relay,
+the Wind Tunnel runner, Prometheus, Grafana, and the services beside
+them), and publishes that list through node_exporter\. This option is
+for what a node does not list: a machine that does not run these
+modules, or a unit of your own on every machine\. Its default is empty,
+so what is watched follows each node’s configuration\.
 
 Each key is a regular expression Prometheus matches against the whole
 unit name, suffix included, so ` restic-backups-.* ` works, and its name
-is given to every unit it matches\. The keys are joined with ` | ` into
-the default of the dashboard’s ` units ` variable; a viewer can type
-another regex in the browser, which lives in that page’s URL and is
-never saved to the dashboard\.
+is given to every unit it matches\. A unit is watched on each node that
+runs it, and a node that does not run it has no row for it, so one set
+serves a fleet whose machines run different things\. A unit a node
+lists itself keeps the name the node gives it\.
 
-Setting this option replaces the default\. To add a unit and keep the
-defaults, define it with ` lib.mkOptionDefault `, which merges with the
-default instead of overriding it:
-` overviewUnits = lib.mkOptionDefault { "caddy.service" = "Web server"; }; `
-(a list, ` lib.mkOptionDefault [ "caddy.service" ] `, merges the same
-way)\.
+The watched units reach the recording rules (` holochain:service_watched `
+and ` holochain:service_state `), which the node page’s “Is each
+service on this machine running?”, the fleet page’s “Which services
+are not running?” and the room screen’s machine tiles read\. For a dashboard of your own, the
+keys are also joined with ` | ` into the default of any ` units ` textbox
+variable, and every field override matched by name to ` name ` (the
+unit label of ` node_systemd_unit_state `) gets one regex value mapping
+per named unit\.
 
-This only picks what those two tables list\. The
-` holochain:node_problem ` rule, which the problem lists read, gives
-every failed unit on the node a sentence of its own whatever is listed
-here, except device, scope and slice units, which the node_exporter
-flags these modules set leave out, naming it by its name here or, when
-it has none or is not listed, by its unit name\.
+The ` holochain:node_problem ` rule, which the problem lists read, gives
+every failed unit on the node a sentence of its own whether it is
+watched or not, except device, scope and slice units, which the
+node_exporter flags these modules set leave out, naming it by its
+watched name or, when it has none, by its unit name\.
 
 
 
@@ -1679,19 +1666,7 @@ it has none or is not listed, by its unit name\.
 *Default:*
 
 ```nix
-{
-  "(podman|docker)-wind-tunnel-runner.service" = "Wind Tunnel runner";
-  "grafana.service" = "Dashboards";
-  "holochain-conductor-metrics.timer" = "Holochain readings (timer)";
-  "holochain-conductor.service" = "Holochain conductor";
-  "holochain-happ-installer.service" = "App installer";
-  "holochain-http-gateway.service" = "HTTP gateway";
-  "nix-daemon.socket" = "Nix";
-  "prometheus-node-exporter.service" = "Machine readings";
-  "prometheus.service" = "Metrics database";
-  "sshd.service" = "Remote login";
-  "tailscaled.service" = "Private network (Tailscale)";
-}
+{ }
 ```
 
 
@@ -1700,7 +1675,6 @@ it has none or is not listed, by its unit name\.
 
 ```nix
 {
-  "holochain-conductor.service" = "Holochain conductor";
   "caddy.service" = "Web server";
   "restic-backups-.*" = "Backups";
 }
@@ -2413,6 +2387,275 @@ unsigned integer, meaning >=0
 
 *Declared by:*
  - [modules/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-http-gateway.nix)
+
+
+
+## services\.holochain-services\.healthChecks
+
+
+
+Health checks, keyed by the unit they check, which should also be in
+` units `\. A timer runs every one every 30 seconds and writes
+` holochain_service_healthy ` (1 or 0) and
+` holochain_service_health_timestamp_seconds ` to
+` holochain-service-health.prom ` in ` textfileDirectory `\. A service
+whose unit is active reads Not answering on the dashboards when its
+check fails, and No fresh readings when the last check is older than
+` services.holochain-grafana.states.staleAfterSeconds `\. The bootstrap
+module adds its ` /health ` here\.
+
+
+
+*Type:*
+attribute set of (submodule)
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+*Declared by:*
+ - [modules/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-services.nix)
+
+
+
+## services\.holochain-services\.healthChecks\.\<name>\.insecure
+
+
+
+Accept any TLS certificate\. For a check that reaches a service by
+its loopback address while its certificate names the host\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+*Declared by:*
+ - [modules/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-services.nix)
+
+
+
+## services\.holochain-services\.healthChecks\.\<name>\.timeoutSeconds
+
+
+
+How long the check waits for an answer before it reads the service as not answering\.
+
+
+
+*Type:*
+positive integer, meaning >0
+
+
+
+*Default:*
+
+```nix
+5
+```
+
+*Declared by:*
+ - [modules/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-services.nix)
+
+
+
+## services\.holochain-services\.healthChecks\.\<name>\.url
+
+
+
+A URL that answers with a success status while the service works\.
+
+
+
+*Type:*
+string
+
+
+
+*Example:*
+
+```nix
+"http://127.0.0.1:443/health"
+```
+
+*Declared by:*
+ - [modules/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-services.nix)
+
+
+
+## services\.holochain-services\.textfileDirectory
+
+
+
+The directory node_exporter’s textfile collector reads on this
+machine, where the list of services and the health readings are
+written\. Set by ` services.holochain-edgenode ` when its
+` metricsExporter ` is on, and by ` services.holochain-grafana ` on a
+monitor; on another machine that runs node_exporter with a textfile
+collector of its own (a machine that only runs the bootstrap server,
+say), set it to that collector’s directory\. Null writes nothing, and
+that machine’s services are then missing from the dashboards\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+"/var/lib/prometheus-node-exporter-text-files"
+```
+
+*Declared by:*
+ - [modules/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-services.nix)
+
+
+
+## services\.holochain-services\.units
+
+
+
+The systemd units this node runs that the Holochain dashboards watch,
+each with the name a person reads for it; a value is that name, or
+` { name; conductor; } ` for a unit that runs a conductor\.
+
+Filled from the configuration: every nixos-holochain module that is
+enabled adds the units it creates (the conductor, the app installer
+when there are apps, the conductor readings timer when
+` conductorMetrics ` is on, the HTTP gateway, the local bootstrap and
+relay, the Wind Tunnel runner, and on a monitor Prometheus and
+Grafana), and, on a machine where any of them is enabled, the
+services beside them that are enabled here: node_exporter, sshd,
+Tailscale and the Nix daemon’s socket\. Add a unit of your own the way
+any attribute set option merges; override a name with ` lib.mkForce `
+on that one attribute\.
+
+Published as ` holochain_service_info ` through node_exporter’s textfile
+collector when ` textfileDirectory ` is set\. The node page’s “Is each
+service on this machine running?” lists each of them with its state,
+the fleet page lists the ones that are not running, and the room
+screen’s machine tile reads “A service is down” while one has failed,
+keeps failing and restarting, has stopped or does not answer\. A unit
+systemd does not run has no row; evaluation warns about a listed unit
+this configuration does not define\.
+` services.holochain-grafana.overviewUnits `, on the monitor, adds units
+to watch on every node on top of these\.
+
+
+
+*Type:*
+attribute set of ((submodule) or string convertible to it)
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+
+
+*Example:*
+
+```nix
+{
+  "caddy.service" = "Web server";
+  "moss-node-metrics.timer" = "Moss readings (timer)";
+}
+
+```
+
+*Declared by:*
+ - [modules/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-services.nix)
+
+
+
+## services\.holochain-services\.units\.\<name>\.conductor
+
+
+
+For a unit that runs a Holochain conductor, the ` conductor ` label
+its readings carry (` services.holochain-edgenode.conductorMetrics.name `
+for an edgenode)\. The service then reads Not answering when the
+conductor does not answer its admin interface, and No fresh
+readings when its readings are old, although systemd says the
+unit is active\. A conductor that no listed unit claims is shown
+as a service of its own, “Holochain conductor (\<conductor>)”, as
+the edgenode names the unit that runs a conductor under a name
+other than the default: a Moss node whose readings carry
+` conductor="Moss" ` reads “Holochain conductor (Moss)”\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+"Workshop"
+```
+
+*Declared by:*
+ - [modules/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-services.nix)
+
+
+
+## services\.holochain-services\.units\.\<name>\.name
+
+
+
+The name a person reads for the unit on the dashboards\.
+
+
+
+*Type:*
+string
+
+
+
+*Example:*
+
+```nix
+"Local bootstrap and relay"
+```
+
+*Declared by:*
+ - [modules/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-services.nix)
 
 
 

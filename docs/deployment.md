@@ -194,12 +194,14 @@ Four dashboards ship, all tagged `holochain`, each titled with the one question 
 |---|---|---|
 | Is the Holochain network working? (`holochain-now`) | The room, on a shared screen (add `?kiosk` to the URL), and anyone opening Grafana for the first time | Are the readings current, which machines are on, is each app working on each machine and connected to how many others, did the latest write in the room's app reach every machine, and how long since each app last heard from anyone |
 | Which Holochain node needs attention? (`holochain-fleet`) | Whoever runs the fleet | How many machines are unreachable, conductors silent or stale, app parts cut off or behind, machine problems; one row per machine, worst first; the problems in words; the watched services that are down; the app matrix; each machine's status over time; and a collapsed Machines row |
-| Is this node working, app by app? (`holochain-node`) | An operator with one machine, or anyone following a link from the fleet page | Each conductor on the machine, its apps, and one row per app part: its state, other computers, the share of its best peer's data it holds, when it last heard from anyone, what it is still fetching; then the machine itself in collapsed rows |
+| Is this node working, app by app? (`holochain-node`) | An operator with one machine, or anyone following a link from the fleet page | Each conductor on the machine, its apps, and one row per app part: its state, other computers, the share of its best peer's data it holds, when it last heard from anyone, what it is still fetching; every service the machine runs, by name, with its state; then the machine itself in collapsed rows |
 | Is this app in step on every node? (`holochain-network`) | The facilitator asked "did my message reach the others?", or the operator after a Lost contact | One app network across every machine: how many run it, whether any is cut off or behind, a step chart of the data each holds, and each machine's status over time |
 
 Every app part reads one of six words, worst first: **Not running**, **No fresh readings**, **Lost contact**, **No one else yet** (grey, and normal for a machine alone), **Catching up** and **In step**. The room and fleet pages explain each in a sentence at the bottom. They are computed once, by the recording rules of `modules/holochain-rules.nix`, so no two pages can disagree; a machine reads by its worst conductor, and an app by its worst part. No page shows a hash, an installed app id or a scrape address, except the collapsed "For bug reports" row of the network page, which exists to be pasted into an issue.
 
-Two options feed the pages. `overviewUnits` names the systemd units the fleet and node pages watch, and the name a person reads for each: setting it replaces the default, so to add a service and keep the rest, write `overviewUnits = lib.mkOptionDefault { "caddy.service" = "Web server"; };` (a list, `lib.mkOptionDefault [ "caddy.service" ]`, still works and shows the unit name). `room` (`app`, `part`, `label`) picks the one app part whose writes the room screen follows; left unset, that chart says so. Temperatures are empty in this VM and on any machine without hardware sensors; that is expected.
+Each machine lists the services it runs, from the modules enabled on it: the conductor, the app installer, the readings timer, the HTTP gateway, the local bootstrap and relay, the Wind Tunnel runner, Prometheus and Grafana on the monitor, and beside them node_exporter, sshd, Tailscale and the Nix daemon when they are enabled. The node page lists them by name with their state; the fleet page lists the ones that are not running; a machine's tile on the room screen reads "A service is down" while one has failed, keeps failing and restarting, has stopped or does not answer. The table of every service and where its name and state come from is in [architecture.md](architecture.md#services-from-what-each-node-runs). A machine needs node_exporter's textfile collector for its list to reach the pages; an edgenode and a monitor have it already.
+
+Two options feed the pages. `overviewUnits`, on the monitor, adds units to watch on every machine that runs them, with the name a person reads for each: `overviewUnits = { "caddy.service" = "Web server"; };` (a list, `[ "caddy.service" ]`, still works and shows the unit name). A service of your own on one machine goes in that machine's own list instead: `services.holochain-services.units."caddy.service" = "Web server";`. `room` (`app`, `part`, `label`) picks the one app part whose writes the room screen follows; left unset, that chart says so. Temperatures are empty in this VM and on any machine without hardware sensors; that is expected.
 
 The thresholds behind the words (readings older than 90 s, 10 minutes without contact, 95% of the best peer's data) are `services.holochain-grafana.states`. The provisioned dashboards follow them: every colour step that stands for a state threshold, and every sentence that quotes one, is rewritten from the option on its way into the store. A dashboards directory outside the store is not rewritten, so it keeps the defaults.
 
@@ -258,7 +260,7 @@ curl -s localhost:9090/api/v1/targets | jq '.data.activeTargets[] | {scrapeUrl, 
 # default it is the workshop password
 curl -s -u "admin:$GRAFANA_ADMIN_PASSWORD" 'localhost:3000/api/search?tag=holochain' | jq -r '.[].uid'
 
-# every node by name, with its state (3 is Running)
+# every node by name, with its state (4 is Running, 2 A service is down)
 curl -s --get localhost:9090/api/v1/query \
   --data-urlencode 'query=holochain:node_state' \
   | jq '.data.result[] | {node: .metric.node, state: .value[1]}'
@@ -298,6 +300,8 @@ Check it from any node:
 ```bash
 curl -sf http://bootstrap-host:443/health
 ```
+
+On the dashboards the server is "Local bootstrap and relay", among the services of the machine that runs it. A timer asks its `/health` every 30 seconds, so a server that runs and does not answer reads Not answering, not Running, and turns that machine's tile on the room screen to A service is down. This needs node_exporter's textfile collector on that machine: an edgenode or a monitor has one; on a machine that runs only the server, point `services.holochain-services.textfileDirectory` at the directory its node_exporter reads.
 
 ```bash
 journalctl -u holochain-bootstrap -f

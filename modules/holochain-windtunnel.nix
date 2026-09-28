@@ -3,8 +3,9 @@
 # Runs the Holochain Foundation's Wind Tunnel runner image as an OCI container
 # (ADR-008, as amended by research record #15).
 #
-# This module is NOT a source of dashboard data, and enabling it does not make
-# anything appear in Grafana. The image's entrypoint is
+# This module is NOT a source of Holochain data, and enabling it adds nothing
+# to Grafana but one line among the node's services, "Wind Tunnel runner",
+# which says whether its container is running. The image's entrypoint is
 #
 #   chronyd -q 'server pool.ntp.org iburst'
 #   exec nomad agent -config=<baked nomad.json> -config=/etc/nomad.d
@@ -24,6 +25,8 @@
 }: let
   cfg = config.services.holochain-windtunnel;
 in {
+  imports = [./holochain-services.nix];
+
   options.services.holochain-windtunnel = {
     enable = lib.mkOption {
       type = lib.types.bool;
@@ -111,6 +114,10 @@ in {
   };
 
   config = lib.mkIf cfg.enable {
+    # The container's unit, which the dashboards list among the node's
+    # services: the only trace of this module on them.
+    services.holochain-services.units."${config.virtualisation.oci-containers.backend}-wind-tunnel-runner.service" = "Wind Tunnel runner";
+
     virtualisation.oci-containers = {
       backend = lib.mkDefault cfg.backend;
       containers.wind-tunnel-runner = {
