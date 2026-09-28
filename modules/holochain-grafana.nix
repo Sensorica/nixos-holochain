@@ -223,12 +223,18 @@
   addressNamed = lib.optionals (builtins.isList cfg.scrapeTargets) (lib.filter (target: builtins.match "[0-9.]+|\\[.*]|.*:.*" target.node != null) targets);
   nodeNames = map (target: target.node) targets;
   # The name this machine goes by on the dashboards: a target on a loopback
-  # address is this machine, whatever name it was given; otherwise the host
-  # name, which is what a list names a target on this machine's own name.
-  loopbackTarget = lib.findFirst (target: builtins.elem (hostOf target.address) loopback) null targets;
+  # address is this machine, whatever name it was given; so is a target on
+  # this machine's own host name (or its FQDN), whatever key names it;
+  # otherwise the host name, which is what a list names a target on it.
+  ownNames = [config.networking.hostName] ++ lib.optional (config.networking.domain != null) "${config.networking.hostName}.${config.networking.domain}";
+  ownTarget =
+    lib.findFirst (target: builtins.elem (hostOf target.address) loopback) (
+      lib.findFirst (target: builtins.elem (hostOf target.address) ownNames) null targets
+    )
+    targets;
   localNode =
-    if loopbackTarget != null
-    then loopbackTarget.node
+    if ownTarget != null
+    then ownTarget.node
     else config.networking.hostName;
   sharedNodeNames = lib.filter (name: lib.count (n: n == name) nodeNames > 1) (lib.unique nodeNames);
 
@@ -480,7 +486,8 @@ in {
         at default priority, so a definition of your own wins): its
         `holochain-home.json` when it has one, with its `node` variable
         defaulting to this machine (the name of the scrape target on a
-        loopback address, else `networking.hostName`), else its
+        loopback address, or at this machine's host name or FQDN, else
+        `networking.hostName`), else its
         `holochain-now.json`, otherwise a copy of Grafana's own home page.
         The choice is made while building, so a directory inside a package is
         not built during evaluation.

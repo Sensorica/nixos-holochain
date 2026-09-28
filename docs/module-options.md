@@ -1537,7 +1537,8 @@ For a directory in the Nix store, the module sets Grafana’s home page
 at default priority, so a definition of your own wins): its
 ` holochain-home.json ` when it has one, with its ` node ` variable
 defaulting to this machine (the name of the scrape target on a
-loopback address, else ` networking.hostName `), else its
+loopback address, or at this machine’s host name or FQDN, else
+` networking.hostName `), else its
 ` holochain-now.json `, otherwise a copy of Grafana’s own home page\.
 The choice is made while building, so a directory inside a package is
 not built during evaluation\.

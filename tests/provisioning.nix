@@ -142,6 +142,22 @@
       };
     }
   ];
+  # An attrset that names this machine by a key other than its host name,
+  # at that host name, and a list with this machine at its FQDN.
+  homeKeyed = monitor [
+    {
+      services.holochain-grafana.scrapeTargets = {
+        lab-1.address = "monitor:9100";
+        lab-2.address = "sensorica-holoport-02:9100";
+      };
+    }
+  ];
+  homeFqdn = monitor [
+    {
+      networking.domain = "lab.example";
+      services.holochain-grafana.scrapeTargets = ["sensorica-holoport-02:9100" "monitor.lab.example:9100"];
+    }
+  ];
   homeRemote = monitor [
     {
       services.holochain-grafana.scrapeTargets = ["sensorica-holoport-02:9100" "monitor:9100"];
@@ -262,6 +278,14 @@
       remote = {
         home = homeOf homeRemote;
         dashboards = dashboardsOf homeRemote;
+      };
+      keyed = {
+        home = homeOf homeKeyed;
+        dashboards = dashboardsOf homeKeyed;
+      };
+      fqdn = {
+        home = homeOf homeFqdn;
+        dashboards = dashboardsOf homeFqdn;
       };
       withoutHome = {
         home = homeOf withoutHome;
@@ -424,7 +448,7 @@ in
       cmp -s "$home" "$dashboards/holochain-home.json" && jq -e '.uid == "holochain-home"' "$home" > /dev/null
     }
     home_node() { jq -r '.templating.list[] | select(.name == "node") | .current.value' "$1"; }
-    for kind in list homes.named homes.remote; do
+    for kind in list homes.named homes.remote homes.keyed homes.fqdn; do
       home=$(jq -r ".$kind.home" ${facts})
       is_home "$home" "$(jq -r ".$kind.dashboards" ${facts})" || { echo "the $kind monitor's home page is not the provisioned home page" >&2; exit 1; }
     done
@@ -432,6 +456,12 @@ in
     test "$(home_node "$(jq -r .list.home ${facts})")" = monitor
     test "$(home_node "$(jq -r .homes.named.home ${facts})")" = homelab
     test "$(home_node "$(jq -r .homes.remote.home ${facts})")" = monitor
+    # A target at this machine's host name, or its FQDN, is this machine,
+    # whatever key names it.
+    test "$(home_node "$(jq -r .homes.keyed.home ${facts})")" = lab-1 \
+      || { echo "the keyed monitor's home page does not open on lab-1" >&2; exit 1; }
+    test "$(home_node "$(jq -r .homes.fqdn.home ${facts})")" = monitor.lab.example \
+      || { echo "the fqdn monitor's home page does not open on monitor.lab.example" >&2; exit 1; }
     # The other pages keep their own node default.
     test "$(jq -c '.templating.list[] | select(.name == "node") | .current' "$(jq -r .list.dashboards ${facts})/holochain-node.json")" = '{}'
     # The broken copies: each must be refused.
