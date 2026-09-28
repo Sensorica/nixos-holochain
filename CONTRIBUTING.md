@@ -59,6 +59,8 @@ Prose about how the modules fit together belongs in `docs/architecture.md`, not 
 
 Update `docs/` in the same PR as the behaviour it describes. `README.md` has a rule of its own: every statement in it has to be true of the tree at that commit, and every ticked roadmap item cites the PR that closed it.
 
+A change that someone running these modules would notice gets a line under `## [Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md), under the heading that fits. A change that breaks an option, a default or a flake output goes under `### Breaking` and says what to change. Maintainers cut releases as [`docs/releasing.md`](docs/releasing.md) describes.
+
 ## Commits and PRs
 
 - Conventional commits (`feat(edgenode): …`, `fix(grafana): …`, `docs: …`), one logical change per commit.
