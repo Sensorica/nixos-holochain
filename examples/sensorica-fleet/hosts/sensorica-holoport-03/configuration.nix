@@ -12,4 +12,5 @@
   sensorica.desktop = "plasma"; # "plasma" (KDE), "gnome" or "none" (text console only)
   sensorica.eventMode.enable = false; # true: no login, the room dashboard full screen at boot
   services.holochain-edgenode.enable = true; # false: no Holochain conductor, no hApps
+  sensorica.remoteAccess.enable = false; # true once Headscale runs and the key is in /var/lib/secrets/headscale-authkey
 }

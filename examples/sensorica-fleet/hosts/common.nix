@@ -6,6 +6,8 @@
     # "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... operator@laptop"
   ];
 in {
+  imports = [./remote-access.nix];
+
   time.timeZone = "America/Montreal";
 
   # ADR-017: the Holoport is a legacy-BIOS x86_64 box, and the same tree has to

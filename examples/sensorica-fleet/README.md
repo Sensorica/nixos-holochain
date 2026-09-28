@@ -49,6 +49,7 @@ Each `hosts/sensorica-holoport-0N/configuration.nix` opens with a switches block
 | `sensorica.desktop` | `"plasma"` (default), `"gnome"`, `"none"` | KDE Plasma with the operator panel, GNOME with the same launchers in the dock, or no graphical session at all (text console and SSH). The node's services run the same either way. |
 | `sensorica.eventMode.enable` | `false` (default), `true` | Logs in without a password and opens the room dashboard full screen at boot. Needs a desktop. |
 | `services.holochain-edgenode.enable` | `true` (default), `false` | The Holochain conductor and the event's hApps. |
+| `sensorica.remoteAccess.enable` | `false` (default), `true` | Joins Sensorica's tailnet through Headscale at `https://hs.sensorica.co` (`hosts/remote-access.nix`), so SSH, Grafana and `rebuild` reach the Holoport from outside the lab. Before switching it on, write a pre-auth key from `headscale preauthkeys create` to `/var/lib/secrets/headscale-authkey` (root only). |
 
 `sensorica-holoport-01` also enables Grafana (`services.holochain-grafana`) and the Moss node (`services.holochain-moss-node`) further down its file; `enable = false` on either turns it off.
 
