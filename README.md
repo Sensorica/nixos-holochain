@@ -1,10 +1,36 @@
 # nixos-holochain
 
-> A declarative substrate for running Holochain edgenodes, hApps, and developer environments. Built at Sensorica, intended for the Holochain community.
+> NixOS modules for running Holochain on your own machines: a conductor with its keystore, the hApps you name installed at boot, metrics, a Grafana dashboard and an HTTP gateway, all declared in a NixOS configuration and deployed with `nixos-rebuild`. Built and piloted at Sensorica.
 
-**Status:** the modules work and are VM-tested. A conductor and its hApps come up at boot on both supported Holochain lines (0.7.0 and 0.6.3), a fleet's traffic is on a provisioned Grafana dashboard, and an HTTP gateway serves zome reads over HTTP. Eight NixOS VM tests run in CI. What is still open is hardware: the five-machine fleet has not been deployed to real Holoports yet (issues [#8](https://github.com/Sensorica/nixos-holochain/issues/8) to [#12](https://github.com/Sensorica/nixos-holochain/issues/12)).
+This is for anyone who runs Holochain nodes on NixOS, or wants to: one always-on node at home, a lab or workshop fleet, a community node serving a hApp's DHT. You describe the node in Nix; the modules produce the systemd units, the conductor configuration, the lair passphrase and the idempotent hApp installer, and every change is a new NixOS generation you can roll back.
+
+It is built and piloted at [Sensorica](https://sensorica.co), Montreal's open value network, whose lab fleet of Holoports is the first deployment (see [Used by](#used-by)).
+
+**Status:** no release yet. The first release candidate will be `v0.1.0-rc.1`, piloted on Holoports at the Sensorica lab; what it waits on is the [v0.1.0 milestone](https://github.com/Sensorica/nixos-holochain/milestone/1). The modules work and are VM-tested: a conductor and its hApps come up at boot on both supported Holochain lines, a fleet's traffic is on a provisioned Grafana dashboard, and an HTTP gateway serves zome reads over HTTP. Eight NixOS VM tests run in CI. What is still open is hardware: the five-machine fleet has not been deployed to real Holoports yet (issues [#8](https://github.com/Sensorica/nixos-holochain/issues/8) to [#12](https://github.com/Sensorica/nixos-holochain/issues/12)).
+
 **License:** [MIT](LICENSE), the license of nixpkgs, so any module here can be reused in other flakes or proposed upstream to nixpkgs as it is. The hApps these modules run keep their own licenses (Holochain itself and Moss are CAL-1.0, hREA is Apache-2.0).
-**Origin:** Successor to the archived [Sensorica/holoports-workshop](https://github.com/Sensorica/holoports-workshop), pivoting from HolOS appliance-image deployment to vanilla NixOS authorship.
+
+---
+
+## Supported Holochain lines
+
+One module set serves both lines. The version of the conductor package a node runs decides the three things that differ between them: the conductor's network section, the admin CLI prefix and the HTTP gateway release (see [`docs/architecture.md`](docs/architecture.md#two-holochain-lines-one-module)).
+
+| Holochain | From | How a node selects it | HTTP gateway | VM tests |
+|---|---|---|---|---|
+| 0.7.0 | holonix `main-0.7` (input `holonix`) | the default | `hc-http-gw` 0.4.0 | `vmTest`, `vmTestWithHapp`, `vmTestGrafana`, `vmTestGateway` |
+| 0.6.3 | holonix `main-0.6` (input `holonix-0_6`) | set `package` and `hcPackage` to this flake's `holochain-0_6` and `hc-0_6` | `hc-http-gw` 0.3.5 | `vmTest-0_6`, `vmTestWithHapp-0_6`, `vmTestConductorMetrics-0_6` |
+
+`vmTestWindtunnel` runs no conductor, so it belongs to neither line. To run a node on 0.6.3, as [`examples/sensorica-fleet`](examples/sensorica-fleet/) does, set both packages in its `configuration.nix`, whose first line becomes `{config, pkgs, inputs, ...}:` so that `inputs` (passed by the template's `specialArgs`) and `pkgs` are in scope:
+
+```nix
+services.holochain-edgenode = {
+  package = inputs.nixos-holochain.packages.${pkgs.stdenv.hostPlatform.system}.holochain-0_6;
+  hcPackage = inputs.nixos-holochain.packages.${pkgs.stdenv.hostPlatform.system}.hc-0_6;
+};
+```
+
+On 0.6 the admin CLI prefix changes too: check the node with `hc sandbox call --running 4444 list-apps` instead of `hc client call --port 4444 list-apps`.
 
 ---
 
@@ -12,8 +38,8 @@
 
 The Holochain ecosystem has two real deployment stories today:
 
-1. **Dev environments via Holonix** — Nix-based, well documented, mature.
-2. **Production edgenodes via HolOS** — a Buildroot-based appliance image you flash and run, not configure.
+1. **Dev environments via Holonix**: Nix-based, well documented, mature.
+2. **Production edgenodes via HolOS**: a Buildroot-based appliance image you flash and run, not configure.
 
 There is no canonical, declarative, *author it yourself* way to stand up a Holochain edgenode on commodity hardware. You either flash the HolOS pre-built image (without authoring the configuration) or you cobble together systemd units, conductor configs, and lair keystore management by hand.
 
@@ -25,13 +51,17 @@ There is no canonical, declarative, *author it yourself* way to stand up a Holoc
 
 ---
 
-## Quickstart
+## Getting started
 
-One machine:
+From a freshly installed NixOS machine to a running conductor, step by step: [`docs/getting-started.md`](docs/getting-started.md).
+
+The short version, on a machine already running NixOS with flakes enabled:
 
 ```bash
 nix flake init -t github:Sensorica/nixos-holochain#minimal
 ```
+
+Nix first asks whether to accept this repository's binary cache settings (four y/N questions); answering N is fine, because the first switch passes the cache explicitly (see [`docs/getting-started.md`](docs/getting-started.md#5-check-and-switch)).
 
 That writes a flake with one `nixosConfigurations.edgenode`, a `configuration.nix` to edit and a placeholder `hardware-configuration.nix` to replace with `nixos-generate-config --show-hardware-config` from the target machine. Then:
 
@@ -40,13 +70,27 @@ nix flake check --no-build
 sudo nixos-rebuild switch --flake .#edgenode
 ```
 
+The first switch compiles Holochain from source unless it is given the Holochain Foundation's binary cache; [`docs/getting-started.md`](docs/getting-started.md) has the command that passes it.
+
 A fleet of five with Grafana on the first node, a Colmena hive and a live ISO:
 
 ```bash
 nix flake init -t github:Sensorica/nixos-holochain#fleet
 ```
 
-To wire the modules into a flake you already have, take the input, the `holonix` follows line (the module reads its default conductor and `hc` from `inputs.holonix`) and the `specialArgs`:
+### Pinning a version
+
+There is no release tag yet, so every command and template here follows `main`, and your `flake.lock` pins `main` at the commit it resolved; `nix flake update nixos-holochain` moves it forward. Once `v0.1.0` is released, pin to the tag instead:
+
+```nix
+nixos-holochain.url = "github:Sensorica/nixos-holochain/v0.1.0";
+```
+
+and initialise from it with `nix flake init -t github:Sensorica/nixos-holochain/v0.1.0#minimal`. A template's `flake.nix` names `github:Sensorica/nixos-holochain` without a tag, so after initialising from a tag, set that input to the same tag.
+
+### Adding the modules to a flake you already have
+
+Take the input, the `holonix` follows line (the module reads its default conductor and `hc` from `inputs.holonix`) and the `specialArgs`:
 
 ```nix
 {
@@ -77,7 +121,9 @@ To wire the modules into a flake you already have, take the input, the `holonix`
 }
 ```
 
-Try it in a VM without any hardware at all:
+### Trying it in a VM
+
+No hardware at all:
 
 ```bash
 nixos-rebuild build-vm --flake github:Sensorica/nixos-holochain#minimal-vm
@@ -88,48 +134,20 @@ nixos-rebuild build-vm --flake github:Sensorica/nixos-holochain#observability-vm
 ./result/bin/run-observability-vm-vm
 ```
 
-See [`docs/deployment.md`](docs/deployment.md) for the deployment guide, [`docs/architecture.md`](docs/architecture.md) for how the pieces fit, and [`examples/sensorica-fleet/`](examples/sensorica-fleet/) for the worked fleet.
-
 ---
 
-## Repository structure
+## Documentation
 
-```
-nixos-holochain/
-├── flake.nix                          # Entry point: inputs, modules, templates, packages, VM checks
-├── modules/
-│   ├── holochain-edgenode.nix         # Core: conductor + lair + hApp installer + metrics
-│   ├── conductor-metrics.jq           # dump-network-stats → Prometheus text
-│   ├── holochain-grafana.nix          # Prometheus + Grafana for a fleet
-│   ├── dashboards/                    # Provisioned Grafana dashboards
-│   ├── holochain-windtunnel.nix       # Opt-in: donate the machine to the Foundation's Nomad cluster
-│   ├── holochain-http-gateway.nix     # HTTP gateway in front of the conductor
-│   └── default.nix                    # Module aggregator
-├── packages/
-│   └── holochain-http-gateway.nix     # hc-http-gw build, one release per Holochain line
-├── templates/
-│   ├── minimal/                       # nix flake init -t …#minimal: one edgenode
-│   └── fleet/                         # nix flake init -t …#fleet: five nodes, Grafana, live ISO
-├── examples/
-│   └── sensorica-fleet/               # The Sensorica Lab fleet: its own flake, five hosts, ISO, colmena hive
-│       ├── flake.nix
-│       ├── hosts/common.nix           # shared host config, operator SSH keys
-│       ├── hosts/edgenode-01..05/     # configuration.nix + hardware-configuration.nix per machine
-│       ├── hosts/workshop-iso/        # Live ISO for participants
-│       └── README.md
-├── happs/                             # .happ bundles (not committed, see happs/README.md)
-├── secrets/                           # private material only, gitignored except *.example
-├── workshop/
-│   ├── facilitator-guide.md
-│   ├── participant-handout.md
-│   └── preflight-checklist.md
-└── docs/
-    ├── architecture.md
-    ├── module-options.md              # generated by `nix build .#options-doc`
-    ├── deployment.md
-    ├── images/                        # dashboard screenshots
-    └── archive/                       # December 2025 HolOS workshop notes
-```
+| Where | What |
+|---|---|
+| [`docs/getting-started.md`](docs/getting-started.md) | A fresh NixOS machine to a running conductor with the `#minimal` template |
+| [`docs/deployment.md`](docs/deployment.md) | Single node, Colmena fleet, workshop ISO, the dashboard in a VM, first boot sequence, verification, rollback |
+| [`docs/architecture.md`](docs/architecture.md) | How the modules fit, the units they create, and how one module serves two Holochain lines |
+| [`docs/module-options.md`](docs/module-options.md) | Every option of the four modules, generated from their declarations |
+| [`templates/minimal/README.md`](templates/minimal/README.md), [`templates/fleet/README.md`](templates/fleet/README.md) | What each template contains and how to deploy it |
+| [`examples/sensorica-fleet/README.md`](examples/sensorica-fleet/README.md) | The Sensorica Lab fleet, a filled-in five-node example |
+| [`happs/README.md`](happs/README.md) | Referencing a hApp bundle by hash |
+| [`workshop/`](workshop/) | Facilitator guide, participant handout and preflight checklist |
 
 ---
 
@@ -181,13 +199,55 @@ nix build .#checks.x86_64-linux.vmTestGateway -L
 
 ---
 
-## Workshop (Sensorica Lab, date to be fixed in #7)
+## Used by
 
-This repo is the substrate for the Holochain NixOS workshop at Sensorica, the follow-up to the December 2025 HolOS/edgenode event. The exact date is [issue #7](https://github.com/Sensorica/nixos-holochain/issues/7).
+**Sensorica Lab, Montreal: the pilot.** Five Holoports at the Sensorica lab are to run [`examples/sensorica-fleet`](examples/sensorica-fleet/): Holochain 0.6.3 with hREA, Kando and Requests & Offers on one network seed, Grafana on `edgenode-01`, and a live ISO for workshop participants. It is the pilot for `v0.1.0` and has not been deployed on the Holoports yet ([#8](https://github.com/Sensorica/nixos-holochain/issues/8) to [#12](https://github.com/Sensorica/nixos-holochain/issues/12)).
 
-See [`workshop/facilitator-guide.md`](workshop/facilitator-guide.md) and [`workshop/preflight-checklist.md`](workshop/preflight-checklist.md).
+The fleet is also the substrate of the Holochain NixOS workshop at Sensorica, the follow-up to the December 2025 HolOS/edgenode event; its date is [issue #7](https://github.com/Sensorica/nixos-holochain/issues/7). **Goal:** each participant deploys a working edgenode into a 5-machine fleet, watches live P2P traffic via Grafana, and rolls back a configuration change. 4 hours, no prior Nix experience required. See [`workshop/facilitator-guide.md`](workshop/facilitator-guide.md) and [`workshop/preflight-checklist.md`](workshop/preflight-checklist.md).
 
-**Goal:** Each participant deploys a working edgenode into a 5-machine fleet, watches live P2P traffic via Grafana, and rolls back a configuration change. 4 hours, no prior Nix experience required.
+Running nixos-holochain somewhere else? Open a pull request adding your deployment to this list.
+
+---
+
+## Repository structure
+
+```
+nixos-holochain/
+├── flake.nix                          # Entry point: inputs, modules, templates, packages, VM checks
+├── modules/
+│   ├── holochain-edgenode.nix         # Core: conductor + lair + hApp installer + metrics
+│   ├── conductor-metrics.jq           # dump-network-stats → Prometheus text
+│   ├── holochain-grafana.nix          # Prometheus + Grafana for a fleet
+│   ├── dashboards/                    # Provisioned Grafana dashboards
+│   ├── holochain-windtunnel.nix       # Opt-in: donate the machine to the Foundation's Nomad cluster
+│   ├── holochain-http-gateway.nix     # HTTP gateway in front of the conductor
+│   └── default.nix                    # Module aggregator
+├── packages/
+│   └── holochain-http-gateway.nix     # hc-http-gw build, one release per Holochain line
+├── templates/
+│   ├── minimal/                       # nix flake init -t …#minimal: one edgenode
+│   └── fleet/                         # nix flake init -t …#fleet: five nodes, Grafana, live ISO
+├── examples/
+│   └── sensorica-fleet/               # The Sensorica Lab fleet: its own flake, five hosts, ISO, colmena hive
+│       ├── flake.nix
+│       ├── hosts/common.nix           # shared host config, operator SSH keys
+│       ├── hosts/edgenode-01..05/     # configuration.nix + hardware-configuration.nix per machine
+│       ├── hosts/workshop-iso/        # Live ISO for participants
+│       └── README.md
+├── happs/                             # .happ bundles (not committed, see happs/README.md)
+├── secrets/                           # private material only, gitignored except *.example
+├── workshop/
+│   ├── facilitator-guide.md
+│   ├── participant-handout.md
+│   └── preflight-checklist.md
+└── docs/
+    ├── getting-started.md             # fresh NixOS machine to a running conductor
+    ├── architecture.md
+    ├── module-options.md              # generated by `nix build .#options-doc`
+    ├── deployment.md
+    ├── images/                        # dashboard screenshots
+    └── archive/                       # December 2025 HolOS workshop notes
+```
 
 ---
 
@@ -244,4 +304,5 @@ Each ticked item names the pull request that closed it.
 ## Acknowledgements
 
 Built at [Sensorica](https://sensorica.co), Montreal's open value network.
-Successor to the December 2025 HolOS workshop organized with the Sensorica community.
+
+Successor to the archived [Sensorica/holoports-workshop](https://github.com/Sensorica/holoports-workshop) and to the December 2025 HolOS workshop organized with the Sensorica community, pivoting from HolOS appliance-image deployment to vanilla NixOS authorship.

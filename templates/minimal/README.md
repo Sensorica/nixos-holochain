@@ -44,7 +44,7 @@ systemctl status holochain-conductor.service
 hc client call --port 4444 list-apps
 ```
 
-The admin interface listens on 4444 and the app interface on 8888, both on loopback. The admin port is never opened in the firewall; `openFirewall = true` opens the app port and, with `metricsExporter.enable`, the node_exporter port.
+The admin interface listens on 4444 on loopback. The app interface on 8888, also on loopback, is attached by the hApp installer, so it exists only once a hApp is configured. The admin port is never opened in the firewall; `openFirewall = true` opens the app port and, with `metricsExporter.enable`, the node_exporter port.
 
 ## More
 

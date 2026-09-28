@@ -120,7 +120,7 @@ The dashboard panels are provisioned, not saved by hand. Editing one in the brow
 2. `holochain-conductor.service` starts (waits for network). Its `preStart` generates `/var/lib/holochain/lair-passphrase` (mode 0600) if it is not already there, and the conductor reads it over `--piped`. Nothing is prompted and nothing is stored in the Nix store.
 3. The unit is `Type = notify`, so it becomes active when the conductor reports readiness rather than when the process starts. On slow or unaccelerated hardware this takes a minute or more; `TimeoutStartSec` is 600s.
 4. `holochain-happ-installer.service` installs and enables the configured hApps, then attaches the app WebSocket.
-5. The conductor is reachable on `adminPort` (default 4444) and `appPort` (default 8888), both bound to localhost.
+5. The conductor is reachable on `adminPort` (default 4444), bound to localhost, and, once the installer has attached it, on `appPort` (default 8888), also bound to localhost. A node with no hApps configured has no installer and no app interface.
 
 Every boot after the first runs the same sequence. The installer is idempotent: it skips `install-app` for apps already present, re-runs `enable-app` unconditionally, and only attaches the app WebSocket if it is not already attached. The passphrase persists in the state directory, so the keystore opens again with nobody present.
 
