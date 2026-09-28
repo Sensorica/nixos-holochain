@@ -785,14 +785,14 @@
       "id": 22,
       "type": "bargauge",
       "title": "DHT seconds since last gossip",
-      "description": "Seconds since the last gossip round with any peer in each DHT, as of now, for the selected node that has gone longest without one (holochain_dht_seconds_since_gossip), one bar per app and role. never means no selected node has a gossip timestamp for any peer in that DHT, which is what a node alone on its network shows. The 300 s and 900 s thresholds are a starting point for a quiet but healthy DHT, not a Holochain figure.",
+      "description": "Seconds since the last gossip round with any peer in each DHT, as of now, for the selected node that has gone longest without one (holochain_dht_seconds_since_gossip), one bar per app and role. never means at least one selected node has no gossip timestamp for any peer in that DHT, which is what a node alone on its network shows; the query reads the exporter's -1 as 1e9 so that max() takes it as the longest silence rather than the shortest. The 300 s and 900 s thresholds are a starting point for a quiet but healthy DHT, not a Holochain figure.",
       "gridPos": {"h": 8, "w": 8, "x": 16, "y": 32},
       "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
       "targets": [
         {
           "refId": "A",
           "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
-          "expr": "max by (app, role) (holochain_dht_seconds_since_gossip{instance=~\"$instance\"})",
+          "expr": "max by (app, role) ((holochain_dht_seconds_since_gossip{instance=~\"$instance\"} >= 0) or (holochain_dht_seconds_since_gossip{instance=~\"$instance\"} * 0 + 1e9))",
           "legendFormat": "{{app}} {{role}}",
           "instant": true,
           "range": false
@@ -817,7 +817,7 @@
             "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 300}, {"color": "red", "value": 900}]
           },
           "mappings": [
-            {"type": "value", "options": {"-1": {"text": "never", "color": "orange", "index": 0}}}
+            {"type": "range", "options": {"from": 1000000000, "to": null, "result": {"text": "never", "color": "orange", "index": 0}}}
           ],
           "min": 0,
           "max": 900

@@ -1394,7 +1394,8 @@
 
               # The per-DHT panels in this node's terms: every DHT is the one
               # app's, and a node alone on its network has no peer and has
-              # never gossiped.
+              # never gossiped, which the gossip panel reads as 1e9 so that
+              # max() keeps the worst node rather than hiding it.
               def by_dht(title, ref, name):
                   return {
                       (r["metric"]["app"], r["metric"]["role"]): r["value"][1]
@@ -1406,7 +1407,7 @@
               assert dht_peers and {a for a, _ in dht_peers} == {"dino-adventure"}, dht_peers
               assert set(dht_peers.values()) == {"0"}, dht_peers
               gossip = by_dht("DHT seconds since last gossip", "A", "q-dht-gossip")
-              assert gossip.keys() == dht_peers.keys() and set(gossip.values()) == {"-1"}, gossip
+              assert gossip.keys() == dht_peers.keys() and set(gossip.values()) == {"1000000000"}, gossip
               held = by_dht("DHT ops held here vs best peer", "A", "q-dht-held")
               best = by_dht("DHT ops held here vs best peer", "B", "q-dht-best")
               machine.log(f"DHT ops held here: {held}; best peer: {best}")
@@ -1426,11 +1427,16 @@
                           for prop in o["properties"]
                           if prop["id"] == "mappings"
                       )
-                  return {
+                  values = {
                       value: (option["text"], option["color"])
                       for m in found if m["type"] == "value"
                       for value, option in m["options"].items()
                   }
+                  ranges = {
+                      (m["options"]["from"], m["options"]["to"]): (m["options"]["result"]["text"], m["options"]["result"]["color"])
+                      for m in found if m["type"] == "range"
+                  }
+                  return {**values, **ranges}
 
               conductor_states = {
                   "0": ("down", "red"), "1": ("up", "green"),
@@ -1440,7 +1446,7 @@
               assert mapping("Fleet status", "Conductor") == conductor_states, mapping("Fleet status", "Conductor")
               assert mapping("Conductors up") == conductor_states, mapping("Conductors up")
               assert mapping("Fleet status", "Node") == {"0": ("down", "red"), "1": ("up", "green")}
-              assert mapping("DHT seconds since last gossip") == {"-1": ("never", "orange")}, mapping("DHT seconds since last gossip")
+              assert mapping("DHT seconds since last gossip") == {(1000000000, None): ("never", "orange")}, mapping("DHT seconds since last gossip")
               assert mapping("Services") == {
                   "0": ("inactive", "orange"), "1": ("active", "green"),
                   "2": ("starting or stopping", "yellow"), "3": ("failed", "red"),
