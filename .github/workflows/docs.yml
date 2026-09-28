@@ -55,12 +55,13 @@ jobs:
         run: mdbook build
 
       - uses: actions/upload-pages-artifact@v3
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         with:
           path: book
 
   deploy:
-    if: github.event_name != 'pull_request'
+    # workflow_dispatch can run on any branch; only main is published.
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
     environment:
