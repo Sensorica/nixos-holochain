@@ -95,6 +95,8 @@
       {
         services.holochain-edgenode = {
           enable = true;
+          # One app, so the installer is listed; its bundle is never built.
+          happs.demo.src = pkgs.writeText "demo.happ" "";
           metricsExporter = {
             enable = true;
             textfileDirectory = "/var/lib/holochain-textfiles";
@@ -348,6 +350,7 @@ in
     check '.services.withBootstrap.units | map_values(.name) == {
       "holochain-conductor.service": "Holochain conductor (Workshop)",
       "holochain-conductor-metrics.timer": "Holochain readings (timer)",
+      "holochain-happ-installer.service": "App installer",
       "holochain-http-gateway.service": "HTTP gateway",
       "holochain-bootstrap.service": "Local bootstrap and relay",
       "podman-wind-tunnel-runner.service": "Wind Tunnel runner",
@@ -382,6 +385,7 @@ in
     # carries the Holochain it is.
     check '.packages as $p | .services.withBootstrap.units | map_values(.version) == {
       "holochain-conductor.service": $p.conductor, "holochain-conductor-metrics.timer": "",
+      "holochain-happ-installer.service": $p.hc,
       "holochain-http-gateway.service": $p.gateway, "holochain-bootstrap.service": $p.bootstrap,
       "podman-wind-tunnel-runner.service": "",
       "prometheus.service": $p.prometheus, "grafana.service": $p.grafana,
@@ -432,6 +436,8 @@ in
     }
     broken_versions "holochain-conductor.service has lost its version label" withBootstrap \
       '/name="holochain-conductor.service"/s/,version="[^"]*"//'
+    broken_versions "holochain-happ-installer.service has lost its version label" withBootstrap \
+      '/name="holochain-happ-installer.service"/s/,version="[^"]*"//'
     broken_versions "grafana.service has lost its version label" withBootstrap \
       '/name="grafana.service"/s/,version="[^"]*"//'
     broken_versions "moss-node.service has lost its holochain_version label" moss \
