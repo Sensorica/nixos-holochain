@@ -133,6 +133,10 @@
     }
   ];
 
+  # wdocker is packaged for x86_64-linux only (packages/wdocker.nix), so on
+  # any other system the Moss facts and their checks are left out.
+  hasMoss = pkgs.stdenv.hostPlatform.system == "x86_64-linux";
+
   # The home page as each kind of target list provisions it: a list names a
   # loopback target after this machine, an attrset by its key, and a list with
   # no loopback leaves this machine's host name.
@@ -256,22 +260,28 @@
     # The versions each module should publish, from the packages it runs.
     packages = let
       c = withBootstrap.services;
-    in {
-      conductor = lib.getVersion c.holochain-edgenode.package;
-      hc = lib.getVersion c.holochain-edgenode.hcPackage;
-      gateway = lib.getVersion c.holochain-http-gateway.package;
-      bootstrap = lib.getVersion c.holochain-bootstrap.package;
-      prometheus = lib.getVersion c.prometheus.package;
-      grafana = lib.getVersion c.grafana.package;
-      # The monitors are built from the same nixpkgs as pkgs.
-      nodeExporter = lib.getVersion pkgs.prometheus-node-exporter;
-      openssh = lib.getVersion c.openssh.package;
-      tailscale = lib.getVersion c.tailscale.package;
-      nix = lib.getVersion withBootstrap.nix.package;
-      moss = lib.getVersion withMoss.services.holochain-moss-node.package;
-      mossHolochain = withMoss.services.holochain-moss-node.package.holochainVersion;
-    };
-    moss = servicesOf withMoss;
+    in
+      {
+        conductor = lib.getVersion c.holochain-edgenode.package;
+        hc = lib.getVersion c.holochain-edgenode.hcPackage;
+        gateway = lib.getVersion c.holochain-http-gateway.package;
+        bootstrap = lib.getVersion c.holochain-bootstrap.package;
+        prometheus = lib.getVersion c.prometheus.package;
+        grafana = lib.getVersion c.grafana.package;
+        # The monitors are built from the same nixpkgs as pkgs.
+        nodeExporter = lib.getVersion pkgs.prometheus-node-exporter;
+        openssh = lib.getVersion c.openssh.package;
+        tailscale = lib.getVersion c.tailscale.package;
+        nix = lib.getVersion withBootstrap.nix.package;
+      }
+      // lib.optionalAttrs hasMoss {
+        moss = lib.getVersion withMoss.services.holochain-moss-node.package;
+        mossHolochain = withMoss.services.holochain-moss-node.package.holochainVersion;
+      };
+    moss =
+      if hasMoss
+      then servicesOf withMoss
+      else null;
     homes = {
       named = {
         home = homeOf homeNamed;
@@ -396,7 +406,7 @@ in
       and ([.services.withBootstrap.units[] | select(.holochainVersion != "")] | length == 1)'
     # The Moss node: wdocker's version, and the Holochain wdocker brings,
     # which is not the edgenode's; its readings timer has none.
-    check '.moss.units["moss-node.service"] == {name: "Moss node", conductor: "Moss", version: .packages.moss, holochainVersion: .packages.mossHolochain}
+    check '.moss == null or .moss.units["moss-node.service"] == {name: "Moss node", conductor: "Moss", version: .packages.moss, holochainVersion: .packages.mossHolochain}
       and .moss.units["moss-node-metrics.timer"].version == ""
       and .moss.units["holochain-conductor.service"].holochainVersion != .packages.mossHolochain'
 
@@ -419,7 +429,9 @@ in
           done
     }
     jq '.services + {moss: .moss}' ${facts} > units.json
-    for config in withBootstrap moss; do
+    configs=withBootstrap
+    if jq -e '.moss != null' ${facts} > /dev/null; then configs="$configs moss"; fi
+    for config in $configs; do
       file=$(jq -r --arg c "$config" '.[$c].file' units.json)
       cat "$file"
       versioned "$file" "$config"
@@ -440,8 +452,10 @@ in
       '/name="holochain-happ-installer.service"/s/,version="[^"]*"//'
     broken_versions "grafana.service has lost its version label" withBootstrap \
       '/name="grafana.service"/s/,version="[^"]*"//'
-    broken_versions "moss-node.service has lost its holochain_version label" moss \
-      '/name="moss-node.service"/s/holochain_version="[^"]*",//'
+    if jq -e '.moss != null' ${facts} > /dev/null; then
+      broken_versions "moss-node.service has lost its holochain_version label" moss \
+        '/name="moss-node.service"/s/holochain_version="[^"]*",//'
+    fi
 
     # Grafana's home page is "What is this machine running?" as provisioned,
     # so with its node set to this machine. A dashboards directory without it
