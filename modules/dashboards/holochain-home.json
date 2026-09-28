@@ -36,7 +36,7 @@
       "title": "Each app across the fleet",
       "url": "/d/holochain-network/holochain-network",
       "asDropdown": false,
-      "includeVars": true,
+      "includeVars": false,
       "keepTime": true,
       "targetBlank": false,
       "icon": "dashboard",

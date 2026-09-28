@@ -2,7 +2,8 @@
 # JSON: no label outside the human ones reaches a legend, a display name, a
 # table column or a stat's picked field, no text shows a variable whose value
 # is a machine key, every panel says what it answers, and no two dashboards
-# share a uid. Prints one line per dashboard and fails, listing every offence, when
+# share a uid, and no link carries one page's node to a page that reads every
+# node. Prints one line per dashboard and fails, listing every offence, when
 # anything is off.
 #
 # Input: every dashboard file as a separate JSON document (jq -n with inputs),
@@ -111,8 +112,23 @@ def offences($file):
       end)
     end;
 
+# The dashboards whose node picker opens on every node (All): a page that
+# answers a question about the whole fleet.
+def fleet_wide: [.[] | select(any(.dashboard.templating.list[]?; .name == "node" and .includeAll == true))
+                 | .dashboard.uid];
+# A link that carries this page's variables to such a page replaces its All
+# with this page's one node, so the fleet-wide answer comes up for one machine.
+def narrowing_links($wide):
+  .file as $file
+  | .dashboard.links[]? | select(.type == "link" and .includeVars == true)
+  | (.url // "" | capture("^/d/(?<uid>[^/?]+)")?.uid) as $uid
+  | select($uid != null and IN($uid; $wide[]))
+  | "\($file): link \(.title | tojson) passes this page's variables to \($uid), whose node picker reads every node";
+
 [inputs | {file: (input_filename | split("/") | last), dashboard: .}] as $all
+| ($all | fleet_wide) as $wide
 | ([$all[] | .file as $file | .dashboard | offences($file)]
+   + [$all[] | narrowing_links($wide)]
    + [$all | group_by(.dashboard.uid)[] | select(length > 1)
        | "uid \(.[0].dashboard.uid | tojson) is used by \(map(.file) | join(" and "))"]) as $offences
 | if $offences != [] then error("\n" + ($offences | join("\n")))

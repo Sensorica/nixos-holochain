@@ -70,6 +70,8 @@ in {
         '(.. | objects | select(.title? == "Is each service running, and in which version?") | .transformations[] | select(.id == "filterFieldsByName") | .options.include.names) += ["instance"]'
       broken "panel \"Which Holochain conductors run here?\" has no description" holochain-home.json \
         '(.. | objects | select(.title? == "Which Holochain conductors run here?") | .description) = ""'
+      broken "link \"Each app across the fleet\" passes this page's variables to holochain-network" holochain-home.json \
+        '(.links[] | select(.title == "Each app across the fleet") | .includeVars) = true'
       broken "is used by" holochain-network.json '.uid = "holochain-node"'
       broken "is used by" holochain-home.json '.uid = "holochain-now"'
       touch $out
