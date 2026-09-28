@@ -1,0 +1,24 @@
+[book]
+title = "nixos-holochain"
+description = "Declarative NixOS modules for Holochain edgenodes, their hApps and the monitoring around them, from one Holoport to a workshop fleet."
+authors = ["Sensorica"]
+language = "en"
+src = "docs"
+
+[build]
+build-dir = "book"
+# The default `index` preprocessor renders README.md as index.html, which
+# breaks every link to a README.md. Only `links` ({{#include}}) is needed.
+use-default-preprocessors = false
+
+[preprocessor.links]
+
+[output.html]
+site-url = "/nixos-holochain/"
+git-repository-url = "https://github.com/Sensorica/nixos-holochain"
+edit-url-template = "https://github.com/Sensorica/nixos-holochain/edit/main/{path}"
+
+[output.html.search]
+enable = true
+limit-results = 20
+teaser-word-count = 30

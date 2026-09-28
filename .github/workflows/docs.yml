@@ -1,0 +1,72 @@
+name: Deploy Documentation
+
+# The book is built on every pull request that touches its sources, so a
+# broken book fails review, and deployed to GitHub Pages from main only.
+# Some chapters include files from outside docs/ ({{#include}}), so those
+# paths are sources too.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'book.toml'
+      - 'examples/sensorica-fleet/README.md'
+      - 'workshop/**'
+      - 'templates/*/README.md'
+      - 'happs/README.md'
+      - 'CONTRIBUTING.md'
+      - '.github/workflows/docs.yml'
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'book.toml'
+      - 'examples/sensorica-fleet/README.md'
+      - 'workshop/**'
+      - 'templates/*/README.md'
+      - 'happs/README.md'
+      - 'CONTRIBUTING.md'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pinned to the mdbook in the flake's nixpkgs (the devShell's), so a
+      # local `nix develop -c mdbook build` is the build CI runs.
+      - name: Install mdBook
+        run: |
+          curl -sSL https://github.com/rust-lang/mdBook/releases/download/v0.5.2/mdbook-v0.5.2-x86_64-unknown-linux-gnu.tar.gz \
+            | tar -xz --directory=/usr/local/bin
+          mdbook --version
+
+      - name: Build book
+        run: mdbook build
+
+      - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        with:
+          path: book
+
+  deploy:
+    # workflow_dispatch can run on any branch; only main is published.
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
