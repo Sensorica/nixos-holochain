@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Question
+    url: https://github.com/Sensorica/nixos-holochain/discussions/categories/q-a
+    about: How to set up a node, which option does what, whether something is expected. Ask in Discussions (Q&A).
+  - name: Security vulnerability
+    url: https://github.com/Sensorica/nixos-holochain/security/advisories/new
+    about: Report it privately, never in a public issue. See SECURITY.md.

@@ -1,0 +1,82 @@
+name: Bug report
+description: A module does not do what its options say, or a documented command fails.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. The more of the machine's actual state you paste, the faster this gets fixed: a command and what it printed beats a description of what happened.
+
+        A security vulnerability does not go here. Follow [SECURITY.md](https://github.com/Sensorica/nixos-holochain/blob/main/SECURITY.md) and report it privately.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened, and what you expected
+      description: What the machine did, and what you expected it to do instead.
+    validations:
+      required: true
+
+  - type: input
+    id: nixos-version
+    attributes:
+      label: NixOS version
+      description: The output of `nixos-version` on the affected machine. Not on NixOS (for example `nix flake check` or `nix flake init -t` on another system)? Write "not NixOS" and paste `nix --version` instead.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: holochain-line
+    attributes:
+      label: Holochain line
+      description: Which Holochain line the conductor runs. The default `services.holochain-edgenode.package` comes from holonix `main-0.7`; 0.6 means you pointed `package` and `hcPackage` at a 0.6 build, such as this flake's `holochain-0_6` and `hc-0_6`.
+      options:
+        - "0.7"
+        - "0.6"
+        - Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: revision
+    attributes:
+      label: nixos-holochain revision
+      description: The commit or tag your flake is locked to. `nix flake metadata` lists it under Inputs.
+      placeholder: "github:Sensorica/nixos-holochain/963edb514139394a64b2a34162c3965268c33a2d"
+    validations:
+      required: true
+
+  - type: textarea
+    id: options
+    attributes:
+      label: Module options used
+      description: The `services.holochain-*` options you set, as they appear in your configuration. Remove passwords, passphrases and keys before pasting. Leave it empty if the failure is not in a module, for example a `nix flake check` or template command.
+      render: nix
+    validations:
+      required: false
+
+  - type: textarea
+    id: command-output
+    attributes:
+      label: Command run and its output
+      description: The exact command you ran (`nixos-rebuild switch`, `nix flake check`, a `hc` call, a `curl`) and everything it printed.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Service logs
+      description: If a service failed, the relevant journal, for example `journalctl -b -u holochain-conductor -u holochain-happ-installer`.
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else
+      description: Hardware (Holoport, VM, other), network setup, or what you already tried.
+    validations:
+      required: false
