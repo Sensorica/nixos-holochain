@@ -1,0 +1,1195 @@
+{
+  "uid": "holochain-home",
+  "title": "What is this machine running?",
+  "description": "Grafana's home page: one machine in words, the services it runs with their state and version, its Holochain conductors and their apps.",
+  "tags": [
+    "holochain",
+    "nixos-holochain"
+  ],
+  "links": [
+    {
+      "type": "link",
+      "title": "Fleet: which node needs attention?",
+      "url": "/d/holochain-fleet/holochain-fleet",
+      "asDropdown": false,
+      "includeVars": false,
+      "keepTime": true,
+      "targetBlank": false,
+      "icon": "dashboard",
+      "tags": [],
+      "tooltip": ""
+    },
+    {
+      "type": "link",
+      "title": "This machine, app by app",
+      "url": "/d/holochain-node/holochain-node",
+      "asDropdown": false,
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "icon": "dashboard",
+      "tags": [],
+      "tooltip": ""
+    },
+    {
+      "type": "link",
+      "title": "Each app across the fleet",
+      "url": "/d/holochain-network/holochain-network",
+      "asDropdown": false,
+      "includeVars": false,
+      "keepTime": true,
+      "targetBlank": false,
+      "icon": "dashboard",
+      "tags": [],
+      "tooltip": ""
+    },
+    {
+      "type": "link",
+      "title": "Room screen",
+      "url": "/d/holochain-now/holochain-now",
+      "asDropdown": false,
+      "includeVars": false,
+      "keepTime": true,
+      "targetBlank": false,
+      "icon": "dashboard",
+      "tags": [],
+      "tooltip": ""
+    },
+    {
+      "type": "dashboards",
+      "tags": [
+        "moss"
+      ],
+      "asDropdown": false,
+      "title": "Moss",
+      "includeVars": true,
+      "keepTime": true,
+      "targetBlank": false,
+      "icon": "external link",
+      "tooltip": "",
+      "url": ""
+    },
+    {
+      "type": "dashboards",
+      "tags": [
+        "holochain"
+      ],
+      "asDropdown": true,
+      "title": "Holochain dashboards",
+      "includeVars": false,
+      "keepTime": true,
+      "targetBlank": false,
+      "icon": "external link",
+      "tooltip": "",
+      "url": ""
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "node",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "holochain-prometheus"
+        },
+        "definition": "label_values(up{job=\"holochain-nodes\"}, node)",
+        "query": {
+          "query": "label_values(up{job=\"holochain-nodes\"}, node)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "multi": false,
+        "includeAll": false,
+        "hide": 0,
+        "current": {},
+        "options": [],
+        "label": "Node"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "State",
+      "description": "The state of this machine as a whole, in the same words as the fleet page and the room screen: Unreachable when Prometheus cannot reach it, Holochain not answering when a conductor does not answer, A service is down when a service below has failed, stopped or does not answer, No fresh readings when a conductor's or a service's readings are old, Running when all is well, and No Holochain here for a machine without a conductor.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 5,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "holochain:node_state{node=\"$node\"}",
+          "instant": true,
+          "range": false,
+          "legendFormat": "{{node}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#8e8e8e",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "Not watched: this machine is not among the monitor's scrape targets",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Unreachable",
+                  "color": "red",
+                  "index": 0
+                },
+                "1": {
+                  "text": "Holochain not answering",
+                  "color": "red",
+                  "index": 1
+                },
+                "2": {
+                  "text": "A service is down",
+                  "color": "red",
+                  "index": 2
+                },
+                "3": {
+                  "text": "No fresh readings",
+                  "color": "orange",
+                  "index": 3
+                },
+                "4": {
+                  "text": "Running",
+                  "color": "green",
+                  "index": 4
+                },
+                "5": {
+                  "text": "No Holochain here",
+                  "color": "#8e8e8e",
+                  "index": 5
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "value",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Host name",
+      "description": "The name the machine gives itself (its host name), which is also the name it goes by on the other pages unless the monitor names it otherwise.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 5,
+        "y": 0,
+        "w": 5,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "node_uname_info{node=\"$node\"}",
+          "instant": true,
+          "range": false,
+          "legendFormat": "{{nodename}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#8e8e8e",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "No readings from this machine"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "name",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "System",
+      "description": "The operating system release the machine runs, as NixOS names it: the version and its code name.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 10,
+        "y": 0,
+        "w": 5,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "node_os_info{node=\"$node\"}",
+          "instant": true,
+          "range": false,
+          "legendFormat": "{{pretty_name}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#8e8e8e",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "No readings from this machine"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "name",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Kernel",
+      "description": "The Linux kernel release the machine booted. It changes only at a reboot, so a rebuild that updated the kernel shows here once the machine has restarted.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 15,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "node_uname_info{node=\"$node\"}",
+          "instant": true,
+          "range": false,
+          "legendFormat": "Linux {{release}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#8e8e8e",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "No readings from this machine"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "name",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Up for",
+      "description": "How long since the machine last booted.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 19,
+        "y": 0,
+        "w": 5,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "time() - node_boot_time_seconds{node=\"$node\"}",
+          "instant": true,
+          "range": false,
+          "legendFormat": "Up for"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#8e8e8e",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "No readings from this machine",
+          "unit": "dtdurations"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "value",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "id": 6,
+      "type": "gauge",
+      "title": "CPU busy",
+      "description": "The share of the processor's time spent working, over the last two minutes, all cores together. Amber from 75%, red from 90%.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 8,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "1 - avg(rate(node_cpu_seconds_total{node=\"$node\", mode=\"idle\"}[2m]))",
+          "instant": true,
+          "range": false,
+          "legendFormat": "CPU busy"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 0.75
+              },
+              {
+                "color": "red",
+                "value": 0.9
+              }
+            ]
+          },
+          "noValue": "No readings from this machine"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      }
+    },
+    {
+      "id": 7,
+      "type": "gauge",
+      "title": "Memory used",
+      "description": "The share of memory in use, counting what the system can free at once as available. Red from 90%, where the machine's problem list says Memory is over 90% used.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 4,
+        "w": 8,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "max(1 - node_memory_MemAvailable_bytes{node=\"$node\"} / node_memory_MemTotal_bytes{node=\"$node\"})",
+          "instant": true,
+          "range": false,
+          "legendFormat": "Memory used"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 0.75
+              },
+              {
+                "color": "red",
+                "value": 0.9
+              }
+            ]
+          },
+          "noValue": "No readings from this machine"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      }
+    },
+    {
+      "id": 8,
+      "type": "gauge",
+      "title": "Fullest disk",
+      "description": "How full the fullest real disk of the machine is (memory-backed file systems left out). Red from 90%, where the machine's problem list says A disk is over 90% full. The node page's Disk space shows each disk.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 4,
+        "w": 8,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "max(1 - node_filesystem_avail_bytes{node=\"$node\", fstype!~\"tmpfs|ramfs|overlay|squashfs|nsfs\", mountpoint!=\"/nix/store\"} / node_filesystem_size_bytes{node=\"$node\", fstype!~\"tmpfs|ramfs|overlay|squashfs|nsfs\", mountpoint!=\"/nix/store\"})",
+          "instant": true,
+          "range": false,
+          "legendFormat": "Fullest disk"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 0.75
+              },
+              {
+                "color": "red",
+                "value": 0.9
+              }
+            ]
+          },
+          "noValue": "No readings from this machine"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      }
+    },
+    {
+      "id": 9,
+      "type": "table",
+      "title": "Is each service running, and in which version?",
+      "description": "Every service this machine runs for Holochain and beside it, one row each, by name, worst first, with the version of what it runs and when it last started. The machine lists them itself, from the nixos-holochain modules enabled on it (services.holochain-services.units), and the monitor's services.holochain-grafana.overviewUnits may add more. Each version comes from the Nix package the service runs, not from asking the service, so it is the version this machine was built with; a dash means the service has none worth naming, or the machine was built before services carried versions. The states are the node page's: Failed, Stopped and Not answering are down; Not answering means systemd says the service runs but it does not answer its health check or, for a conductor, its admin interface; No fresh readings means nobody has checked it lately. A Holochain conductor another program runs, with no service of its own here, has a row of its own, such as \"Holochain conductor (Moss)\".",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 9,
+        "w": 24,
+        "h": 11
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "label_replace(holochain:service_state{node=\"$node\"}, \"version\", \"-\", \"version\", \"\")",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "max by (node, name) (node_systemd_unit_start_time_seconds{node=\"$node\"} > 0) * 1000 and on (node, name) holochain:service_watched{node=\"$node\"}",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "service",
+                "Value #A",
+                "version",
+                "Value #B"
+              ]
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "indexByName": {
+              "service": 0,
+              "Value #A": 1,
+              "version": 2,
+              "Value #B": 3
+            },
+            "renameByName": {
+              "service": "Service",
+              "Value #A": "State",
+              "version": "Version",
+              "Value #B": "Started"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          },
+          "noValue": "This machine lists no services: it needs node_exporter's textfile collector and services.holochain-services.textfileDirectory"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "State"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "Failed",
+                        "color": "red",
+                        "index": 0
+                      },
+                      "1": {
+                        "text": "Stopped",
+                        "color": "red",
+                        "index": 1
+                      },
+                      "2": {
+                        "text": "Not answering",
+                        "color": "red",
+                        "index": 2
+                      },
+                      "3": {
+                        "text": "No fresh readings",
+                        "color": "orange",
+                        "index": 3
+                      },
+                      "4": {
+                        "text": "Starting",
+                        "color": "#EAB839",
+                        "index": 4
+                      },
+                      "5": {
+                        "text": "Stopping",
+                        "color": "#EAB839",
+                        "index": 5
+                      },
+                      "6": {
+                        "text": "Running",
+                        "color": "green",
+                        "index": 6
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Started"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeFromNow"
+              },
+              {
+                "id": "noValue",
+                "value": "-"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Version"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "-"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "State",
+            "desc": false
+          }
+        ]
+      }
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "Which Holochain conductors run here?",
+      "description": "Each Holochain conductor on this machine, by the name its readings carry, with the service that runs it, the Holochain version it is, and whether it answers: Not answering when it does not answer its admin interface, No fresh readings when its readings are old, Running otherwise. The Holochain version comes from the Nix package the service runs; a Moss node brings its own Holochain, which can differ from the machine's own conductor. A dash means no service here claims the conductor, or the machine was built before services carried versions. Click a conductor to see its apps part by part on the node page.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 10,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "label_replace(label_replace(\n  holochain:conductor_state{node=\"$node\"}\n    * on (instance, conductor) group_left (service, holochain_version)\n  max by (instance, conductor, service, holochain_version) (holochain_service_info{node=\"$node\", conductor!=\"\"})\n  or on (instance, conductor) holochain:conductor_state{node=\"$node\"},\n  \"holochain_version\", \"-\", \"holochain_version\", \"\"),\n  \"service\", \"-\", \"service\", \"\")",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "conductor",
+                "service",
+                "holochain_version",
+                "Value"
+              ]
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "indexByName": {
+              "conductor": 0,
+              "service": 1,
+              "holochain_version": 2,
+              "Value": 3
+            },
+            "renameByName": {
+              "conductor": "Conductor",
+              "service": "Run by",
+              "holochain_version": "Holochain",
+              "Value": "State"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          },
+          "noValue": "No Holochain conductor here, or its readings have not arrived yet"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "State"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "1": {
+                        "text": "Not answering",
+                        "color": "red",
+                        "index": 0
+                      },
+                      "2": {
+                        "text": "No fresh readings",
+                        "color": "orange",
+                        "index": 1
+                      },
+                      "3": {
+                        "text": "Running",
+                        "color": "green",
+                        "index": 2
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Conductor"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open this conductor's apps, part by part",
+                    "url": "/d/holochain-node/holochain-node?var-node=${node}&var-conductor=${__value.raw}&${__url_time_range}"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "State",
+            "desc": false
+          }
+        ]
+      }
+    },
+    {
+      "id": 11,
+      "type": "table",
+      "title": "Is each app on this machine working?",
+      "description": "Each app installed on this machine's conductors, by name, worst first, in the six words every page uses for an app: its worst part's state. Not running: the app should be here and Holochain does not report it. No fresh readings: the conductor's readings are old. Lost contact: nobody connected although someone was before, or another machine runs it. No one else yet (grey): nobody else runs it yet, which is normal for a machine alone. Catching up: connected, still receiving data. In step: connected and holding what its best peer holds. A disabled app is left out. Click an app to see its parts on the node page, and from there each part's network across the fleet.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "holochain-prometheus"
+      },
+      "gridPos": {
+        "x": 10,
+        "y": 20,
+        "w": 14,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "holochain-prometheus"
+          },
+          "expr": "holochain:app_state:named{node=\"$node\"}",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "app_name",
+                "app_kind",
+                "conductor",
+                "Value"
+              ]
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "indexByName": {
+              "app_name": 0,
+              "app_kind": 1,
+              "conductor": 2,
+              "Value": 3
+            },
+            "renameByName": {
+              "app_name": "App",
+              "app_kind": "Kind",
+              "conductor": "Conductor",
+              "Value": "State"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          },
+          "noValue": "No app on this machine, or its conductors' readings have not arrived yet"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "State"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "Not running",
+                        "color": "red",
+                        "index": 0
+                      },
+                      "1": {
+                        "text": "No fresh readings",
+                        "color": "orange",
+                        "index": 1
+                      },
+                      "2": {
+                        "text": "Lost contact",
+                        "color": "red",
+                        "index": 2
+                      },
+                      "3": {
+                        "text": "No one else yet",
+                        "color": "#8e8e8e",
+                        "index": 3
+                      },
+                      "4": {
+                        "text": "Catching up",
+                        "color": "#EAB839",
+                        "index": 4
+                      },
+                      "5": {
+                        "text": "In step",
+                        "color": "green",
+                        "index": 5
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "App"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open this app's parts on the node page",
+                    "url": "/d/holochain-node/holochain-node?var-node=${node}&var-conductor=${__data.fields.conductor}&${__url_time_range}"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "State",
+            "desc": false
+          }
+        ]
+      }
+    }
+  ],
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "graphTooltip": 1,
+  "timezone": "browser",
+  "id": null,
+  "version": 1
+}

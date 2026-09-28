@@ -66,7 +66,14 @@ in {
         '(.. | objects | select(.title? == "Is each app part connected, complete and recent?") | .fieldConfig.overrides) |= map(select(.matcher.options != "dna"))'
       broken "panel \"Is each service on this machine running?\" shows the column instance" holochain-node.json \
         '(.. | objects | select(.title? == "Is each service on this machine running?") | .transformations[] | select(.id == "filterFieldsByName") | .options.include.names) += ["instance"]'
+      broken "panel \"Is each service running, and in which version?\" shows the column instance" holochain-home.json \
+        '(.. | objects | select(.title? == "Is each service running, and in which version?") | .transformations[] | select(.id == "filterFieldsByName") | .options.include.names) += ["instance"]'
+      broken "panel \"Which Holochain conductors run here?\" has no description" holochain-home.json \
+        '(.. | objects | select(.title? == "Which Holochain conductors run here?") | .description) = ""'
+      broken "link \"Each app across the fleet\" passes this page's variables to holochain-network" holochain-home.json \
+        '(.links[] | select(.title == "Each app across the fleet") | .includeVars) = true'
       broken "is used by" holochain-network.json '.uid = "holochain-node"'
+      broken "is used by" holochain-home.json '.uid = "holochain-now"'
       touch $out
     '';
 
@@ -150,7 +157,9 @@ in {
       # services the node lists: the conductor that runs Workshop, a gateway
       # that is stopped, so the fleet's list of services down has a row, and a
       # bootstrap server whose health reading keeps pace with the clock. The
-      # Moss and Clones conductors are claimed by no unit.
+      # Moss and Clones conductors are claimed by no unit. The conductor and
+      # the gateway carry the versions their modules declare; the bootstrap
+      # server carries none, as a node built before units had versions.
       unit() {
         for state in active activating deactivating failed inactive; do
           jq -n -c --arg unit "$1" --arg state "$state" --arg v "$([ "$state" = "$2" ] && echo 1 || echo 0)" \
@@ -162,8 +171,8 @@ in {
         unit holochain-http-gateway.service inactive
         unit holochain-bootstrap.service active
       } | jq -s '. + [
-        {series: "holochain_service_info{instance=\"homelab:9100\",job=\"holochain-nodes\",node=\"homelab\",conductor=\"Workshop\",name=\"holochain-conductor.service\",service=\"Holochain conductor (Workshop)\"}", values: "1+0x60"},
-        {series: "holochain_service_info{instance=\"homelab:9100\",job=\"holochain-nodes\",node=\"homelab\",name=\"holochain-http-gateway.service\",service=\"HTTP gateway\"}", values: "1+0x60"},
+        {series: "holochain_service_info{instance=\"homelab:9100\",job=\"holochain-nodes\",node=\"homelab\",conductor=\"Workshop\",holochain_version=\"0.6.3\",name=\"holochain-conductor.service\",service=\"Holochain conductor (Workshop)\",version=\"0.6.3\"}", values: "1+0x60"},
+        {series: "holochain_service_info{instance=\"homelab:9100\",job=\"holochain-nodes\",node=\"homelab\",name=\"holochain-http-gateway.service\",service=\"HTTP gateway\",version=\"0.3.5\"}", values: "1+0x60"},
         {series: "holochain_service_info{instance=\"homelab:9100\",job=\"holochain-nodes\",node=\"homelab\",name=\"holochain-bootstrap.service\",service=\"Local bootstrap and relay\"}", values: "1+0x60"},
         {series: "holochain_service_healthy{instance=\"homelab:9100\",job=\"holochain-nodes\",node=\"homelab\",name=\"holochain-bootstrap.service\"}", values: "1+0x60"},
         {series: "holochain_service_health_timestamp_seconds{instance=\"homelab:9100\",job=\"holochain-nodes\",node=\"homelab\",name=\"holochain-bootstrap.service\"}", values: "0+60x60"}]' > services.json
@@ -316,6 +325,31 @@ in {
                     | {expr, eval_time: "30m",
                        exp_samples: [{labels: "holochain:node_state{instance=\"homelab:9100\",job=\"holochain-nodes\",node=\"homelab\"}", value: 2}]})
                 ]
+              },
+              {
+                name: "the home page: each service with its version, each conductor with its Holochain",
+                interval: "1m",
+                input_series: $up[0],
+                promql_expr_test: [
+                  # A version from Nix where the node declares one, a dash
+                  # where it does not, and a row for each unclaimed conductor.
+                  ($targets[0][] | select(.dashboard == "holochain-home" and .title == "Is each service running, and in which version?" and .ref == "A")
+                    | {expr: "max by (service, version) (\(.expr))", eval_time: "30m",
+                       exp_samples: [
+                         {labels: "{service=\"Holochain conductor (Workshop)\", version=\"0.6.3\"}", value: 6},
+                         {labels: "{service=\"HTTP gateway\", version=\"0.3.5\"}", value: 1},
+                         {labels: "{service=\"Local bootstrap and relay\", version=\"-\"}", value: 6},
+                         {labels: "{service=\"Holochain conductor (Moss)\", version=\"-\"}", value: 6},
+                         {labels: "{service=\"Holochain conductor (Clones)\", version=\"-\"}", value: 6}]}),
+                  # One row per conductor: the one a unit claims, with that
+                  # unit and its Holochain, the others with dashes.
+                  ($targets[0][] | select(.dashboard == "holochain-home" and .title == "Which Holochain conductors run here?")
+                    | {expr: "max by (conductor, service, holochain_version) (\(.expr))", eval_time: "30m",
+                       exp_samples: [
+                         {labels: "{conductor=\"Workshop\", service=\"Holochain conductor (Workshop)\", holochain_version=\"0.6.3\"}", value: 3},
+                         {labels: "{conductor=\"Moss\", service=\"-\", holochain_version=\"-\"}", value: 3},
+                         {labels: "{conductor=\"Clones\", service=\"-\", holochain_version=\"-\"}", value: 3}]})
+                ]
               }
             ]
           }'
@@ -326,6 +360,7 @@ in {
       test "$(jq '.tests[2].promql_expr_test | length' tests.json)" = 6
       test "$(jq '.tests[3].promql_expr_test | length' tests.json)" = 3
       test "$(jq '.tests[4].promql_expr_test | length' tests.json)" = 3
+      test "$(jq '.tests[5].promql_expr_test | length' tests.json)" = 2
       promtool test rules tests.json
 
       # Broken on purpose: a rule name misspelt in one query, in queries
@@ -368,6 +403,12 @@ in {
         'count(holochain:dht_state{dna=\"no-such-'
       broken "a services table that reads the watched list, not the states" \
         'map(if .title == "Is each service on this machine running?" then .expr |= sub("holochain:service_state"; "holochain:service_watched") else . end)' \
+        'got:'
+      broken "a home page that loses the versions" \
+        'map(if .dashboard == "holochain-home" and .title == "Is each service running, and in which version?" then .expr |= sub("\"version\", \"-\", \"version\""; "\"version\", \"-\", \"no_version\"") else . end)' \
+        'got:'
+      broken "a conductors table that repeats each claimed conductor" \
+        'map(if .title == "Which Holochain conductors run here?" then .expr |= sub("or on [(]instance, conductor[)]"; "or") else . end)' \
         'got:'
       broken "a join on part of the key" \
         'map(if .title == "Is each app part connected, complete and recent?" then .expr |= gsub("instance, conductor, app_id, role, dna"; "instance, conductor, app_id, role") else . end)' \

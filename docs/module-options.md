@@ -1520,10 +1520,13 @@ string
 
 Directory of Grafana dashboard JSON files to provision\. Everything in
 it is loaded at startup and re-read every 30 seconds\. The module ships
-four, each titled with the question it answers and all tagged
-` holochain `: ` holochain-now ` (“Is the Holochain network working?”),
-the room screen and Grafana’s home page; ` holochain-fleet ` (“Which
-Holochain node needs attention?”), for whoever runs the fleet;
+five, each titled with the question it answers and all tagged
+` holochain `: ` holochain-home ` (“What is this machine running?”),
+Grafana’s home page, with each service’s state and version, each
+conductor’s Holochain version and each app’s state; ` holochain-now `
+(“Is the Holochain network working?”), the room screen;
+` holochain-fleet ` (“Which Holochain node needs attention?”), for
+whoever runs the fleet;
 ` holochain-node ` (“Is this node working, app by app?”), one machine;
 and ` holochain-network ` (“Is this app in step on every node?”), one
 app network across every machine\. They read the recording rules of
@@ -1532,9 +1535,13 @@ holochain-rules\.nix, so they agree on every state\.
 For a directory in the Nix store, the module sets Grafana’s home page
 (` services.grafana.settings.dashboards.default_home_dashboard_path `,
 at default priority, so a definition of your own wins): its
-` holochain-now.json ` when it has one, otherwise a copy of Grafana’s
-own home page\. The choice is made while building, so a directory
-inside a package is not built during evaluation\.
+` holochain-home.json ` when it has one, with its ` node ` variable
+defaulting to this machine (the name of the scrape target on a
+loopback address, or at this machine’s host name or FQDN, else
+` networking.hostName `), else its
+` holochain-now.json `, otherwise a copy of Grafana’s own home page\.
+The choice is made while building, so a directory inside a package is
+not built during evaluation\.
 
 A directory in the Nix store (a path in your flake, or a directory
 inside a flake input or package such as ` "${inputs.x}/dashboards" `)
@@ -2540,7 +2547,9 @@ null
 
 The systemd units this node runs that the Holochain dashboards watch,
 each with the name a person reads for it; a value is that name, or
-` { name; conductor; } ` for a unit that runs a conductor\.
+` { name; conductor; version; holochainVersion; } `, where ` version ` is
+the version of the package the unit runs and the last two are for a
+unit that runs a conductor\.
 
 Filled from the configuration: every nixos-holochain module that is
 enabled adds the units it creates (the conductor, the app installer
@@ -2549,13 +2558,17 @@ when there are apps, the conductor readings timer when
 relay, the Wind Tunnel runner, and on a monitor Prometheus and
 Grafana), and, on a machine where any of them is enabled, the
 services beside them that are enabled here: node_exporter, sshd,
-Tailscale and the Nix daemon’s socket\. Add a unit of your own the way
-any attribute set option merges; override a name with ` lib.mkForce `
-on that one attribute\.
+Tailscale and the Nix daemon’s socket\. Each module also gives the
+version of the package it runs the unit from, so the home page can
+say what runs, in which version, without asking the machine\. Add a
+unit of your own the way any attribute set option merges; override a
+name with ` lib.mkForce ` on that one attribute\.
 
 Published as ` holochain_service_info ` through node_exporter’s textfile
-collector when ` textfileDirectory ` is set\. The node page’s “Is each
-service on this machine running?” lists each of them with its state,
+collector when ` textfileDirectory ` is set\. The home page’s “Is each
+service running, and in which version?” lists each of them with its
+state and version, the node page’s “Is each service on this machine
+running?” with its state,
 the fleet page lists the ones that are not running, and the room
 screen’s machine tile reads “A service is down” while one has failed,
 keeps failing and restarting, has stopped or does not answer\. A unit
@@ -2635,6 +2648,41 @@ null
 
 
 
+## services\.holochain-services\.units\.\<name>\.holochainVersion
+
+
+
+For a unit that runs a Holochain conductor, the Holochain version
+that conductor is, published as the ` holochain_version ` label\.
+It differs from ` version ` when the unit runs another program
+that brings its own Holochain, as a Moss node does\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+
+```nix
+""
+```
+
+
+
+*Example:*
+
+```nix
+"0.6.1"
+```
+
+*Declared by:*
+ - [modules/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-services.nix)
+
+
+
 ## services\.holochain-services\.units\.\<name>\.name
 
 
@@ -2652,6 +2700,42 @@ string
 
 ```nix
 "Local bootstrap and relay"
+```
+
+*Declared by:*
+ - [modules/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-services.nix)
+
+
+
+## services\.holochain-services\.units\.\<name>\.version
+
+
+
+The version of what the unit runs, from the package the module
+runs it from, never guessed at runtime; published as the
+` version ` label\. Empty when the unit has none worth naming (a
+readings timer, a container pulled by digest), which the home
+page shows as a dash\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+
+```nix
+""
+```
+
+
+
+*Example:*
+
+```nix
+"0.6.3"
 ```
 
 *Declared by:*

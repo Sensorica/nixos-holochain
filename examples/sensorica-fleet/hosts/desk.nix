@@ -17,6 +17,10 @@
   plasma = cfg.desktop == "plasma";
   gnome = cfg.desktop == "gnome";
   moss = config.services.holochain-moss-node.enable or false;
+  host = config.networking.hostName;
+  # Grafana's home page, on this Holoport. The monitor's bare / opens it on
+  # the monitor itself, so every other Holoport passes its own node.
+  homePage = "${cfg.grafanaUrl}/d/holochain-home?var-node=${host}";
   konsole = "${pkgs.kdePackages.konsole}/bin/konsole";
   firefox = "${config.programs.firefox.package}/bin/firefox";
 
@@ -32,8 +36,9 @@
       categories = ["System"];
     };
 
-  # One Grafana entry, on the home page: it names every service of this
-  # Holoport and links to the fleet, node, network and Moss pages from there.
+  # One Grafana entry, on the home page opened on this Holoport: it names
+  # every service of this Holoport and links to the fleet, node, network and
+  # Moss pages from there.
   launchers =
     [
       (launcher {
@@ -41,7 +46,7 @@
         desktopName = "Grafana";
         comment = "What this Holoport runs, and the fleet's dashboards";
         icon = "office-chart-area";
-        exec = "${firefox} --new-window \"${cfg.grafanaUrl}/\"";
+        exec = "${firefox} --new-window \"${homePage}\"";
       })
       (launcher {
         name = "holoport-logs";
@@ -194,7 +199,7 @@ in {
               Name=Grafana
               Comment=What this Holoport runs, on ${lib.removePrefix "http://" cfg.grafanaUrl}
               Icon=office-chart-area
-              URL=${cfg.grafanaUrl}/
+              URL=${homePage}
             '';
           };
 

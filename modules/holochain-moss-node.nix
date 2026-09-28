@@ -320,9 +320,12 @@ in {
       };
 
       services.holochain-services.units = {
+        # wdocker's version, and the Holochain it brings, from the package.
         "moss-node.service" = {
           name = "Moss node";
           conductor = "Moss";
+          version = lib.getVersion cfg.package;
+          holochainVersion = cfg.package.holochainVersion or "";
         };
         "moss-node-metrics.timer" = "Moss readings (timer)";
       };

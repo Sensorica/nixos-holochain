@@ -751,7 +751,8 @@ in {
     # Its name carries the conductor's, as the problem sentences ("Holochain
     # (Workshop) is not answering") and the node page's Conductors stat do, so
     # the three read as one thing; under the default name it is just
-    # "Holochain conductor".
+    # "Holochain conductor". Versions come from the packages the units run,
+    # so the home page never has to ask the conductor.
     services.holochain-services = {
       units = {
         "holochain-conductor.service" = {
@@ -763,9 +764,15 @@ in {
             if cfg.conductorMetrics.enable
             then cfg.conductorMetrics.name
             else null;
+          version = lib.getVersion cfg.package;
+          holochainVersion = lib.getVersion cfg.package;
         };
-        # A one-shot that remains active once it has run.
-        "holochain-happ-installer.service" = lib.mkIf (cfg.happs != {}) "App installer";
+        # A one-shot that remains active once it has run, with the `hc` it
+        # installs the apps with.
+        "holochain-happ-installer.service" = lib.mkIf (cfg.happs != {}) {
+          name = "App installer";
+          version = lib.getVersion cfg.hcPackage;
+        };
         # The service sits idle between runs; its timer stays active.
         "holochain-conductor-metrics.timer" = lib.mkIf cfg.conductorMetrics.enable "Holochain readings (timer)";
       };
@@ -787,6 +794,8 @@ in {
         # How often systemd restarted each service on its own, so a service
         # that keeps failing and restarting reads Failed, not Starting.
         "--collector.systemd.enable-restarts-metrics"
+        # When each unit last started, for the home page's services table.
+        "--collector.systemd.enable-start-time-metrics"
       ];
     };
 

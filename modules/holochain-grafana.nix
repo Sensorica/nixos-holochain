@@ -28,6 +28,9 @@
   #     mappings, replacing any it had;
   #   * constant variables named `room_app`, `room_part` and `room_label` get
   #     the `room` option's values, when it is set;
+  #   * the home page's (uid holochain-home) `node` variable defaults to this
+  #     machine's own node, so the page Grafana opens on shows the machine
+  #     it runs on;
   #   * a threshold step that names a `states` option in `fromOption` takes
   #     that option's value, and the plain steps beside it move with it so
   #     the steps stay in order, so a colour changes where the state word
@@ -69,12 +72,12 @@
     then
       pkgs.runCommand "holochain-grafana-dashboards" {
         nativeBuildInputs = [pkgs.jq];
-        inherit unitsRegex unitMappings roomJson statesJson;
+        inherit unitsRegex unitMappings roomJson statesJson localNode;
       } ''
         cp -rL --no-preserve=mode ${cfg.dashboards} $out
         find $out -type f -name '*.json' | while IFS= read -r f; do
           jq --arg units "$unitsRegex" --argjson mappings "$unitMappings" --argjson room "$roomJson" \
-            --argjson states "$statesJson" '
+            --argjson states "$statesJson" --arg localNode "$localNode" '
             def default($v): .query = $v
               | .current = {text: $v, value: $v}
               | .options = [{selected: true, text: $v, value: $v}];
@@ -132,8 +135,14 @@
               ["in the last 24 hours", "in the last \($states.historyWindow | duration)"]
             ];
             def restated: reduce sentences[] as [$old, $new] (.; split($old) | join($new));
+            # The home page opens on this machine; its picker still lists
+            # every node Prometheus scrapes.
+            def thisMachine: if .type == "query" and .name == "node"
+              then .current = {selected: true, text: $localNode, value: $localNode}
+              else . end;
             if type == "object" and has("panels")
             then (.templating.list // empty) |= map(variable)
+              | if .uid == "holochain-home" then (.templating.list // empty) |= map(thisMachine) else . end
               | (.. | objects | select(has("fieldConfig")) | .fieldConfig.overrides // empty) |= map(unitNames)
               | walk(if type == "object" then restateSteps elif type == "string" then restated else . end)
             else .
@@ -144,18 +153,21 @@
       ''
     else cfg.dashboards;
 
-  # Grafana's home page is the room screen, copied from the provisioned
-  # dashboards so it carries the room constants. Grafana answers a home path
-  # that does not exist with an error, so a directory without the room screen
-  # gets a copy of Grafana's own home page instead. The choice is made while
-  # building, not by looking into the directory while evaluating: a directory
-  # inside a package would otherwise be built during evaluation, which fails
-  # where import-from-derivation is disabled.
+  # Grafana's home page is "What is this machine running?", copied from the
+  # provisioned dashboards so it opens on this machine's node. A directory
+  # without it falls back to the room screen, with its room constants, and a
+  # directory with neither gets a copy of Grafana's own home page, since
+  # Grafana answers a home path that does not exist with an error. The choice
+  # is made while building, not by looking into the directory while
+  # evaluating: a directory inside a package would otherwise be built during
+  # evaluation, which fails where import-from-derivation is disabled.
   homeDashboard =
     pkgs.runCommand "holochain-grafana-home.json" {
       grafanaHome = "${config.services.grafana.package}/share/grafana/public/dashboards/home.json";
     } ''
-      if [ -e ${provisionedDashboards}/holochain-now.json ]; then
+      if [ -e ${provisionedDashboards}/holochain-home.json ]; then
+        cp ${provisionedDashboards}/holochain-home.json $out
+      elif [ -e ${provisionedDashboards}/holochain-now.json ]; then
         cp ${provisionedDashboards}/holochain-now.json $out
       else
         cp "$grafanaHome" $out
@@ -180,12 +192,14 @@
   # Prometheus attaches `node` (and `site`, when given) to every series it
   # scrapes from the target, so a node that is down still has its name.
   loopback = ["127.0.0.1" "localhost" "::1" "[::1]"];
-  nodeOf = address: let
+  hostOf = address: let
     hostPort = builtins.match "(.*):[0-9]+" address;
-    host =
-      if hostPort == null
-      then address
-      else builtins.head hostPort;
+  in
+    if hostPort == null
+    then address
+    else builtins.head hostPort;
+  nodeOf = address: let
+    host = hostOf address;
   in
     if builtins.elem host loopback
     then config.networking.hostName
@@ -208,6 +222,20 @@
   # List targets given by an IP address, which then goes by that address.
   addressNamed = lib.optionals (builtins.isList cfg.scrapeTargets) (lib.filter (target: builtins.match "[0-9.]+|\\[.*]|.*:.*" target.node != null) targets);
   nodeNames = map (target: target.node) targets;
+  # The name this machine goes by on the dashboards: a target on a loopback
+  # address is this machine, whatever name it was given; so is a target on
+  # this machine's own host name (or its FQDN), whatever key names it;
+  # otherwise the host name, which is what a list names a target on it.
+  ownNames = [config.networking.hostName] ++ lib.optional (config.networking.domain != null) "${config.networking.hostName}.${config.networking.domain}";
+  ownTarget =
+    lib.findFirst (target: builtins.elem (hostOf target.address) loopback) (
+      lib.findFirst (target: builtins.elem (hostOf target.address) ownNames) null targets
+    )
+    targets;
+  localNode =
+    if ownTarget != null
+    then ownTarget.node
+    else config.networking.hostName;
   sharedNodeNames = lib.filter (name: lib.count (n: n == name) nodeNames > 1) (lib.unique nodeNames);
 
   # The recording rules the dashboards read (holochain-rules.nix), evaluated
@@ -441,10 +469,13 @@ in {
       description = ''
         Directory of Grafana dashboard JSON files to provision. Everything in
         it is loaded at startup and re-read every 30 seconds. The module ships
-        four, each titled with the question it answers and all tagged
-        `holochain`: `holochain-now` ("Is the Holochain network working?"),
-        the room screen and Grafana's home page; `holochain-fleet` ("Which
-        Holochain node needs attention?"), for whoever runs the fleet;
+        five, each titled with the question it answers and all tagged
+        `holochain`: `holochain-home` ("What is this machine running?"),
+        Grafana's home page, with each service's state and version, each
+        conductor's Holochain version and each app's state; `holochain-now`
+        ("Is the Holochain network working?"), the room screen;
+        `holochain-fleet` ("Which Holochain node needs attention?"), for
+        whoever runs the fleet;
         `holochain-node` ("Is this node working, app by app?"), one machine;
         and `holochain-network` ("Is this app in step on every node?"), one
         app network across every machine. They read the recording rules of
@@ -453,9 +484,13 @@ in {
         For a directory in the Nix store, the module sets Grafana's home page
         (`services.grafana.settings.dashboards.default_home_dashboard_path`,
         at default priority, so a definition of your own wins): its
-        `holochain-now.json` when it has one, otherwise a copy of Grafana's
-        own home page. The choice is made while building, so a directory
-        inside a package is not built during evaluation.
+        `holochain-home.json` when it has one, with its `node` variable
+        defaulting to this machine (the name of the scrape target on a
+        loopback address, or at this machine's host name or FQDN, else
+        `networking.hostName`), else its
+        `holochain-now.json`, otherwise a copy of Grafana's own home page.
+        The choice is made while building, so a directory inside a package is
+        not built during evaluation.
 
         A directory in the Nix store (a path in your flake, or a directory
         inside a flake input or package such as `"''${inputs.x}/dashboards"`)
@@ -721,6 +756,8 @@ in {
         # Restart counts, so a service that keeps failing and restarting
         # reads Failed rather than Starting.
         "--collector.systemd.enable-restarts-metrics"
+        # When each unit last started, for the home page's services table.
+        "--collector.systemd.enable-start-time-metrics"
       ];
     };
 
@@ -729,8 +766,14 @@ in {
     # the flags.
     services.holochain-services = {
       units = {
-        "prometheus.service" = "Metrics database";
-        "grafana.service" = "Dashboards";
+        "prometheus.service" = {
+          name = "Metrics database";
+          version = lib.getVersion config.services.prometheus.package;
+        };
+        "grafana.service" = {
+          name = "Dashboards";
+          version = lib.getVersion config.services.grafana.package;
+        };
       };
       textfileDirectory = lib.mkDefault defaultTextfileDirectory;
     };

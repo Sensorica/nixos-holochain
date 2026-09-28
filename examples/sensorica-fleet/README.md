@@ -57,7 +57,7 @@ Each `hosts/sensorica-holoport-0N/configuration.nix` opens with a switches block
 
 `hosts/desk.nix` is what a person at a Holoport's own screen gets when they log in as `sensorica`. It is self-contained on purpose: copy the file and its two inputs (home-manager `release-26.05` and plasma-manager, both in this flake only; the modules stay desktop-free) to give another NixOS machine the same kind of desk.
 
-- One Grafana entry, on the desktop and in the panel, that opens Grafana's home page: what this Holoport runs, with links to the fleet, node, network and Moss pages.
+- One Grafana entry, on the desktop and in the panel, that opens Grafana's home page on this Holoport: what it runs, with links to the fleet, node, network and Moss pages.
 - Launchers pinned to the panel (the dock on GNOME) and in the menu under System: Grafana, Holochain logs (the conductor's journal), Moss node logs (on the host that runs one) and Rebuild, then Konsole and Dolphin.
 - On Plasma, a session declared with plasma-manager: that bottom panel on every screen, a CPU and RAM monitor, the tray and the clock; Breeze Dark; no screen lock and no suspend or display-off on AC. The layout is applied at the next login. On GNOME, the same no-lock, no-blank settings through dconf.
 - `tmux`, `btop` and the Holochain 0.6 `hc` on PATH, whichever desktop.

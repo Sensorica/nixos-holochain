@@ -1905,7 +1905,7 @@
             inherit pkgs monitor;
             modules = {
               edgenode = edgenodeNode;
-              inherit (self.nixosModules) holochain-http-gateway holochain-bootstrap holochain-windtunnel;
+              inherit (self.nixosModules) holochain-http-gateway holochain-bootstrap holochain-windtunnel holochain-moss-node;
             };
           };
 
@@ -2078,6 +2078,8 @@
                   mv ${textfileDir}/.fixture-$name.tmp ${textfileDir}/fixture-$name.prom
                 done
               '';
+              # The Holochain this node's conductor runs, from its package.
+              holochainVersion = pkgs.lib.getVersion nodes.machine.services.holochain-edgenode.package;
               # The record names of the rule file this node runs.
               records =
                 map (rule: rule.record)
@@ -2159,7 +2161,7 @@
               machine.log("holochain_conductor_up in prometheus: " + series)
               assert '"__name__":"holochain_conductor_up"' in series, series
 
-              # ---- criterion 5: the four dashboards, the room screen at home ----
+              # ---- criterion 5: the five dashboards, "What is this machine running?" at home ----
               def grafana(path):
                   return json.loads(machine.succeed(
                       "curl -sf -u admin:${grafanaTestPassword}"
@@ -2167,31 +2169,34 @@
                   ))
 
 
-              # Exactly the four, and nothing else wearing their tag.
-              def the_four(path):
+              # Exactly the five, and nothing else wearing their tag.
+              def the_five(path):
                   uids = sorted(d["uid"] for d in grafana(path))
                   machine.log(f"{path}: " + json.dumps(uids))
-                  return uids == ["holochain-fleet", "holochain-network", "holochain-node", "holochain-now"]
+                  return uids == ["holochain-fleet", "holochain-home", "holochain-network", "holochain-node", "holochain-now"]
 
 
               tagged = sorted(d["uid"] for d in grafana("/api/search?tag=holochain"))
-              assert the_four("/api/search?tag=holochain"), tagged
+              assert the_five("/api/search?tag=holochain"), tagged
               # The same test on an answer Grafana gives with one short must fail.
-              assert not the_four("/api/search?tag=holochain&limit=3")
+              assert not the_five("/api/search?tag=holochain&limit=4")
 
-              # Grafana's home page is the room screen. Grafana answers with
-              # the dashboard itself, or with a redirect to it when the home
-              # page is a saved preference.
-              def is_room(answer):
+              # Grafana's home page is "What is this machine running?".
+              # Grafana answers with the dashboard itself, or with a redirect
+              # to it when the home page is a saved preference.
+              def is_home(answer):
                   uid = answer.get("dashboard", {}).get("uid")
                   machine.log(f"dashboard: uid {uid!r}, redirect {answer.get('redirectUri')!r}")
-                  return uid == "holochain-now" or "/d/holochain-now" in answer.get("redirectUri", "")
+                  return uid == "holochain-home" or "/d/holochain-home" in answer.get("redirectUri", "")
 
 
               home = grafana("/api/dashboards/home")
-              assert is_room(home), "the home page is not the room screen: " + json.dumps(home)[:500]
+              assert is_home(home), "the home page is not What is this machine running?: " + json.dumps(home)[:500]
               # Another dashboard, in the same shape of answer, must not pass.
-              assert not is_room(grafana("/api/dashboards/uid/holochain-fleet"))
+              assert not is_home(grafana("/api/dashboards/uid/holochain-now"))
+              # It opens on this machine, the target on loopback, named machine.
+              home_node = next(v for v in home["dashboard"]["templating"]["list"] if v["name"] == "node")["current"]
+              assert home_node.get("value") == "machine", home_node
 
               # A provisioned dashboard that Grafana cannot bind to a data
               # source renders empty panels, which a search hit would not show.
@@ -2328,9 +2333,18 @@
                   "1": ("Not answering", "red"), "2": ("No fresh readings", "orange"), "3": ("Running", "green"),
               }
               assert words(panel("holochain-fleet", "Node status over time")["fieldConfig"]["defaults"]["mappings"]) == node_words
-              # Both service tables read their states in the same words.
-              for uid, title in [("holochain-fleet", "Which services are not running?"), ("holochain-node", "Is each service on this machine running?")]:
+              # The three service tables read their states in the same words,
+              # and the home page's conductors and apps read theirs as the node
+              # page does.
+              for uid, title in [("holochain-fleet", "Which services are not running?"),
+                                 ("holochain-node", "Is each service on this machine running?"),
+                                 ("holochain-home", "Is each service running, and in which version?")]:
                   assert words(override(panel(uid, title), "State", "mappings")) == service_words, (uid, title)
+              assert words(override(panel("holochain-home", "Is each app on this machine working?"), "State", "mappings")) == app_words
+              assert words(override(panel("holochain-home", "Which Holochain conductors run here?"), "State", "mappings")) == {
+                  "1": ("Not answering", "red"), "2": ("No fresh readings", "orange"), "3": ("Running", "green"),
+              }
+              assert words(panel("holochain-home", "State")["fieldConfig"]["defaults"]["mappings"]) == node_words
 
               # ---- node names and the recording rules, over three conductors ----
               # Every target carries its node's name, and its site when it has one.
@@ -2419,6 +2433,16 @@
                   "systemd-journald.service": "6", "always-fails.service": "0",
                   "Holochain conductor (Moss)": "6", "Holochain conductor (Workshop)": "6",
               }, "service")
+
+              # Every service the machine's own modules list carries the
+              # version of the package that runs it, as a label Prometheus
+              # keeps; the readings timer has none.
+              wait_values('max by (service, version) (holochain_service_info{node="machine", version!=""})', "q-versions", {
+                  "Holochain conductor": "1", "App installer": "1", "Metrics database": "1", "Dashboards": "1",
+                  "Machine readings": "1", "Nix": "1",
+              }, "service")
+              wait_values('count(holochain_service_info{node="machine", name="holochain-conductor.service", holochain_version="${holochainVersion}", version="${holochainVersion}"})',
+                          "q-conductor-version", {"": "1"}, "none")
 
               # The Moss node's shape: the connected chat and the group in step,
               # the chat nobody else opened alone and grey, not red.

@@ -4,7 +4,9 @@
 # states, and the dashboards as the module rewrites them on their way into the
 # store (the units regex, the units' names as value mappings on the Service
 # column, the room constants). Also the services each machine lists for the
-# dashboards, from the modules enabled on it.
+# dashboards, from the modules enabled on it, each with the version of the
+# package it runs, and Grafana's home page: "What is this machine running?",
+# opening on this machine's own node.
 {
   pkgs,
   # A monitor node's config, from a list of extra modules.
@@ -58,6 +60,7 @@
     }
   ];
   noRoom = monitor [{services.holochain-grafana.dashboards = fixtures;}];
+  shipped = ../modules/dashboards;
   # A dashboards directory inside a package whose build always fails. Choosing
   # the home page must not build it, or a system whose dashboards come from a
   # package would not evaluate where import-from-derivation is off.
@@ -92,6 +95,8 @@
       {
         services.holochain-edgenode = {
           enable = true;
+          # One app, so the installer is listed; its bundle is never built.
+          happs.demo.src = pkgs.writeText "demo.happ" "";
           metricsExporter = {
             enable = true;
             textfileDirectory = "/var/lib/holochain-textfiles";
@@ -110,6 +115,77 @@
     ];
   withBootstrap = everything true;
   withoutBootstrap = everything false;
+  # A Moss node beside the edgenode: its unit carries wdocker's version and
+  # the Holochain that wdocker brings, which is not the edgenode's.
+  withMoss = monitor [
+    modules.edgenode
+    modules.holochain-moss-node
+    {
+      services.holochain-edgenode = {
+        enable = true;
+        metricsExporter.enable = true;
+        conductorMetrics.enable = true;
+      };
+      services.holochain-moss-node = {
+        enable = true;
+        passwordFile = "/var/lib/secrets/moss-node-password";
+      };
+    }
+  ];
+
+  # The home page as each kind of target list provisions it: a list names a
+  # loopback target after this machine, an attrset by its key, and a list with
+  # no loopback leaves this machine's host name.
+  homeNamed = monitor [
+    {
+      services.holochain-grafana.scrapeTargets = {
+        lab-1.address = "sensorica-holoport-01:9100";
+        homelab.address = "127.0.0.1:9100";
+      };
+    }
+  ];
+  # An attrset that names this machine by a key other than its host name,
+  # at that host name, and a list with this machine at its FQDN.
+  homeKeyed = monitor [
+    {
+      services.holochain-grafana.scrapeTargets = {
+        lab-1.address = "monitor:9100";
+        lab-2.address = "sensorica-holoport-02:9100";
+      };
+    }
+  ];
+  homeFqdn = monitor [
+    {
+      networking.domain = "lab.example";
+      services.holochain-grafana.scrapeTargets = ["sensorica-holoport-02:9100" "monitor.lab.example:9100"];
+    }
+  ];
+  homeRemote = monitor [
+    {
+      services.holochain-grafana.scrapeTargets = ["sensorica-holoport-02:9100" "monitor:9100"];
+    }
+  ];
+  # Broken copies of the shipped dashboards: one without the home page, whose
+  # home falls back to the room screen, and one whose home page lost its uid.
+  # The home page check must refuse both.
+  withoutHome = monitor [
+    {
+      services.holochain-grafana.dashboards = "${pkgs.runCommand "dashboards-without-home" {} ''
+        cp -r ${shipped} $out
+        chmod -R u+w $out
+        rm $out/holochain-home.json
+      ''}";
+    }
+  ];
+  homeRenamed = monitor [
+    {
+      services.holochain-grafana.dashboards = "${pkgs.runCommand "dashboards-home-renamed" {nativeBuildInputs = [pkgs.jq];} ''
+        cp -r ${shipped} $out
+        chmod -R u+w $out
+        jq '.uid = "somewhere-else"' ${shipped}/holochain-home.json > $out/holochain-home.json
+      ''}";
+    }
+  ];
   # sshd started from its socket, which defines no sshd.service; and a unit
   # listed that nothing defines, which would have no row on the pages.
   socketSsh = monitor [
@@ -123,6 +199,13 @@
   ghost = monitor [{services.holochain-services.units."ghost.service" = "Ghost";}];
   servicesOf = config: {
     inherit (config.services.holochain-services) units healthChecks textfileDirectory;
+    # The file node_exporter publishes the list from, as the machine links it.
+    file = let
+      rule = lib.findFirst (lib.hasInfix "/holochain-services.prom ") null config.systemd.tmpfiles.rules;
+    in
+      if rule == null
+      then null
+      else lib.last (lib.splitString " " rule);
     # The health timer, when there is one to run.
     healthTimer = config.systemd.timers ? holochain-service-health;
     flags = config.services.prometheus.exporters.node.extraFlags;
@@ -170,8 +253,52 @@
       ghost = servicesOf ghost;
     };
     restated.dashboards = dashboardsOf restated;
+    # The versions each module should publish, from the packages it runs.
+    packages = let
+      c = withBootstrap.services;
+    in {
+      conductor = lib.getVersion c.holochain-edgenode.package;
+      hc = lib.getVersion c.holochain-edgenode.hcPackage;
+      gateway = lib.getVersion c.holochain-http-gateway.package;
+      bootstrap = lib.getVersion c.holochain-bootstrap.package;
+      prometheus = lib.getVersion c.prometheus.package;
+      grafana = lib.getVersion c.grafana.package;
+      # The monitors are built from the same nixpkgs as pkgs.
+      nodeExporter = lib.getVersion pkgs.prometheus-node-exporter;
+      openssh = lib.getVersion c.openssh.package;
+      tailscale = lib.getVersion c.tailscale.package;
+      nix = lib.getVersion withBootstrap.nix.package;
+      moss = lib.getVersion withMoss.services.holochain-moss-node.package;
+      mossHolochain = withMoss.services.holochain-moss-node.package.holochainVersion;
+    };
+    moss = servicesOf withMoss;
+    homes = {
+      named = {
+        home = homeOf homeNamed;
+        dashboards = dashboardsOf homeNamed;
+      };
+      remote = {
+        home = homeOf homeRemote;
+        dashboards = dashboardsOf homeRemote;
+      };
+      keyed = {
+        home = homeOf homeKeyed;
+        dashboards = dashboardsOf homeKeyed;
+      };
+      fqdn = {
+        home = homeOf homeFqdn;
+        dashboards = dashboardsOf homeFqdn;
+      };
+      withoutHome = {
+        home = homeOf withoutHome;
+        dashboards = dashboardsOf withoutHome;
+      };
+      renamed = {
+        home = homeOf homeRenamed;
+        dashboards = dashboardsOf homeRenamed;
+      };
+    };
   });
-  shipped = ../modules/dashboards;
 in
   pkgs.runCommand "grafana-provisioning" {
     nativeBuildInputs = [pkgs.jq pkgs.yq-go];
@@ -223,6 +350,7 @@ in
     check '.services.withBootstrap.units | map_values(.name) == {
       "holochain-conductor.service": "Holochain conductor (Workshop)",
       "holochain-conductor-metrics.timer": "Holochain readings (timer)",
+      "holochain-happ-installer.service": "App installer",
       "holochain-http-gateway.service": "HTTP gateway",
       "holochain-bootstrap.service": "Local bootstrap and relay",
       "podman-wind-tunnel-runner.service": "Wind Tunnel runner",
@@ -251,13 +379,108 @@ in
     # A unit listed that nothing defines is warned about by name.
     check '.services.ghost.warnings | length == 1 and (.[0] | contains("\"ghost.service\""))'
 
-    # Grafana's home page is the shipped room screen, as provisioned (so with
-    # its room constants); a dashboards directory without one gets a copy of
+    # Every unit a module declares carries the version of the package it
+    # runs it from, except the two readings timers and the Wind Tunnel
+    # runner, whose container is pulled by digest; the conductor also
+    # carries the Holochain it is.
+    check '.packages as $p | .services.withBootstrap.units | map_values(.version) == {
+      "holochain-conductor.service": $p.conductor, "holochain-conductor-metrics.timer": "",
+      "holochain-happ-installer.service": $p.hc,
+      "holochain-http-gateway.service": $p.gateway, "holochain-bootstrap.service": $p.bootstrap,
+      "podman-wind-tunnel-runner.service": "",
+      "prometheus.service": $p.prometheus, "grafana.service": $p.grafana,
+      "prometheus-node-exporter.service": $p.nodeExporter, "nix-daemon.socket": $p.nix,
+      "sshd.service": $p.openssh, "tailscaled.service": $p.tailscale}'
+    check '[.packages[] | test("^[0-9]+[.][0-9]+")] | all'
+    check '.services.withBootstrap.units["holochain-conductor.service"].holochainVersion == .packages.conductor
+      and ([.services.withBootstrap.units[] | select(.holochainVersion != "")] | length == 1)'
+    # The Moss node: wdocker's version, and the Holochain wdocker brings,
+    # which is not the edgenode's; its readings timer has none.
+    check '.moss.units["moss-node.service"] == {name: "Moss node", conductor: "Moss", version: .packages.moss, holochainVersion: .packages.mossHolochain}
+      and .moss.units["moss-node-metrics.timer"].version == ""
+      and .moss.units["holochain-conductor.service"].holochainVersion != .packages.mossHolochain'
+
+    # The file each machine publishes its list from names every unit it
+    # lists, and each unit that declares a version with that version, as the
+    # version label. Checked on the file the module links, then on a copy
+    # with one label gone, which must fail by that unit's name.
+    versioned() {
+      local file=$1 config=$2
+      [ "$(grep -c '^holochain_service_info{' "$file")" = "$(jq --arg c "$config" '.[$c].units | length' units.json)" ] \
+        || { echo "$file does not list every unit of $config" >&2; return 1; }
+      jq -r --arg c "$config" '.[$c].units | to_entries[] | select(.value.version != "")
+          | "\(.key)\t\(.value.version)\t\(.value.holochainVersion)"' units.json \
+        | while IFS=$'\t' read -r unit version holochain; do
+            line=$(grep -F "name=\"$unit\"" "$file" || true)
+            case "$line" in *",version=\"$version\""*) ;; *) echo "$unit has lost its version label" >&2; exit 1 ;; esac
+            if [ -n "$holochain" ]; then
+              case "$line" in *"holochain_version=\"$holochain\""*) ;; *) echo "$unit has lost its holochain_version label" >&2; exit 1 ;; esac
+            fi
+          done
+    }
+    jq '.services + {moss: .moss}' ${facts} > units.json
+    for config in withBootstrap moss; do
+      file=$(jq -r --arg c "$config" '.[$c].file' units.json)
+      cat "$file"
+      versioned "$file" "$config"
+    done
+    broken_versions() {
+      local reason=$1 config=$2 edit=$3
+      sed "$edit" "$(jq -r --arg c "$config" '.[$c].file' units.json)" > broken.prom
+      if versioned broken.prom "$config" 2> broken.log; then
+        echo "still passes with $reason" >&2
+        exit 1
+      fi
+      grep -qF "$reason" broken.log || { echo "failed, but not for $reason:" >&2; cat broken.log >&2; exit 1; }
+      echo "fails as it should: $reason"
+    }
+    broken_versions "holochain-conductor.service has lost its version label" withBootstrap \
+      '/name="holochain-conductor.service"/s/,version="[^"]*"//'
+    broken_versions "holochain-happ-installer.service has lost its version label" withBootstrap \
+      '/name="holochain-happ-installer.service"/s/,version="[^"]*"//'
+    broken_versions "grafana.service has lost its version label" withBootstrap \
+      '/name="grafana.service"/s/,version="[^"]*"//'
+    broken_versions "moss-node.service has lost its holochain_version label" moss \
+      '/name="moss-node.service"/s/holochain_version="[^"]*",//'
+
+    # Grafana's home page is "What is this machine running?" as provisioned,
+    # so with its node set to this machine. A dashboards directory without it
+    # falls back to the room screen, and one with neither gets a copy of
     # Grafana's own home page. Making that choice builds nothing while
     # evaluating: a package's directory that cannot be built still yields a
     # home path.
-    cmp "$(jq -r .list.home ${facts})" "$(jq -r .list.dashboards ${facts})/holochain-now.json"
-    jq -e '.uid == "holochain-now"' "$(jq -r .list.home ${facts})"
+    is_home() {
+      local home=$1 dashboards=$2
+      cmp -s "$home" "$dashboards/holochain-home.json" && jq -e '.uid == "holochain-home"' "$home" > /dev/null
+    }
+    home_node() { jq -r '.templating.list[] | select(.name == "node") | .current.value' "$1"; }
+    for kind in list homes.named homes.remote homes.keyed homes.fqdn; do
+      home=$(jq -r ".$kind.home" ${facts})
+      is_home "$home" "$(jq -r ".$kind.dashboards" ${facts})" || { echo "the $kind monitor's home page is not the provisioned home page" >&2; exit 1; }
+    done
+    # It opens on this machine: a loopback target's name, or the host name.
+    test "$(home_node "$(jq -r .list.home ${facts})")" = monitor
+    test "$(home_node "$(jq -r .homes.named.home ${facts})")" = homelab
+    test "$(home_node "$(jq -r .homes.remote.home ${facts})")" = monitor
+    # A target at this machine's host name, or its FQDN, is this machine,
+    # whatever key names it.
+    test "$(home_node "$(jq -r .homes.keyed.home ${facts})")" = lab-1 \
+      || { echo "the keyed monitor's home page does not open on lab-1" >&2; exit 1; }
+    test "$(home_node "$(jq -r .homes.fqdn.home ${facts})")" = monitor.lab.example \
+      || { echo "the fqdn monitor's home page does not open on monitor.lab.example" >&2; exit 1; }
+    # The other pages keep their own node default.
+    test "$(jq -c '.templating.list[] | select(.name == "node") | .current' "$(jq -r .list.dashboards ${facts})/holochain-node.json")" = '{}'
+    # The broken copies: each must be refused.
+    for kind in withoutHome renamed; do
+      if is_home "$(jq -r ".homes.$kind.home" ${facts})" "$(jq -r ".homes.$kind.dashboards" ${facts})"; then
+        echo "the home page check passes on the $kind copy" >&2
+        exit 1
+      fi
+      echo "fails as it should: the $kind copy is not the home page"
+    done
+    # Without the home page, the room screen; with neither, Grafana's own.
+    cmp "$(jq -r .homes.withoutHome.home ${facts})" "$(jq -r .homes.withoutHome.dashboards ${facts})/holochain-now.json"
+    jq -e '.uid == "holochain-now"' "$(jq -r .homes.withoutHome.home ${facts})"
     cmp "$(jq -r .named.home ${facts})" "$(jq -r .named.grafanaHome ${facts})"
     check '.unbuilt.home | type == "string" and endswith("-holochain-grafana-home.json")'
 
