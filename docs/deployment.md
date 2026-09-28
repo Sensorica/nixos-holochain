@@ -78,11 +78,11 @@ The script erases exactly the disk you name and nothing else. It refuses to run 
 | Disks | 1 TB HDD at `/dev/sda` | 128 GB SSD at `/dev/sda`, 2 TB HDD at `/dev/sdb` |
 | Install on | `/dev/sda` | `/dev/sda` (the SSD); `/dev/sdb` stays as it is |
 
-Both have Ethernet and no Wi-Fi, HDMI and a USB keyboard, no DMI data, and legacy BIOS. The key for the BIOS setup is not known yet: try Del or F2; the boot menu is on F7, F8, F11 or F12.
+Both have Ethernet and no Wi-Fi, HDMI and a USB keyboard, no DMI data, and legacy BIOS. On the base HoloPort, tapping Esc at power-on opens the firmware boot menu; pick the stick there, because the GRUB menu on the internal disk belongs to HoloOS and never lists it. The key for the BIOS setup, and the HoloPort+'s keys, are not known yet: try Del or F2 for setup, and F7, F8, F11 or F12 for the boot menu.
 
 ### 1. Boot an installer and get network
 
-Write the workshop ISO (above) or the stock NixOS 26.05 minimal ISO to a USB stick with `dd`, plug the Holoport into the lab router with Ethernet, and boot the stick from the boot menu. Then, in a root shell (`sudo -i` on either ISO):
+Write the workshop ISO (above) or the stock NixOS 26.05 minimal ISO to a USB stick with `dd`, plug the Holoport into the lab router with Ethernet, and boot the stick from the boot menu. Use a USB 2 port: from a USB 3 port the base HoloPort's live system fails with `SQUASHFS error: Unable to read page` and freezes. Prefer a text console to a graphical ISO, whose desktop freezes on the base HoloPort's Intel HD 610; if you booted one and it froze, Ctrl+Alt+F1 then Ctrl+Alt+F3 reaches a console logged in as `nixos`, and `sudo systemctl stop display-manager` stops the frozen session. Then, in a root shell (`sudo -i` on either ISO):
 
 ```bash
 ip -br -4 a
@@ -103,13 +103,13 @@ nano examples/sensorica-fleet/hosts/common.nix
 nix --extra-experimental-features 'nix-command flakes' run --accept-flake-config .#holoport-install -- /dev/sda ./examples/sensorica-fleet#sensorica-holoport-01
 ```
 
-Type `/dev/sda` when it asks. It asks once more at the end, for a root password for the console.
+Type `/dev/sda` when it asks. It asks once more at the end, for a root password for the console, but only when it runs in a terminal: `nixos-install` skips that prompt when its input is not one (a background or piped SSH session), and then `passwd`, run in the shell `nixos-enter --root /mnt` opens, sets it before the reboot. On the base HoloPort, with its slow disk and two cores, expect this to take a while; path 2b moves the work to a laptop.
 
 Before the first boot, keep the checkout (with your key) on the installed disk. The Sensorica fleet rebuilds from `/etc/nixos-holochain`, owned by root and the `wheel` group so the `sensorica` operator can edit it:
 
 ```bash
 install -d -m 2775 -g wheel /mnt/etc/nixos-holochain && cp -a /root/nixos-holochain/. /mnt/etc/nixos-holochain/ && chgrp -R wheel /mnt/etc/nixos-holochain && chmod -R g+rwX /mnt/etc/nixos-holochain && git -C /mnt/etc/nixos-holochain config core.sharedRepository group
-``` On the base HoloPort, with its slow disk and two cores, expect this to take a while; path 2b moves the work to a laptop.
+```
 
 ### 2b. Install from a laptop
 

@@ -102,7 +102,7 @@ Any other flake that rehearses the same workshop node (as Soushi's homelab does)
 modules = [nixos-holochain.nixosModules.holochain-edgenode nixos-holochain.nixosModules.sensorica-event-node];
 ```
 
-That is the whole profile: package, the three hApps, the network seed, the installer timeout and the two metrics options. A host can still override any one of them (a different seed, a trimmed hApp set) with an ordinary assignment; see the comment at the top of `modules/sensorica-event-node.nix` for why that works with `mkDefault`.
+That is the whole profile: package, the three hApps, the network seed, the installer timeout and the two metrics options. A host can still override any single value (a different seed, a longer timeout) with an ordinary assignment, because the profile sets each one with `mkDefault`. Trimming the hApp set is different: `happs` is an attribute set of submodules, so a plain `happs = { hrea = ...; };` is merged with the profile's three apps rather than replacing them. Drop one app with `happs.kando.installed = false;`, or replace the whole set with `happs = lib.mkForce { ... };`. The comment at the top of `modules/sensorica-event-node.nix` explains both.
 
 ## Evaluate
 

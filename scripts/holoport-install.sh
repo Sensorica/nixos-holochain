@@ -43,7 +43,9 @@ if [ "$#" -ne 2 ]; then
   exit 2
 fi
 
-disk=$1
+# A /dev/disk/by-id/... link resolves to its /dev/sdX node, so partition names
+# and the label check below compare kernel names.
+disk=$(readlink -f "$1")
 source=$2
 swap_size=${SWAP_SIZE:-8GiB}
 
@@ -120,10 +122,13 @@ echo "==> formatting"
 mkfs.fat -F 32 -n boot "$(part 2)"
 mkfs.ext4 -F -L nixos "$(part 3)"
 mkswap -L swap "$(part 4)"
+# Let udev finish probing the new filesystems before mounting; without this a
+# VM run once failed here with "wrong fs type".
+udevadm settle
 
 echo "==> mounting"
 mkdir -p /mnt
-mount "$(part 3)" /mnt
+mount -t ext4 "$(part 3)" /mnt
 mkdir -p /mnt/efi-boot
 mount -o umask=077 "$(part 2)" /mnt/efi-boot
 swapon "$(part 4)"
