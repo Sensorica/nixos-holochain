@@ -48,6 +48,10 @@ Workshop nodes ship with KDE Plasma 6 as the desktop. Reasoning:
 | `happ-installer.service` fails silently | hApp file not found at path | Verify `happs/` contains the `.happ` files before ISO build |
 | Participants can't see each other's nodes | Firewall closed | Ensure `openFirewall = true` and router is not blocking DHT traffic |
 | `colmena apply` can't reach nodes | SSH keys not set up | Add facilitator SSH key to each host config before building |
+| Live USB drops to emergency mode, "Expecting device /dev/disk/by-label/nixos-graphical-…" | Stick made with Ventoy | Write the ISO with `dd` and check it with `cmp`; see docs/deployment.md § Rescuing an install |
+| Installer fails on `cache.nixos.org … after 0 ms` | Router DNS answers IPv6 only, no IPv6 route | Public DNS on the live session with `nmcli`, then retry; see docs/deployment.md § Rescuing an install |
+| Installer offers only manual partitioning on retry | Previous failed run still mounted | Unmount `/tmp/calamares-root-*` and `swapoff -a`, relaunch |
+| Installer failed and the reason is unclear | Calamares hides `nixos-install` output | SSH in from a laptop and read `/root/.cache/calamares/session.log`; see docs/deployment.md § Rescuing an install |
 
 ---
 
