@@ -131,4 +131,8 @@ jobs:
             .#checks.x86_64-linux.vmTestBootstrap \
             .#checks.x86_64-linux.edgenodeConfigRender \
             .#checks.x86_64-linux.conductorMetricsJq \
-            .#checks.x86_64-linux.dhtMetricsJq
+            .#checks.x86_64-linux.dhtMetricsJq \
+            .#checks.x86_64-linux.metricsHelpAgreement \
+            .#checks.x86_64-linux.metricsNameShape \
+            .#checks.x86_64-linux.fleetDashboardQueries \
+            .#checks.x86_64-linux.edgenodeNamesWiring
