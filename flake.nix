@@ -1111,6 +1111,35 @@
         };
 
         checks = {
+          # The edgenode declares the Holochain Foundation cache by default, and
+          # the option really turns it off (#26). Evaluation only: a host that
+          # forgets the cache compiles Holochain from source on its first switch.
+          edgenodeBinaryCache = let
+            eval = extra:
+              (nixpkgs.lib.nixosSystem {
+                inherit system;
+                modules = [
+                  self.nixosModules.holochain-edgenode
+                  {
+                    _module.args.inputs = inputs;
+                    services.holochain-edgenode.enable = true;
+                    fileSystems."/".device = "none";
+                    boot.loader.grub.enable = false;
+                    system.stateVersion = "26.05";
+                  }
+                  extra
+                ];
+              }).config.nix.settings;
+            on = eval {};
+            off = eval {services.holochain-edgenode.binaryCache.enable = false;};
+            has = st:
+              builtins.elem "https://holochain-ci.cachix.org" (st.extra-substituters or [])
+              && builtins.elem "holochain-ci.cachix.org-1:5IUSkZc0aoRS53rfkvH9Kid40NpyjwCMCzwRTXy+QN8=" (st.extra-trusted-public-keys or []);
+          in
+            assert has on;
+            assert !(has off);
+              pkgs.runCommand "edgenode-binary-cache" {} "echo on=${builtins.toJSON (has on)} off=${builtins.toJSON (has off)} > $out";
+
           # The #54 passthroughs, rendered on both lines and then handed to
           # that line's real conductor, which rejects unknown keys and bad
           # values: "Conductor ready." is the proof each rendered key is one
@@ -1264,6 +1293,23 @@
               grep -qx 'holochain_conductor_network_sent_bytes_total{conductor="Workshop"} 177' out.prom
               grep -qx 'holochain_conductor_apps{conductor="Workshop",status="enabled"} 0' out.prom
               grep -qx 'holochain_conductor_apps{conductor="Workshop",status="disabled"} 0' out.prom
+
+              # ...and the connections it held survive the silence: when it
+              # answers again, only what moved since counts. a sent 5 more
+              # bytes and c 3 more, so 177 + 8, not 177 + a's and c's whole
+              # lifetimes.
+              cat > grown.json <<'EOF'
+              {"transport_stats":{"backend":"iroh","peer_urls":["u1"],
+                "connections":[
+                  {"pub_key":"a","send_message_count":5,"send_bytes":125,"recv_message_count":4,"recv_bytes":200,"opened_at_s":1,"is_direct":true},
+                  {"pub_key":"c","send_message_count":2,"send_bytes":10,"recv_message_count":0,"recv_bytes":0,"opened_at_s":9,"is_direct":false}]},
+               "blocked_message_counts":{}}
+              EOF
+              run grown.json "$(cat state.json)" null > out.prom
+              cat out.prom
+              grep -qx 'holochain_conductor_network_sent_bytes_total{conductor="Workshop"} 185' out.prom
+              grep -qx 'holochain_conductor_network_sent_messages_total{conductor="Workshop"} 12' out.prom
+              grep -qx 'holochain_conductor_network_received_bytes_total{conductor="Workshop"} 210' out.prom
 
               # Every line names its conductor, and a name is free text: a
               # quote, a backslash and a newline in it are escaped, and no line

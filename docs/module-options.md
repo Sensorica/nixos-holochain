@@ -558,6 +558,41 @@ WebSocket port the hApp installer attaches as the app interface\.
 
 
 
+## services\.holochain-edgenode\.binaryCache\.enable
+
+
+
+Declare the Holochain Foundation’s binary cache
+(` https://holochain-ci.cachix.org `) in the host’s ` nix.settings `, so
+` holochain ` and ` hc ` are downloaded prebuilt instead of compiled from
+source\. A flake’s own ` nixConfig ` does not reach a downstream flake
+that imports this module, and without the cache a first
+` nixos-rebuild switch ` compiles the whole Holochain workspace
+(seen on a homelab rehearsal, 2026-09-26)\.
+
+The setting lands in ` nix.conf ` only once a switch has activated it,
+so the very first switch that brings it still builds from source
+unless it is run with
+` --option extra-substituters https://holochain-ci.cachix.org --option extra-trusted-public-keys <key> `; see docs/deployment\.md\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
 ## services\.holochain-edgenode\.bootstrapUrl
 
 
