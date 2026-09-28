@@ -8,6 +8,395 @@ cp "$(nix build .#options-doc --print-out-paths)" docs/module-options.md
 
 The prose about how the modules fit together lives in [`architecture.md`](architecture.md).
 
+## services\.holochain-bootstrap\.enable
+
+Whether to enable the Kitsune2 bootstrap and relay server (` kitsune2-bootstrap-srv `)\.
+
+One process serves peer discovery at ` /bootstrap/{space} ` and an iroh
+relay at ` /relay ` on the same port\. Point conductors at it with
+` services.holochain-edgenode.bootstrapUrl = "http(s)://<host>:<port>" `
+and ` relayUrl = "http(s)://<host>:<port>/relay" `\.
+
+The relay is open: it has no authentication by default, so anyone who
+can reach the port can relay traffic through it\. Keep it on a LAN or
+behind a firewall unless that is what you want\. Its state is ephemeral
+and cannot be shared between instances, so run one server per network,
+not several behind a load balancer
+\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+
+
+*Example:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [modules/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-bootstrap.nix)
+
+
+
+## services\.holochain-bootstrap\.package
+
+
+
+The ` kitsune2-bootstrap-srv ` package\. The flake’s module defaults it to
+the holonix main-0\.6 build (kitsune2 0\.4\.1), the line the Sensorica
+fleet runs\. A 0\.7 network takes ` nixos-holochain.packages.${system}.bootstrap-srv `
+instead (kitsune2 0\.5\.0): keep the server on the same line as the
+conductors that use it\.
+
+
+
+*Type:*
+package
+
+
+
+*Default:*
+
+```nix
+nixos-holochain.packages.${system}.bootstrap-srv-0_6
+```
+
+*Declared by:*
+ - [modules/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-bootstrap.nix)
+
+
+
+## services\.holochain-bootstrap\.extraArgs
+
+
+
+Further ` kitsune2-bootstrap-srv ` flags, appended as given\.
+
+
+
+*Type:*
+list of string
+
+
+
+*Default:*
+
+```nix
+[ ]
+```
+
+
+
+*Example:*
+
+```nix
+[
+  "--max-entries-per-space"
+  "64"
+  "--allowed-origins"
+  "https://example.org"
+]
+```
+
+*Declared by:*
+ - [modules/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-bootstrap.nix)
+
+
+
+## services\.holochain-bootstrap\.listenAddresses
+
+
+
+Addresses the HTTP server binds, each on ` port `\. IPv6 addresses go in
+brackets\. The default ` [::] ` is dual-stack on Linux and accepts IPv4
+as well; on a host with IPv6 disabled, use ` 0.0.0.0 `\.
+
+Do not list both ` 0.0.0.0 ` and ` [::] `, although that is the server’s
+own production default\. On Linux the second bind fails with “address
+in use”, and the 0\.4\.1 server does not exit on a failed bind: it logs
+nothing, listens on nothing and stays up, so systemd reports the unit
+active\. Seen in this repository’s VM test, not guessed\.
+
+
+
+*Type:*
+list of string
+
+
+
+*Default:*
+
+```nix
+[
+  "[::]"
+]
+```
+
+
+
+*Example:*
+
+```nix
+[
+  "192.168.1.10"
+]
+```
+
+*Declared by:*
+ - [modules/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-bootstrap.nix)
+
+
+
+## services\.holochain-bootstrap\.logLevel
+
+
+
+` RUST_LOG ` filter for the server\. Its built-in default is ` debug `,
+which logs every request to the journal\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+
+```nix
+"info"
+```
+
+
+
+*Example:*
+
+```nix
+"info,kitsune2_bootstrap_srv=debug"
+```
+
+*Declared by:*
+ - [modules/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-bootstrap.nix)
+
+
+
+## services\.holochain-bootstrap\.openFirewall
+
+
+
+Open ` port ` on TCP and ` quicPort ` on UDP\. Conductors on other machines
+cannot reach the server without this or an equivalent firewall rule\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+*Declared by:*
+ - [modules/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-bootstrap.nix)
+
+
+
+## services\.holochain-bootstrap\.port
+
+
+
+TCP port for bootstrap and relay, over HTTPS when a certificate is
+configured and plain HTTP otherwise\. The unit holds
+` CAP_NET_BIND_SERVICE ` so a port below 1024 works without root\.
+
+
+
+*Type:*
+16 bit unsigned integer; between 0 and 65535 (both inclusive)
+
+
+
+*Default:*
+
+```nix
+443
+```
+
+*Declared by:*
+ - [modules/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-bootstrap.nix)
+
+
+
+## services\.holochain-bootstrap\.quicAddress
+
+
+
+Address the QUIC address discovery (QAD) endpoint binds, which lets
+iroh clients learn their public address\. On Linux ` [::] ` also accepts
+IPv4\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+
+```nix
+"[::]"
+```
+
+*Declared by:*
+ - [modules/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-bootstrap.nix)
+
+
+
+## services\.holochain-bootstrap\.quicPort
+
+
+
+UDP port for QUIC address discovery; 7842 is iroh’s default\.
+
+
+
+*Type:*
+16 bit unsigned integer; between 0 and 65535 (both inclusive)
+
+
+
+*Default:*
+
+```nix
+7842
+```
+
+*Declared by:*
+ - [modules/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-bootstrap.nix)
+
+
+
+## services\.holochain-bootstrap\.tlsCertFile
+
+
+
+PEM certificate for HTTPS and for QUIC\. A path as a string, read at
+service start through systemd’s ` LoadCredential `, so it never enters
+the Nix store and may be readable by root only\. Set it together with
+` tlsKeyFile `\.
+
+Without it the server speaks plain HTTP, and QUIC uses a self-signed
+certificate it generates at start\. That is enough for a LAN of
+edgenodes, which then need
+` services.holochain-edgenode.relayAllowPlainText = true `\. It is not
+enough for a packaged Moss desktop: Moss enables plain-text relays only
+in development builds, so a laptop running stock Moss needs this server
+on HTTPS with a certificate it trusts\.
+
+The certificate is read once, at start: restart the unit after a
+renewal\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+"/var/lib/acme/bootstrap.example.org/fullchain.pem"
+```
+
+*Declared by:*
+ - [modules/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-bootstrap.nix)
+
+
+
+## services\.holochain-bootstrap\.tlsKeyFile
+
+
+
+PEM private key matching ` tlsCertFile `, loaded the same way\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+"/var/lib/acme/bootstrap.example.org/key.pem"
+```
+
+*Declared by:*
+ - [modules/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-bootstrap.nix)
+
+
+
+## services\.holochain-bootstrap\.workerThreads
+
+
+
+Worker threads for the HTTP server\. ` null ` keeps the server’s
+production default, four per CPU\. The workers block on file IO, which
+is why the default exceeds the core count\.
+
+
+
+*Type:*
+null or (positive integer, meaning >0)
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+*Declared by:*
+ - [modules/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-bootstrap.nix)
+
+
+
 ## services\.holochain-edgenode\.enable
 
 
@@ -68,6 +457,8 @@ inputs.holonix.packages.${pkgs.stdenv.hostPlatform.system}.holochain
 
 
 ## services\.holochain-edgenode\.adminAllowedOrigins
+
+
 
 Allowed origins for the admin WebSocket interface\. The default is the
 Origin header ` hc ` sends when given no ` --origin `, which is what the
@@ -160,6 +551,41 @@ WebSocket port the hApp installer attaches as the app interface\.
 
 ```nix
 8888
+```
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
+## services\.holochain-edgenode\.binaryCache\.enable
+
+
+
+Declare the Holochain Foundation’s binary cache
+(` https://holochain-ci.cachix.org `) in the host’s ` nix.settings `, so
+` holochain ` and ` hc ` are downloaded prebuilt instead of compiled from
+source\. A flake’s own ` nixConfig ` does not reach a downstream flake
+that imports this module, and without the cache a first
+` nixos-rebuild switch ` compiles the whole Holochain workspace
+(seen on a homelab rehearsal, 2026-09-26)\.
+
+The setting lands in ` nix.conf ` only once a switch has activated it,
+so the very first switch that brings it still builds from source
+unless it is run with
+` --option extra-substituters https://holochain-ci.cachix.org --option extra-trusted-public-keys <key> `; see docs/deployment\.md\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
 ```
 
 *Declared by:*
@@ -302,6 +728,33 @@ absolute path
 
 ```nix
 "/var/lib/holochain"
+```
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
+## services\.holochain-edgenode\.dbSyncLevel
+
+
+
+` db_sync_level `, the SQLite synchronous level, from 0\.7 only (0\.6 has
+` db_sync_strategy ` instead, which this module does not set)\. ` null `
+leaves the conductor default, ` Normal `\. ` Off ` trades crash safety for
+speed\. Ignored with a warning below 0\.7\.
+
+
+
+*Type:*
+null or one of “Full”, “Normal”, “Off”
+
+
+
+*Default:*
+
+```nix
+null
 ```
 
 *Declared by:*
@@ -609,6 +1062,34 @@ string
 
 
 
+## services\.holochain-edgenode\.relayAllowPlainText
+
+
+
+Let the iroh transport use a plain-HTTP relay, by rendering
+` network.advanced.irohTransport.relayAllowPlainText: true `\. Kitsune2
+refuses an ` http:// ` relay URL without it, so the conductor would not
+start\. Needed for a LAN ` services.holochain-bootstrap ` server without
+TLS; leave it off for an ` https:// ` relay\. Works on both lines\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
 ## services\.holochain-edgenode\.relayUrl
 
 
@@ -617,6 +1098,11 @@ Iroh relay used when a direct connection cannot be established\. Required
 by the conductor on both lines; ` null ` selects
 ` https://use1-1.relay.n0.iroh-canary.iroh.link./ `, the default both
 0\.6\.3 and 0\.7\.0 write for themselves\.
+
+For a ` services.holochain-bootstrap ` server this is
+` http(s)://<host>:<port>/relay `: the same server as ` bootstrapUrl `,
+on the ` /relay ` path\. A plain ` http:// ` relay also needs
+` relayAllowPlainText `\.
 
 
 
@@ -629,6 +1115,40 @@ null or string
 
 ```nix
 null
+```
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
+## services\.holochain-edgenode\.requestTimeoutS
+
+
+
+` network.request_timeout_s `: seconds before a request and its response
+time out\. ` null ` leaves the conductor default, 60\. Same key on both
+lines\.
+
+
+
+*Type:*
+null or (positive integer, meaning >0)
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+90
 ```
 
 *Declared by:*
@@ -706,6 +1226,33 @@ string
 
 ```nix
 "holochain"
+```
+
+*Declared by:*
+ - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+
+
+
+## services\.holochain-edgenode\.wasmBackend
+
+
+
+` wasm_backend `, from 0\.7 only: which compiler runs zomes when the
+Holochain binary was built with more than one\. The conductor refuses a
+backend it was not built with\. ` null ` uses whichever is available\.
+Ignored with a warning below 0\.7\.
+
+
+
+*Type:*
+null or one of “cranelift”, “LLVM”, “wasmi”
+
+
+
+*Default:*
+
+```nix
+null
 ```
 
 *Declared by:*
