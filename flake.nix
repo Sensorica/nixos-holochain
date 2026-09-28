@@ -1372,7 +1372,7 @@
         };
 
         devShells.default = pkgs.mkShell {
-          buildInputs = with pkgs; [nixos-rebuild colmena nil nixd alejandra];
+          buildInputs = with pkgs; [nixos-rebuild colmena nil nixd alejandra mdbook];
         };
 
         checks = {

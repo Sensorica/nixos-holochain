@@ -17,3 +17,6 @@ result-*
 # Claude Code subagents started with worktree isolation land here, outside
 # the .worktrees/ convention; never commit them.
 .claude/worktrees/
+
+# mdBook output (book.toml builds into book/)
+/book
