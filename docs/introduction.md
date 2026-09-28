@@ -22,7 +22,7 @@ These modules are that middle path. One `nixos-rebuild` brings up a conductor wi
 
 ## Where it stands
 
-The modules work and are VM-tested on Holochain 0.7.0 and 0.6.3. The open work is hardware: deploying the full five-machine fleet to real Holoports is tracked in issues [#8](https://github.com/Sensorica/nixos-holochain/issues/8) to [#12](https://github.com/Sensorica/nixos-holochain/issues/12). The project is licensed AGPL-3.0 and succeeds the archived [Sensorica/holoports-workshop](https://github.com/Sensorica/holoports-workshop).
+The modules work and are VM-tested on Holochain 0.7.0 and 0.6.3. The open work is hardware: deploying the full five-machine fleet to real Holoports is tracked in issues [#8](https://github.com/Sensorica/nixos-holochain/issues/8) to [#12](https://github.com/Sensorica/nixos-holochain/issues/12). The project is licensed [MIT](https://github.com/Sensorica/nixos-holochain/blob/main/LICENSE) and succeeds the archived [Sensorica/holoports-workshop](https://github.com/Sensorica/holoports-workshop).
 
 ## Three ways through this book
 
@@ -30,7 +30,7 @@ The modules work and are VM-tested on Holochain 0.7.0 and 0.6.3. The open work i
 
 **You run NixOS and want the modules on your own machines.** Read the [Architecture](architecture.md) for how the conductor, the installer and the observability stack fit together, then keep the [Module options](module-options.md) reference open. [Starting from a template](templates/minimal.md) gets a first node evaluating, [hApp bundles](happs.md) covers where `.happ` files come from, and [Moss always-online node](moss-node.md) runs a Moss group's headless node.
 
-**You want to change the code.** [Contributing](contributing.md) sets the rules: open an issue first, every new module ships a VM test, and the option reference is regenerated in the same commit as any option change. The [archive](archive/README.md) records the December 2025 HolOS workshop this project grew out of.
+**You want to change the code.** [Contributing](contributing.md) sets the rules: open an issue first, every new module ships a VM test, and the option reference is regenerated in the same commit as any option change. [Releasing](releasing.md) is how a version is tagged, and the [architecture decision records](adr/README.md) are the design decisions behind the code. The [archive](archive/README.md) records the December 2025 HolOS workshop this project grew out of.
 
 ## Building this book
 
