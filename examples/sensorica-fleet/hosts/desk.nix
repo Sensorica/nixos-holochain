@@ -151,6 +151,8 @@ in {
             {
               location = "bottom";
               height = 44;
+              # sensorica-holoport-01 drives two screens; the desk is on both.
+              screen = "all";
               widgets = [
                 "org.kde.plasma.kickoff"
                 {
