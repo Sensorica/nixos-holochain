@@ -74,6 +74,10 @@ in
     pname = "wdocker";
     version = mossVersion;
 
+    # The Holochain this wdocker runs, for the Moss node module's service
+    # list, which shows it next to wdocker's own version.
+    passthru = {inherit holochainVersion;};
+
     src = fetchFromGitHub {
       owner = "lightningrodlabs";
       repo = "moss";

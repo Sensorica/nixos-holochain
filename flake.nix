@@ -128,6 +128,23 @@
           # `holochain-edgenode`. Not part of `default` on purpose; see the
           # comment at the top of the module.
           sensorica-event-node = ./modules/sensorica-event-node.nix;
+
+          # A Moss always-online node as a service, with its readings and page
+          # (#28). Not part of `default`: it runs a second conductor. The
+          # wdocker package comes from this flake, as the bootstrap server's does.
+          holochain-moss-node = {
+            imports = [
+              ./modules/holochain-moss-node.nix
+              ({
+                lib,
+                pkgs,
+                ...
+              }: {
+                services.holochain-moss-node.package =
+                  lib.mkDefault self.packages.${pkgs.stdenv.hostPlatform.system}.wdocker-0_15;
+              })
+            ];
+          };
         };
 
         # The one system in the root flake: a single edgenode with no hApp, so
@@ -216,7 +233,18 @@
             system,
             lib,
             ...
-          }:
+          }: let
+            # The Moss page and the names program, checked without a VM.
+            mossChecks = import ./tests/moss.nix {
+              inherit pkgs;
+              nixos-holochain = self;
+              exporter = pkgs.callPackage ./packages/holochain-conductor-exporter.nix {
+                hc = inputs.holonix-0_6.packages.${system}.hc;
+              };
+              dashboard = ./modules/dashboards-moss/sensorica-moss-node.json;
+              namesJq = ./modules/moss-node-names.jq;
+            };
+          in
             lib.mkIf (system == "x86_64-linux") {
               # wdocker on the Moss 0.15 line, with the Holochain 0.6.1 binary it
               # expects. docs/moss-node.md runs it by hand.
@@ -283,6 +311,90 @@
                     machine.wait_until_fails(f"kill -0 {pid}", timeout=60)
                   '';
                 };
+
+              # The Moss node as a service (nixosModules.holochain-moss-node):
+              # systemd starts the daemon with no terminal, the password comes
+              # from a credential, the node survives a restart, and its
+              # readings reach node_exporter as conductor="Moss". Then the
+              # same machine with the password file gone must not reach
+              # "Daemon ready.": a daemon that starts without its password
+              # proves nothing about the credential.
+              checks.vmTestMossNode = let
+                node = password: {
+                  imports = [
+                    self.nixosModules.holochain-edgenode
+                    self.nixosModules.holochain-moss-node
+                  ];
+                  virtualisation = {
+                    cores = 4;
+                    memorySize = 4096;
+                    diskSize = 8192;
+                  };
+                  services.holochain-edgenode = {
+                    enable = true;
+                    package = inputs.holonix-0_6.packages.${system}.holochain;
+                    hcPackage = inputs.holonix-0_6.packages.${system}.hc;
+                    metricsExporter.enable = true;
+                  };
+                  services.holochain-moss-node = {
+                    enable = true;
+                    name = "vmtest";
+                    passwordFile = "/etc/moss-node-password";
+                  };
+                  # "yes": the password; "empty": an empty file; "no": none.
+                  environment.etc = lib.mkIf (password != "no") {
+                    "moss-node-password" = {
+                      text =
+                        if password == "yes"
+                        then "vmtest"
+                        else "";
+                      mode = "0400";
+                    };
+                  };
+                };
+              in
+                pkgs.testers.nixosTest {
+                  name = "moss-node-service";
+                  nodes = {
+                    machine = node "yes";
+                    nopassword = node "no";
+                    emptypassword = node "empty";
+                  };
+                  testScript = ''
+                    machine.wait_for_unit("moss-node.service")
+                    machine.wait_until_succeeds(
+                        "journalctl -u moss-node --no-pager | grep -q 'Daemon ready.'", timeout=300)
+                    user = machine.succeed("systemctl show moss-node -p User --value").strip()
+                    assert user == "moss-node", user
+                    machine.succeed("moss-node --help | grep -q 'join \"INVITE_LINK\"'")
+                    listing = machine.succeed("moss-node wdocker list")
+                    assert "vmtest" in listing and "running" in listing, listing
+
+                    machine.succeed("systemctl start moss-node-metrics.service")
+                    machine.wait_until_succeeds(
+                        "grep -q 'holochain_conductor_up{conductor=\"Moss\"} 1' /var/lib/prometheus-node-exporter-text-files/moss-node.prom",
+                        timeout=120)
+
+                    machine.succeed("systemctl restart moss-node")
+                    machine.wait_until_succeeds(
+                        "test $(journalctl -u moss-node --no-pager | grep -c 'Daemon ready.') -ge 2", timeout=300)
+
+                    nopassword.wait_for_unit("multi-user.target")
+                    nopassword.sleep(20)
+                    journal = nopassword.succeed("journalctl -u moss-node --no-pager")
+                    assert "Daemon ready." not in journal, "the daemon started without its password"
+
+                    # An empty file is refused before wdaemon sees it, so no
+                    # conductor is created with an empty password.
+                    emptypassword.wait_until_succeeds(
+                        "journalctl -u moss-node --no-pager | grep -q 'is empty; write the conductor password'", timeout=120)
+                    emptypassword.fail("ls /var/lib/moss-node/.local/share/wdocker/0.15.x/conductors/vmtest")
+                  '';
+                };
+
+              # The Moss page and the names program, without a VM (tests/moss.nix).
+              checks.moss-dashboard = mossChecks.mossDashboard;
+              checks.moss-names = mossChecks.mossNames;
             };
         }
       ];
@@ -732,11 +844,16 @@
           text = builtins.readFile ./scripts/holoport-install.sh;
         };
 
-        # The Sensorica event node exactly as examples/sensorica-fleet builds
-        # it (same modules, same host file, same 0.6 line and hApp bundles),
-        # on this flake's nixpkgs rather than the fleet's own lock. The one
-        # addition is the test driver's backdoor, which nixpkgs'
-        # installer tests also put into the system they install.
+        # The Sensorica event node as examples/sensorica-fleet builds it (same
+        # modules, same host file, same 0.6 line and hApp bundles), on this
+        # flake's nixpkgs rather than the fleet's own lock. Two additions: the
+        # test driver's backdoor, which nixpkgs' installer tests also put into
+        # the system they install, and a stand-in for the fleet's operator
+        # desk (hosts/desk.nix), whose home-manager and plasma-manager inputs
+        # this flake does not carry. The stand-in declares the two switches
+        # the host file sets and keeps the Plasma session the desk turns on
+        # for "plasma", so the installed closure still carries the desktop;
+        # the desk's launchers and panel layout are not part of the rehearsal.
         holoportTarget = inputs.nixpkgs.lib.nixosSystem {
           inherit system;
           specialArgs = {inherit inputs;};
@@ -747,7 +864,26 @@
             # The line, hApps and seed, from the same export the fleet's
             # `fleetModules` import (#33).
             self.nixosModules.sensorica-event-node
-            ./examples/sensorica-fleet/hosts/edgenode-01/configuration.nix
+            # sensorica-holoport-01 hosts the Sensorica Moss group's node.
+            self.nixosModules.holochain-moss-node
+            ({
+              config,
+              lib,
+              ...
+            }: {
+              options.sensorica = {
+                desktop = lib.mkOption {
+                  type = lib.types.enum ["plasma" "gnome" "none"];
+                  default = "plasma";
+                };
+                eventMode.enable = lib.mkEnableOption "the desk's event mode, not rehearsed here";
+              };
+              config = lib.mkIf (config.sensorica.desktop == "plasma") {
+                services.desktopManager.plasma6.enable = true;
+                services.displayManager.sddm.enable = true;
+              };
+            })
+            ./examples/sensorica-fleet/hosts/sensorica-holoport-01/configuration.nix
             "${inputs.nixpkgs}/nixos/modules/testing/test-instrumentation.nix"
           ];
         };
@@ -1259,7 +1395,7 @@
         };
 
         devShells.default = pkgs.mkShell {
-          buildInputs = with pkgs; [nixos-rebuild colmena nil nixd alejandra];
+          buildInputs = with pkgs; [nixos-rebuild colmena nil nixd alejandra mdbook];
         };
 
         checks = {
@@ -1809,7 +1945,7 @@
             inherit pkgs monitor;
             modules = {
               edgenode = edgenodeNode;
-              inherit (self.nixosModules) holochain-http-gateway holochain-bootstrap holochain-windtunnel;
+              inherit (self.nixosModules) holochain-http-gateway holochain-bootstrap holochain-windtunnel holochain-moss-node;
             };
           };
 
@@ -1982,6 +2118,8 @@
                   mv ${textfileDir}/.fixture-$name.tmp ${textfileDir}/fixture-$name.prom
                 done
               '';
+              # The Holochain this node's conductor runs, from its package.
+              holochainVersion = pkgs.lib.getVersion nodes.machine.services.holochain-edgenode.package;
               # The record names of the rule file this node runs.
               records =
                 map (rule: rule.record)
@@ -2063,7 +2201,7 @@
               machine.log("holochain_conductor_up in prometheus: " + series)
               assert '"__name__":"holochain_conductor_up"' in series, series
 
-              # ---- criterion 5: the four dashboards, the room screen at home ----
+              # ---- criterion 5: the five dashboards, "What is this machine running?" at home ----
               def grafana(path):
                   return json.loads(machine.succeed(
                       "curl -sf -u admin:${grafanaTestPassword}"
@@ -2071,31 +2209,34 @@
                   ))
 
 
-              # Exactly the four, and nothing else wearing their tag.
-              def the_four(path):
+              # Exactly the five, and nothing else wearing their tag.
+              def the_five(path):
                   uids = sorted(d["uid"] for d in grafana(path))
                   machine.log(f"{path}: " + json.dumps(uids))
-                  return uids == ["holochain-fleet", "holochain-network", "holochain-node", "holochain-now"]
+                  return uids == ["holochain-fleet", "holochain-home", "holochain-network", "holochain-node", "holochain-now"]
 
 
               tagged = sorted(d["uid"] for d in grafana("/api/search?tag=holochain"))
-              assert the_four("/api/search?tag=holochain"), tagged
+              assert the_five("/api/search?tag=holochain"), tagged
               # The same test on an answer Grafana gives with one short must fail.
-              assert not the_four("/api/search?tag=holochain&limit=3")
+              assert not the_five("/api/search?tag=holochain&limit=4")
 
-              # Grafana's home page is the room screen. Grafana answers with
-              # the dashboard itself, or with a redirect to it when the home
-              # page is a saved preference.
-              def is_room(answer):
+              # Grafana's home page is "What is this machine running?".
+              # Grafana answers with the dashboard itself, or with a redirect
+              # to it when the home page is a saved preference.
+              def is_home(answer):
                   uid = answer.get("dashboard", {}).get("uid")
                   machine.log(f"dashboard: uid {uid!r}, redirect {answer.get('redirectUri')!r}")
-                  return uid == "holochain-now" or "/d/holochain-now" in answer.get("redirectUri", "")
+                  return uid == "holochain-home" or "/d/holochain-home" in answer.get("redirectUri", "")
 
 
               home = grafana("/api/dashboards/home")
-              assert is_room(home), "the home page is not the room screen: " + json.dumps(home)[:500]
+              assert is_home(home), "the home page is not What is this machine running?: " + json.dumps(home)[:500]
               # Another dashboard, in the same shape of answer, must not pass.
-              assert not is_room(grafana("/api/dashboards/uid/holochain-fleet"))
+              assert not is_home(grafana("/api/dashboards/uid/holochain-now"))
+              # It opens on this machine, the target on loopback, named machine.
+              home_node = next(v for v in home["dashboard"]["templating"]["list"] if v["name"] == "node")["current"]
+              assert home_node.get("value") == "machine", home_node
 
               # A provisioned dashboard that Grafana cannot bind to a data
               # source renders empty panels, which a search hit would not show.
@@ -2232,9 +2373,18 @@
                   "1": ("Not answering", "red"), "2": ("No fresh readings", "orange"), "3": ("Running", "green"),
               }
               assert words(panel("holochain-fleet", "Node status over time")["fieldConfig"]["defaults"]["mappings"]) == node_words
-              # Both service tables read their states in the same words.
-              for uid, title in [("holochain-fleet", "Which services are not running?"), ("holochain-node", "Is each service on this machine running?")]:
+              # The three service tables read their states in the same words,
+              # and the home page's conductors and apps read theirs as the node
+              # page does.
+              for uid, title in [("holochain-fleet", "Which services are not running?"),
+                                 ("holochain-node", "Is each service on this machine running?"),
+                                 ("holochain-home", "Is each service running, and in which version?")]:
                   assert words(override(panel(uid, title), "State", "mappings")) == service_words, (uid, title)
+              assert words(override(panel("holochain-home", "Is each app on this machine working?"), "State", "mappings")) == app_words
+              assert words(override(panel("holochain-home", "Which Holochain conductors run here?"), "State", "mappings")) == {
+                  "1": ("Not answering", "red"), "2": ("No fresh readings", "orange"), "3": ("Running", "green"),
+              }
+              assert words(panel("holochain-home", "State")["fieldConfig"]["defaults"]["mappings"]) == node_words
 
               # ---- node names and the recording rules, over three conductors ----
               # Every target carries its node's name, and its site when it has one.
@@ -2323,6 +2473,16 @@
                   "systemd-journald.service": "6", "always-fails.service": "0",
                   "Holochain conductor (Moss)": "6", "Holochain conductor (Workshop)": "6",
               }, "service")
+
+              # Every service the machine's own modules list carries the
+              # version of the package that runs it, as a label Prometheus
+              # keeps; the readings timer has none.
+              wait_values('max by (service, version) (holochain_service_info{node="machine", version!=""})', "q-versions", {
+                  "Holochain conductor": "1", "App installer": "1", "Metrics database": "1", "Dashboards": "1",
+                  "Machine readings": "1", "Nix": "1",
+              }, "service")
+              wait_values('count(holochain_service_info{node="machine", name="holochain-conductor.service", holochain_version="${holochainVersion}", version="${holochainVersion}"})',
+                          "q-conductor-version", {"": "1"}, "none")
 
               # The Moss node's shape: the connected chat and the group in step,
               # the chat nobody else opened alone and grey, not red.
@@ -2519,8 +2679,10 @@
               # it: the problem list says so, and the room screen's readings
               # tile reads 1e9, which its mapping shows as "No readings" in red
               # (checks.dashboardWords holds the mapping). The timer
-              # stops first, or its next run would replace the file.
-              machine.succeed("systemctl stop holochain-conductor-metrics.timer")
+              # stops first, or its next run would replace the file, and so
+              # does a run the timer already started, which would otherwise
+              # finish after the write and overwrite the bad file.
+              machine.succeed("systemctl stop holochain-conductor-metrics.timer holochain-conductor-metrics.service")
               machine.succeed(
                   "echo 'not a metric line' > /var/lib/prometheus-node-exporter-text-files/holochain-conductor.prom"
               )
@@ -2847,7 +3009,7 @@
                       got = installer.succeed(f"blkid -o value -s TYPE {dev}").strip()
                       assert got == fstype, f"{dev}: type {got!r}, expected {fstype!r}"
 
-              # docs/deployment.md: edgenode-01's Grafana password file is
+              # docs/deployment.md: sensorica-holoport-01's Grafana password file is
               # written under /mnt before the first boot.
               installer.succeed(
                   "install -d -m 0700 /mnt/var/lib/secrets",
@@ -2869,7 +3031,7 @@
                   target.wait_for_unit("multi-user.target")
 
               with subtest("the installed system, not a test fixture"):
-                  assert target.succeed("hostname").strip() == "edgenode-01"
+                  assert target.succeed("hostname").strip() == "sensorica-holoport-01"
                   assert target.succeed("findmnt -no SOURCE /").strip() == "/dev/sda3"
                   assert target.succeed("readlink -f /run/booted-system").strip() == SYSTEM
                   target.succeed("test -d /boot/grub/i386-pc")

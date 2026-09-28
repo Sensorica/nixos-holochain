@@ -5,6 +5,7 @@
 **Status:** the modules work and are VM-tested. A conductor and its hApps come up at boot on both supported Holochain lines (0.7.0 and 0.6.3), a fleet's traffic is on a provisioned Grafana dashboard, and an HTTP gateway serves zome reads over HTTP. Ten NixOS VM tests run in CI. What is still open is hardware: the five-machine fleet has not been deployed to real Holoports yet (issues [#8](https://github.com/Sensorica/nixos-holochain/issues/8) to [#12](https://github.com/Sensorica/nixos-holochain/issues/12)).
 **License:** [MIT](LICENSE), the license of nixpkgs, so any module here can be reused in other flakes or proposed upstream to nixpkgs as it is. The hApps these modules run keep their own licenses (Holochain itself and Moss are CAL-1.0, hREA is Apache-2.0).
 **Origin:** Successor to the archived [Sensorica/holoports-workshop](https://github.com/Sensorica/holoports-workshop), pivoting from HolOS appliance-image deployment to vanilla NixOS authorship.
+**Documentation:** the book at [sensorica.github.io/nixos-holochain](https://sensorica.github.io/nixos-holochain/), built from `docs/` with mdBook.
 
 ---
 
@@ -117,7 +118,7 @@ nixos-holochain/
 │   └── sensorica-fleet/               # The Sensorica Lab fleet: its own flake, five hosts, ISO, colmena hive
 │       ├── flake.nix
 │       ├── hosts/common.nix           # shared host config, operator SSH keys
-│       ├── hosts/edgenode-01..05/     # configuration.nix + hardware-configuration.nix per machine
+│       ├── hosts/sensorica-holoport-01..05/     # configuration.nix + hardware-configuration.nix per machine
 │       ├── hosts/workshop-iso/        # Live ISO for participants
 │       └── README.md
 ├── happs/                             # .happ bundles (not committed, see happs/README.md)
@@ -147,7 +148,7 @@ nixos-holochain/
 | Module | What it does |
 |--------|--------------|
 | `holochain-edgenode` | Conductor with an in-process lair keystore, an idempotent hApp installer, and optional Prometheus metrics. Supports Holochain 0.7 and 0.6 from one option set. |
-| `holochain-grafana` | Prometheus and Grafana on the monitor node, with recording rules for every state and four provisioned dashboards, each titled with its reader's question: a room screen as Grafana's home page, a fleet page, a node page and an app-network page. |
+| `holochain-grafana` | Prometheus and Grafana on the monitor node, with recording rules for every state and five provisioned dashboards, each titled with its reader's question: "What is this machine running?" as Grafana's home page (each service with its state and version, each conductor with its Holochain version, each app in words), a room screen, a fleet page, a node page and an app-network page. |
 | `holochain-http-gateway` | `hc-http-gw` in front of the conductor, exposing named zome functions over HTTP. Nothing is exposed by default. |
 | `holochain-windtunnel` | Opt-in, off by default: joins the machine to the Holochain Foundation's Nomad cluster to run their Wind Tunnel scenarios. |
 | `holochain-bootstrap` | The Kitsune2 bootstrap and relay server on your own machine, so a fleet finds itself without the Foundation's test server or the internet. See [Running your own bootstrap and relay](docs/deployment.md#running-your-own-bootstrap-and-relay). |
@@ -180,7 +181,7 @@ Ten NixOS VM tests and a conductor config check, all built in CI:
 | `vmTest` / `vmTest-0_6` | A bare conductor comes up and answers `list-apps` on 0.7.0 and on 0.6.3 |
 | `vmTestWithHapp` / `vmTestWithHapp-0_6` | A hApp installs once, stays enabled, and survives a cold boot on both lines, and every one of its cells has its `holochain_dht_*` series on `/metrics` |
 | `vmTestConductorMetrics-0_6` | The conductor's gauges appear on `/metrics` on the 0.6 line |
-| `vmTestGrafana` | Conductor and per-DHT series reach Prometheus, the four dashboards are provisioned with their data source and the room screen is Grafana's home page, every panel query answers through Grafana's own query API (three are only required not to error: the two temperature panels, since a VM has no sensor, and "Same data everywhere", which needs two nodes), and the pages name a failed unit, a dead node and a stale, silent or unreadable conductor as such |
+| `vmTestGrafana` | Conductor and per-DHT series reach Prometheus, the five dashboards are provisioned with their data source and "What is this machine running?" is Grafana's home page, opening on this machine, every service its modules list carries its version, every panel query answers through Grafana's own query API (three are only required not to error: the two temperature panels, since a VM has no sensor, and "Same data everywhere", which needs two nodes), and the pages name a failed unit, a dead node and a stale, silent or unreadable conductor as such |
 | `vmTestGateway` | A zome read answers 200 with JSON through the HTTP gateway, and a function outside the allow list answers 403 |
 | `vmTestWindtunnel` | The generated container unit carries the flags the runner requires, and stays stopped when `autoStart = false` |
 | `vmTestWdocker` | The packaged Moss `wdocker` starts its pinned Holochain 0.6.1 conductor through `wdaemon` in an offline VM, downloads nothing into its `bins` directory, and `wdocker stop` ends the conductor |

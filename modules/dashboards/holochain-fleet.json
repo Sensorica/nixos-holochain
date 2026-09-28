@@ -544,6 +544,18 @@
       ],
       "transformations": [
         {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "field": "node",
+                "desc": false
+              }
+            ]
+          }
+        },
+        {
           "id": "merge",
           "options": {}
         },
@@ -859,6 +871,18 @@
       ],
       "transformations": [
         {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "field": "node",
+                "desc": false
+              }
+            ]
+          }
+        },
+        {
           "id": "filterFieldsByName",
           "options": {
             "include": {
@@ -937,6 +961,18 @@
         }
       ],
       "transformations": [
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "field": "node",
+                "desc": false
+              }
+            ]
+          }
+        },
         {
           "id": "filterFieldsByName",
           "options": {
@@ -1081,6 +1117,18 @@
         }
       ],
       "transformations": [
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "field": "node",
+                "desc": false
+              }
+            ]
+          }
+        },
         {
           "id": "groupingToMatrix",
           "options": {

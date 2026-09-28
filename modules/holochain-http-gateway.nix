@@ -225,7 +225,10 @@ in {
       }
     ];
 
-    services.holochain-services.units."holochain-http-gateway.service" = "HTTP gateway";
+    services.holochain-services.units."holochain-http-gateway.service" = {
+      name = "HTTP gateway";
+      version = lib.getVersion cfg.package;
+    };
 
     systemd.services.holochain-http-gateway = {
       description = "Holochain HTTP gateway";

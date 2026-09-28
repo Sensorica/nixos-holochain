@@ -275,9 +275,10 @@
             "uid": "holochain-prometheus"
           },
           "expr": "holochain:node_state{site=~\"$site\"}",
-          "legendFormat": "{{node}}",
           "instant": true,
-          "range": false
+          "range": false,
+          "format": "table",
+          "legendFormat": "{{node}}"
         }
       ],
       "fieldConfig": {
@@ -331,7 +332,8 @@
               }
             }
           ],
-          "noValue": "No machine is watched yet"
+          "noValue": "No machine is watched yet",
+          "displayName": "${__data.fields.node}"
         },
         "overrides": []
       },
@@ -340,8 +342,8 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
-          "values": false
+          "fields": "/^Value$/",
+          "values": true
         },
         "colorMode": "background",
         "graphMode": "none",
@@ -350,7 +352,21 @@
         "textMode": "value_and_name",
         "wideLayout": true,
         "showPercentChange": false
-      }
+      },
+      "transformations": [
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "field": "node",
+                "desc": false
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "id": 3,
@@ -381,6 +397,18 @@
         }
       ],
       "transformations": [
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "field": "node",
+                "desc": false
+              }
+            ]
+          }
+        },
         {
           "id": "groupingToMatrix",
           "options": {
@@ -523,6 +551,18 @@
         }
       ],
       "transformations": [
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "field": "node",
+                "desc": false
+              }
+            ]
+          }
+        },
         {
           "id": "groupingToMatrix",
           "options": {

@@ -36,11 +36,11 @@
   labelValue = value: builtins.replaceStrings ["\\" "\"" "\n"] ["\\\\" "\\\"" "\\n"] value;
 
   infoFile = pkgs.writeText "holochain-services.prom" (''
-      # HELP holochain_service_info A service this node runs that the Holochain dashboards watch, by the name a person reads for it (service) and, for a conductor, the conductor label its readings carry. Always 1.
+      # HELP holochain_service_info A service this node runs that the Holochain dashboards watch, by the name a person reads for it (service), the version of what it runs (version, when known), and, for a conductor, the conductor label its readings carry and the Holochain version it runs (holochain_version). Always 1.
       # TYPE holochain_service_info gauge
     ''
     + lib.concatStrings (lib.mapAttrsToList (unit: service: ''
-        holochain_service_info{${lib.optionalString (service.conductor != null) ''conductor="${labelValue service.conductor}",''}name="${labelValue unit}",service="${labelValue service.name}"} 1
+        holochain_service_info{${lib.optionalString (service.conductor != null) ''conductor="${labelValue service.conductor}",''}${lib.optionalString (service.holochainVersion != "") ''holochain_version="${labelValue service.holochainVersion}",''}name="${labelValue unit}",service="${labelValue service.name}"${lib.optionalString (service.version != "") '',version="${labelValue service.version}"''}} 1
       '')
       cfg.units));
 
@@ -100,6 +100,29 @@ in {
               `conductor="Moss"` reads "Holochain conductor (Moss)".
             '';
           };
+          version = lib.mkOption {
+            type = lib.types.str;
+            default = "";
+            example = "0.6.3";
+            description = ''
+              The version of what the unit runs, from the package the module
+              runs it from, never guessed at runtime; published as the
+              `version` label. Empty when the unit has none worth naming (a
+              readings timer, a container pulled by digest), which the home
+              page shows as a dash.
+            '';
+          };
+          holochainVersion = lib.mkOption {
+            type = lib.types.str;
+            default = "";
+            example = "0.6.1";
+            description = ''
+              For a unit that runs a Holochain conductor, the Holochain version
+              that conductor is, published as the `holochain_version` label.
+              It differs from `version` when the unit runs another program
+              that brings its own Holochain, as a Moss node does.
+            '';
+          };
         };
       }));
       default = {};
@@ -112,7 +135,9 @@ in {
       description = ''
         The systemd units this node runs that the Holochain dashboards watch,
         each with the name a person reads for it; a value is that name, or
-        `{ name; conductor; }` for a unit that runs a conductor.
+        `{ name; conductor; version; holochainVersion; }`, where `version` is
+        the version of the package the unit runs and the last two are for a
+        unit that runs a conductor.
 
         Filled from the configuration: every nixos-holochain module that is
         enabled adds the units it creates (the conductor, the app installer
@@ -121,13 +146,17 @@ in {
         relay, the Wind Tunnel runner, and on a monitor Prometheus and
         Grafana), and, on a machine where any of them is enabled, the
         services beside them that are enabled here: node_exporter, sshd,
-        Tailscale and the Nix daemon's socket. Add a unit of your own the way
-        any attribute set option merges; override a name with `lib.mkForce`
-        on that one attribute.
+        Tailscale and the Nix daemon's socket. Each module also gives the
+        version of the package it runs the unit from, so the home page can
+        say what runs, in which version, without asking the machine. Add a
+        unit of your own the way any attribute set option merges; override a
+        name with `lib.mkForce` on that one attribute.
 
         Published as `holochain_service_info` through node_exporter's textfile
-        collector when `textfileDirectory` is set. The node page's "Is each
-        service on this machine running?" lists each of them with its state,
+        collector when `textfileDirectory` is set. The home page's "Is each
+        service running, and in which version?" lists each of them with its
+        state and version, the node page's "Is each service on this machine
+        running?" with its state,
         the fleet page lists the ones that are not running, and the room
         screen's machine tile reads "A service is down" while one has failed,
         keeps failing and restarting, has stopped or does not answer. A unit
@@ -195,18 +224,39 @@ in {
   config = lib.mkMerge [
     {
       services.holochain-services.units = lib.mkIf anyEnabled (lib.mkMerge [
-        (lib.mkIf config.services.prometheus.exporters.node.enable {"prometheus-node-exporter.service" = "Machine readings";})
+        (lib.mkIf config.services.prometheus.exporters.node.enable {
+          "prometheus-node-exporter.service" = {
+            name = "Machine readings";
+            # The NixOS exporter module has no package option: it runs this.
+            version = lib.getVersion pkgs.prometheus-node-exporter;
+          };
+        })
         # With startWhenNeeded, NixOS runs sshd from a socket and defines no
         # sshd.service, only sshd.socket and one sshd@ instance per login.
-        (lib.mkIf config.services.openssh.enable (
-          if config.services.openssh.startWhenNeeded
-          then {"sshd.socket" = "Remote login";}
-          else {"sshd.service" = "Remote login";}
-        ))
-        (lib.mkIf config.services.tailscale.enable {"tailscaled.service" = "Private network (Tailscale)";})
+        (lib.mkIf config.services.openssh.enable {
+          ${
+            if config.services.openssh.startWhenNeeded
+            then "sshd.socket"
+            else "sshd.service"
+          } = {
+            name = "Remote login";
+            version = lib.getVersion config.services.openssh.package;
+          };
+        })
+        (lib.mkIf config.services.tailscale.enable {
+          "tailscaled.service" = {
+            name = "Private network (Tailscale)";
+            version = lib.getVersion config.services.tailscale.package;
+          };
+        })
         # NixOS starts nix-daemon.service on demand, so the service is inactive
         # on an idle node that is perfectly healthy; its socket is not.
-        (lib.mkIf config.nix.enable {"nix-daemon.socket" = "Nix";})
+        (lib.mkIf config.nix.enable {
+          "nix-daemon.socket" = {
+            name = "Nix";
+            version = lib.getVersion config.nix.package;
+          };
+        })
       ]);
 
       # A listed unit systemd does not run has no node_systemd_unit_state

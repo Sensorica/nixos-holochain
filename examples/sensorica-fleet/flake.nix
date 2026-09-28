@@ -1,4 +1,4 @@
-# Sensorica Lab fleet: five Holochain edgenodes (edgenode-01 is the monitor
+# Sensorica Lab fleet: five Holochain edgenodes (sensorica-holoport-01 is the monitor
 # node) plus the workshop live ISO. This is the worked example of what the
 # nixos-holochain modules are for; copy it and edit hosts/ for your own fleet.
 {
@@ -8,7 +8,7 @@
     # A checkout of this repository overrides it with
     #   --override-input nixos-holochain <path-to-checkout>
     # (that is what CI and the review commands do).
-    nixos-holochain.url = "github:Sensorica/nixos-holochain";
+    nixos-holochain.url = "github:Sensorica/nixos-holochain/lab/holoport-session";
     # The fleet pins its own nixpkgs, as any downstream fleet does; the
     # Holochain toolchain comes from the module repository.
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
@@ -18,6 +18,17 @@
     # follow too (the same way `holonix` above is needed for
     # `holochain-edgenode`'s own default package).
     holonix-0_6.follows = "nixos-holochain/holonix-0_6";
+    # The operator desk (hosts/desk.nix) declares the sensorica user's Plasma
+    # session. Only this example needs them; the modules stay desktop-free.
+    home-manager = {
+      url = "github:nix-community/home-manager/release-26.05";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    plasma-manager = {
+      url = "github:nix-community/plasma-manager";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.home-manager.follows = "home-manager";
+    };
   };
 
   outputs = inputs @ {
@@ -30,7 +41,7 @@
     inherit (nixpkgs) lib;
     pkgs = import nixpkgs {inherit system;};
 
-    hosts = ["edgenode-01" "edgenode-02" "edgenode-03" "edgenode-04" "edgenode-05"];
+    hosts = ["sensorica-holoport-01" "sensorica-holoport-02" "sensorica-holoport-03" "sensorica-holoport-04" "sensorica-holoport-05"];
 
     # Passed to every host: the modules read inputs.holonix and
     # inputs.holonix-0_6 for their packages.
@@ -54,6 +65,13 @@
       # get it, so a `colmena apply` and a `nixos-rebuild switch` install the
       # same bundles from the same conductor.
       nixos-holochain.nixosModules.sensorica-event-node
+      # Off unless a host enables it; sensorica-holoport-01 hosts the
+      # Sensorica Moss group's always-online node.
+      nixos-holochain.nixosModules.holochain-moss-node
+      # What a person at the Holoport's own screen gets: launchers, a laid-out
+      # Plasma session and the off-by-default event mode.
+      inputs.home-manager.nixosModules.home-manager
+      ./hosts/desk.nix
     ];
 
     mkEdgenode = name:
@@ -89,7 +107,7 @@
     };
 
     checks.${system} = {
-      # Guards #33: fails evaluation if edgenode-01's effective event-profile
+      # Guards #33: fails evaluation if sensorica-holoport-01's effective event-profile
       # values (package, hApp srcs, network seeds, installer timeout, the two
       # metrics enables) diverge from `nixosModules.sensorica-event-node`'s
       # own defaults, so a future override in this example that quietly
@@ -100,7 +118,7 @@
       # --no-build` (what CI and the review commands run) catches a
       # divergence without building anything.
       eventProfileParity = let
-        edge = self.nixosConfigurations.edgenode-01.config.services.holochain-edgenode;
+        edge = self.nixosConfigurations.sensorica-holoport-01.config.services.holochain-edgenode;
 
         # The module's own defaults, evaluated the way any bare consumer
         # gets them: `holochain-edgenode` plus the profile, nothing else
@@ -145,7 +163,7 @@
           assertion =
             if diffs == {}
             then "ok"
-            else throw "edgenode-01 diverges from nixosModules.sensorica-event-node on: ${toString (builtins.attrNames diffs)}";
+            else throw "sensorica-holoport-01 diverges from nixosModules.sensorica-event-node on: ${toString (builtins.attrNames diffs)}";
         } ''
           echo "$assertion" > $out
         '';

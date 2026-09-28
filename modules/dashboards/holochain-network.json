@@ -710,9 +710,10 @@
             "uid": "holochain-prometheus"
           },
           "expr": "max by (node) (holochain:dht_heard:named{dna=\"$network\", node=~\"$node\", conductor!=\"\"} unless on (instance, conductor, app_id, role, dna) (holochain:dht_state == 3))",
-          "legendFormat": "{{node}}",
           "instant": true,
-          "range": false
+          "range": false,
+          "format": "table",
+          "legendFormat": "{{node}}"
         }
       ],
       "fieldConfig": {
@@ -756,7 +757,8 @@
               }
             }
           ],
-          "noValue": "Nobody else runs this app yet"
+          "noValue": "Nobody else runs this app yet",
+          "displayName": "${__data.fields.node}"
         },
         "overrides": []
       },
@@ -774,10 +776,24 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
-          "values": false
+          "fields": "/^Value$/",
+          "values": true
         }
-      }
+      },
+      "transformations": [
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "field": "node",
+                "desc": false
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "id": 13,

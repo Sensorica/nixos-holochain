@@ -1,11 +1,13 @@
 # Shared by every fleet host. Per-machine files set the hostname, import
-# their hardware-configuration.nix and add roles (edgenode-01 adds Grafana).
-{pkgs, ...}: let
+# their hardware-configuration.nix and add roles (sensorica-holoport-01 adds Grafana).
+{lib, ...}: let
   # Pasted once, used for the sensorica account and for root below.
   operatorKeys = [
     # "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... operator@laptop"
   ];
 in {
+  imports = [./remote-access.nix];
+
   time.timeZone = "America/Montreal";
 
   # ADR-017: the Holoport is a legacy-BIOS x86_64 box, and the same tree has to
@@ -48,13 +50,41 @@ in {
   # PermitRootLogin stays at its NixOS default, prohibit-password: keys only.
   users.users.root.openssh.authorizedKeys.keys = operatorKeys;
 
-  services.desktopManager.plasma6.enable = true;
-  services.displayManager.sddm.enable = true;
+  # Every host's flake output carries its hostname, so one alias rebuilds
+  # whichever Holoport it runs on, from the checkout the install leaves in
+  # /etc/nixos-holochain (docs/deployment.md). It does not pull: that checkout
+  # carries the operator keys as a local commit, so updating it stays a
+  # separate, deliberate `git -C /etc/nixos-holochain pull --rebase`.
+  environment.shellAliases.rebuild = "sudo nixos-rebuild switch --flake /etc/nixos-holochain/examples/sensorica-fleet";
 
-  environment.systemPackages = with pkgs; [git kdePackages.kate kdePackages.konsole firefox];
+  # The checkout belongs to root and the wheel group, so an operator logged in
+  # as sensorica can edit it from the desk (Kate, Dolphin) while `rebuild`
+  # still runs as root. setgid keeps new files in the group; git is told the
+  # directory is safe for every user and to keep its objects group-writable.
+  systemd.tmpfiles.rules = ["d /etc/nixos-holochain 2775 root wheel - -"];
+  programs.git = {
+    enable = true;
+    config.safe.directory = "/etc/nixos-holochain";
+  };
+
+  # A Holoport is a server: it never sleeps, whoever is logged in or not.
+  # Plasma's power management suspended sensorica-holoport-01 from the login
+  # screen on 2026-09-27, taking the conductors and the dashboards with it.
+  # With the sleep targets gone, no desktop, logind idle action or key can
+  # suspend or hibernate it.
+  systemd.targets = {
+    sleep.enable = false;
+    suspend.enable = false;
+    hibernate.enable = false;
+    hybrid-sleep.enable = false;
+  };
+
+  # The screen, keyboard and desktop are desk.nix's: `sensorica.desktop`
+  # picks KDE Plasma (the default), GNOME or none, per host.
 
   services.holochain-edgenode = {
-    enable = true;
+    # On by default; each host's switches block can turn it off.
+    enable = lib.mkDefault true;
     openFirewall = true;
 
     # Package, hApps, network seed, installer timeout and the two metrics
