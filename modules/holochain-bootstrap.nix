@@ -33,7 +33,29 @@
     ++ lib.optionals tls ["--tls-cert" "%d/tls-cert" "--tls-key" "%d/tls-key"]
     ++ lib.optionals (cfg.workerThreads != null) ["--worker-thread-count" (toString cfg.workerThreads)]
     ++ cfg.extraArgs;
+
+  # Where the health check reaches the server: the first address it listens
+  # on, or the loopback for a wildcard (`[::]` is dual-stack on Linux, so
+  # 127.0.0.1 reaches it too). Over HTTPS the certificate names the host, not
+  # this address, so the check accepts any certificate.
+  # An empty list is refused by an assertion, which must get to say so.
+  firstAddress =
+    if cfg.listenAddresses == []
+    then "[::]"
+    else builtins.head cfg.listenAddresses;
+  healthHost =
+    if builtins.elem firstAddress ["[::]" "0.0.0.0"]
+    then "127.0.0.1"
+    else firstAddress;
+  scheme =
+    if tls
+    then "https"
+    else "http";
+  healthUrl = "${scheme}://${healthHost}:${toString cfg.port}/health";
 in {
+  # The services this node runs, by name, for the dashboards.
+  imports = [./holochain-services.nix];
+
   options.services.holochain-bootstrap = {
     enable = lib.mkEnableOption ''
       the Kitsune2 bootstrap and relay server (`kitsune2-bootstrap-srv`).
@@ -186,6 +208,17 @@ in {
         message = "services.holochain-bootstrap.listenAddresses must name at least one address.";
       }
     ];
+
+    # Listed among the node's services, with a health reading: the 0.4.1
+    # server can stay active while it listens on nothing (see
+    # listenAddresses), so the unit's state alone would not show it.
+    services.holochain-services = {
+      units."holochain-bootstrap.service" = "Local bootstrap and relay";
+      healthChecks."holochain-bootstrap.service" = {
+        url = healthUrl;
+        insecure = tls;
+      };
+    };
 
     systemd.services.holochain-bootstrap = {
       description = "Kitsune2 bootstrap and relay server";

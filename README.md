@@ -100,6 +100,8 @@ nixos-holochain/
 ├── modules/
 │   ├── holochain-edgenode.nix         # Core: conductor + lair + hApp installer + metrics
 │   ├── conductor-metrics.jq           # dump-network-stats → Prometheus text
+│   ├── conductor-counters.jq          # running byte and message totals across closed connections
+│   ├── dht-metrics.jq                 # list-apps + dump-network-metrics → per-DHT Prometheus text
 │   ├── holochain-grafana.nix          # Prometheus + Grafana for a fleet
 │   ├── dashboards/                    # Provisioned Grafana dashboards
 │   ├── holochain-windtunnel.nix       # Opt-in: donate the machine to the Foundation's Nomad cluster
@@ -133,6 +135,7 @@ nixos-holochain/
     ├── deployment.md
     ├── moss-node.md                   # running the packaged Moss node by hand
     ├── releasing.md                   # How a maintainer cuts a release candidate and a release
+    ├── adr/                           # architecture decision records, one per file
     ├── images/                        # dashboard screenshots
     └── archive/                       # December 2025 HolOS workshop notes
 ```
@@ -144,7 +147,7 @@ nixos-holochain/
 | Module | What it does |
 |--------|--------------|
 | `holochain-edgenode` | Conductor with an in-process lair keystore, an idempotent hApp installer, and optional Prometheus metrics. Supports Holochain 0.7 and 0.6 from one option set. |
-| `holochain-grafana` | Prometheus and Grafana on the monitor node, with the "Holochain Fleet" dashboard and its data source provisioned. |
+| `holochain-grafana` | Prometheus and Grafana on the monitor node, with recording rules for every state and four provisioned dashboards, each titled with its reader's question: a room screen as Grafana's home page, a fleet page, a node page and an app-network page. |
 | `holochain-http-gateway` | `hc-http-gw` in front of the conductor, exposing named zome functions over HTTP. Nothing is exposed by default. |
 | `holochain-windtunnel` | Opt-in, off by default: joins the machine to the Holochain Foundation's Nomad cluster to run their Wind Tunnel scenarios. |
 | `holochain-bootstrap` | The Kitsune2 bootstrap and relay server on your own machine, so a fleet finds itself without the Foundation's test server or the internet. See [Running your own bootstrap and relay](docs/deployment.md#running-your-own-bootstrap-and-relay). |
@@ -175,9 +178,9 @@ Ten NixOS VM tests and a conductor config check, all built in CI:
 | Check | What it proves |
 |---|---|
 | `vmTest` / `vmTest-0_6` | A bare conductor comes up and answers `list-apps` on 0.7.0 and on 0.6.3 |
-| `vmTestWithHapp` / `vmTestWithHapp-0_6` | A hApp installs once, stays enabled, and survives a cold boot on both lines |
+| `vmTestWithHapp` / `vmTestWithHapp-0_6` | A hApp installs once, stays enabled, and survives a cold boot on both lines, and every one of its cells has its `holochain_dht_*` series on `/metrics` |
 | `vmTestConductorMetrics-0_6` | The conductor's gauges appear on `/metrics` on the 0.6 line |
-| `vmTestGrafana` | Conductor series reach Prometheus and the dashboard is provisioned with its data source |
+| `vmTestGrafana` | Conductor and per-DHT series reach Prometheus, the four dashboards are provisioned with their data source and the room screen is Grafana's home page, every panel query answers through Grafana's own query API (three are only required not to error: the two temperature panels, since a VM has no sensor, and "Same data everywhere", which needs two nodes), and the pages name a failed unit, a dead node and a stale, silent or unreadable conductor as such |
 | `vmTestGateway` | A zome read answers 200 with JSON through the HTTP gateway, and a function outside the allow list answers 403 |
 | `vmTestWindtunnel` | The generated container unit carries the flags the runner requires, and stays stopped when `autoStart = false` |
 | `vmTestWdocker` | The packaged Moss `wdocker` starts its pinned Holochain 0.6.1 conductor through `wdaemon` in an offline VM, downloads nothing into its `bins` directory, and `wdocker stop` ends the conductor |
