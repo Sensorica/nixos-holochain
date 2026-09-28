@@ -213,7 +213,10 @@ in {
     # server can stay active while it listens on nothing (see
     # listenAddresses), so the unit's state alone would not show it.
     services.holochain-services = {
-      units."holochain-bootstrap.service" = "Local bootstrap and relay";
+      units."holochain-bootstrap.service" = {
+        name = "Local bootstrap and relay";
+        version = lib.getVersion cfg.package;
+      };
       healthChecks."holochain-bootstrap.service" = {
         url = healthUrl;
         insecure = tls;

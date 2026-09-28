@@ -721,6 +721,8 @@ in {
         # Restart counts, so a service that keeps failing and restarting
         # reads Failed rather than Starting.
         "--collector.systemd.enable-restarts-metrics"
+        # When each unit last started, for the home page's services table.
+        "--collector.systemd.enable-start-time-metrics"
       ];
     };
 
@@ -729,8 +731,14 @@ in {
     # the flags.
     services.holochain-services = {
       units = {
-        "prometheus.service" = "Metrics database";
-        "grafana.service" = "Dashboards";
+        "prometheus.service" = {
+          name = "Metrics database";
+          version = lib.getVersion config.services.prometheus.package;
+        };
+        "grafana.service" = {
+          name = "Dashboards";
+          version = lib.getVersion config.services.grafana.package;
+        };
       };
       textfileDirectory = lib.mkDefault defaultTextfileDirectory;
     };
