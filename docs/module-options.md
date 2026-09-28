@@ -1520,10 +1520,13 @@ string
 
 Directory of Grafana dashboard JSON files to provision\. Everything in
 it is loaded at startup and re-read every 30 seconds\. The module ships
-four, each titled with the question it answers and all tagged
-` holochain `: ` holochain-now ` (“Is the Holochain network working?”),
-the room screen and Grafana’s home page; ` holochain-fleet ` (“Which
-Holochain node needs attention?”), for whoever runs the fleet;
+five, each titled with the question it answers and all tagged
+` holochain `: ` holochain-home ` (“What is this machine running?”),
+Grafana’s home page, with each service’s state and version, each
+conductor’s Holochain version and each app’s state; ` holochain-now `
+(“Is the Holochain network working?”), the room screen;
+` holochain-fleet ` (“Which Holochain node needs attention?”), for
+whoever runs the fleet;
 ` holochain-node ` (“Is this node working, app by app?”), one machine;
 and ` holochain-network ` (“Is this app in step on every node?”), one
 app network across every machine\. They read the recording rules of
@@ -1532,9 +1535,12 @@ holochain-rules\.nix, so they agree on every state\.
 For a directory in the Nix store, the module sets Grafana’s home page
 (` services.grafana.settings.dashboards.default_home_dashboard_path `,
 at default priority, so a definition of your own wins): its
-` holochain-now.json ` when it has one, otherwise a copy of Grafana’s
-own home page\. The choice is made while building, so a directory
-inside a package is not built during evaluation\.
+` holochain-home.json ` when it has one, with its ` node ` variable
+defaulting to this machine (the name of the scrape target on a
+loopback address, else ` networking.hostName `), else its
+` holochain-now.json `, otherwise a copy of Grafana’s own home page\.
+The choice is made while building, so a directory inside a package is
+not built during evaluation\.
 
 A directory in the Nix store (a path in your flake, or a directory
 inside a flake input or package such as ` "${inputs.x}/dashboards" `)
