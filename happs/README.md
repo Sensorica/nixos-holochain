@@ -41,9 +41,6 @@ Neither test is conditional. An earlier version of `vmTestWithHapp` was gated on
 
 ## Workshop bundles
 
-| Bundle | Source | Purpose |
-|---|---|---|
-| Wind Tunnel | [holochain/wind-tunnel](https://github.com/holochain/wind-tunnel) | Observable traffic for the Grafana moment (slice 3) |
-| Moss | [lightningrodlabs/moss](https://github.com/lightningrodlabs/moss) | Participants join the group from their own laptop after the workshop |
+The Sensorica workshop fleet runs hREA, Kando and Requests & Offers on the 0.6 line (ADR-015), fetched by hash in `modules/sensorica-happs.nix` and installed by the `sensorica-event-node` profile. Versions and bundles are listed once, in the Sensorica fleet README (`examples/sensorica-fleet/README.md`, "Holochain line and hApps"). Participants join the Sensorica Moss group from their own laptop with [Moss](https://github.com/lightningrodlabs/moss), and the group's always-online node runs on the monitor Holoport (`holochain-moss-node`). Wind Tunnel is not a workshop bundle: the `holochain-windtunnel` module lends a machine to the Foundation's test cluster and feeds nothing to Grafana.
 
 Check each project's releases for a bundle built against the Holochain line the fleet runs. As of this writing Wind Tunnel, hREA, Requests & Offers and Nondominium all still publish 0.6.x bundles; only Moss 0.16-dev targets 0.7.

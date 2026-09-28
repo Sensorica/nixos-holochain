@@ -73,7 +73,7 @@ sync
 
 ## Monitoring
 
-`node-01` serves Grafana on `:3000` with the "Holochain Fleet" dashboard provisioned, scraping every node's `node_exporter` and the conductor metrics timer. It logs in as `admin` with the password in `/var/lib/secrets/grafana-admin-password`, which you create on the node before the first deploy (root-owned, mode 0400; systemd hands it to Grafana); `services.holochain-grafana.adminPasswordFile` in the option reference gives the commands. The module's `adminPassword` default is a lab convenience and lands world-readable in the Nix store, so it is not used here.
+`node-01` serves Grafana on `:3000` with the five Holochain dashboards provisioned, "What is this machine running?" as its home page, scraping every node's `node_exporter` and the conductor metrics timer. It logs in as `admin` with the password in `/var/lib/secrets/grafana-admin-password`, which you create on the node before the first deploy (root-owned, mode 0400; systemd hands it to Grafana); `services.holochain-grafana.adminPasswordFile` in the option reference gives the commands. The module's `adminPassword` default is a lab convenience and lands world-readable in the Nix store, so it is not used here.
 
 ## Option reference
 

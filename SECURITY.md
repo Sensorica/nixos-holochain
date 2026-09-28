@@ -20,7 +20,7 @@ Please do not open a public issue, pull request or discussion for a vulnerabilit
 
 A useful report says:
 
-- which module and which options are involved (`services.holochain-edgenode`, `services.holochain-grafana`, `services.holochain-http-gateway` or `services.holochain-windtunnel`),
+- which module and which options are involved (`services.holochain-edgenode`, `services.holochain-grafana`, `services.holochain-http-gateway`, `services.holochain-windtunnel`, `services.holochain-bootstrap` or `services.holochain-moss-node`),
 - the nixos-holochain commit your flake is locked to (`nix flake metadata` lists it under Inputs),
 - what an attacker can do, from where, and what they need first,
 - the steps or configuration that reproduce it.

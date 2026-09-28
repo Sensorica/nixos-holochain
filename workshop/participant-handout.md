@@ -1,6 +1,6 @@
 # Participant Handout — Holochain Edgenode Workshop
 
-**Sensorica Lab, August 2026**
+**Sensorica Lab, 2026**
 
 ---
 
@@ -10,7 +10,7 @@ By the end of this session you will have:
 
 - A working Holochain edgenode running on a real machine, declared entirely in a single Nix file
 - Deployed that node into a 5-machine fleet using a single command
-- Watched live P2P traffic between all nodes using Wind Tunnel + Grafana
+- Watched live P2P traffic between all nodes on Grafana
 - Rolled back a configuration change in under 10 seconds
 
 ---
@@ -25,7 +25,7 @@ sudo nixos-rebuild switch --flake .#sensorica-holoport-0X
 systemctl status holochain-conductor
         ↓
 # if something breaks:
-sudo nixos-rebuild --rollback
+sudo nixos-rebuild switch --rollback
 ```
 
 That is the whole practice. Everything else is understanding what lives in `configuration.nix`.
@@ -50,7 +50,7 @@ nixos-holochain/
 | Command | What it does |
 |---------|-------------|
 | `nixos-rebuild switch --flake .#sensorica-holoport-01` | Rebuild and switch to new config |
-| `nixos-rebuild --rollback` | Roll back to previous generation |
+| `nixos-rebuild switch --rollback` | Roll back to previous generation |
 | `systemctl status holochain-conductor` | Check conductor health |
 | `journalctl -u holochain-conductor -f` | Follow conductor logs |
 | `nix repl --file '<nixpkgs>'` | Explore available options interactively |

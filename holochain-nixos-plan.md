@@ -1,5 +1,7 @@
 # holochain-nixos
 
+> **Superseded:** this is the May 2026 plan the repository started from, kept as a record. Where it differs from the tree, the tree wins: the project is `nixos-holochain`, licensed MIT, `modules/pai.nix` was removed, the fleet lives in `examples/sensorica-fleet/`, and the current state is in [README.md](README.md) and the [book](https://sensorica.github.io/nixos-holochain/).
+
 > A declarative substrate for running Holochain edgenodes, hApps, and developer environments. Built at Sensorica, intended for the Holochain community.
 
 **Status:** Pre-alpha. Workshop substrate under construction.

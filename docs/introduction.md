@@ -12,7 +12,7 @@ These modules are that middle path. One `nixos-rebuild` brings up a conductor wi
 
 ## What is in the repository
 
-- **Five NixOS modules.** `holochain-edgenode` is the core: conductor, in-process lair keystore, an idempotent hApp installer and optional metrics, on both the 0.7 and the 0.6 Holochain lines from one option set. `holochain-grafana` adds Prometheus and Grafana for a fleet, `holochain-http-gateway` serves chosen zome functions over HTTP, `holochain-bootstrap` runs your own bootstrap and relay server, and `holochain-windtunnel` lends a machine to the Holochain Foundation's test cluster, off by default.
+- **Seven NixOS modules.** `holochain-edgenode` is the core: conductor, in-process lair keystore, an idempotent hApp installer and optional metrics, on both the 0.7 and the 0.6 Holochain lines from one option set. `holochain-grafana` adds Prometheus and Grafana for a fleet, `holochain-http-gateway` serves chosen zome functions over HTTP, `holochain-bootstrap` runs your own bootstrap and relay server, and `holochain-windtunnel` lends a machine to the Holochain Foundation's test cluster, off by default. `holochain-moss-node` runs a Moss group's always-online node beside the edgenode, and `sensorica-event-node` is the Sensorica workshop's profile (Holochain line, hApps and network seed) layered on it.
 
 - **Two flake templates.** `nix flake init -t github:Sensorica/nixos-holochain#minimal` writes one edgenode; `#fleet` writes five nodes with Grafana, a Colmena hive and a live ISO.
 

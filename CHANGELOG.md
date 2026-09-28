@@ -8,7 +8,7 @@ Every tag has its own section, release candidates included, and the release work
 
 ## [Unreleased]
 
-Nothing has been released yet. This section records what `main` holds after the September 2026 stack (#13, #16 to #21, #23), compared with the May 2026 tree (`aa7a5a8`) that anyone following `main` before it had.
+Nothing has been released yet. This section records what `main` holds after the pull requests merged in September 2026 (#13 to #68), compared with the May 2026 tree (`aa7a5a8`) that anyone following `main` before them had.
 
 ### Breaking
 
@@ -38,6 +38,18 @@ Nothing has been released yet. This section records what `main` holds after the 
 - New checks built in CI: the NixOS VM tests `vmTest-0_6`, `vmTestWithHapp-0_6` (#16), `vmTestConductorMetrics-0_6`, `vmTestWindtunnel` (#17) and `vmTestGateway` (#18), and `conductorMetricsJq` (#21).
 - The example fleet runs Holochain 0.6.3 with hREA happ-0.4.0-beta, Kando v0.17.5 and Requests & Offers v0.5.2, fetched by hash. The hardware stubs of the example and of the `fleet` template carry the HoloPort disk layout (GPT with a `bios_grub` partition and an ESP, GRUB for both firmwares). (#19, #21)
 - `CONTRIBUTING.md`, with the VM-test and option-reference rules. (#18)
+- `services.holochain-edgenode.binaryCache.enable`, on by default: a host importing the module gets the Holochain Foundation cache (`holochain-ci.cachix.org`) and its key in `nix.settings`, so `holochain` and `hc` download prebuilt after the first switch. (#34)
+- Per-DHT series from `dump-network-metrics --include-dht-summary`: `holochain_dht_*`, one set per cell, labelled `conductor`, `app_id`, `role` and `dna`, and named for dashboards by `holochain_dht_info` and `holochain_app_info`, from the new `happs.<id>.displayName` and `roleNames`. (#47, #63)
+- `packages.<system>.holochain-conductor-exporter` and `holochain-conductor-exporter-0_6`, the one program that writes `holochain_*` series for any conductor on a machine. Every series carries a `conductor` label, from the new `conductorMetrics.name` (default `"Holochain"`). (#63)
+- `holochain-grafana`: recording rules that compute every state once (`modules/holochain-rules.nix`), with their thresholds in `states`; `scrapeTargets` as an attribute set keyed by node name, with an optional `site` (a list still works); `overviewUnits` with the name a person reads for each unit; and `room`. (#35, #64)
+- Five dashboards, each titled with its reader's question and all tagged `holochain`: `holochain-home` ("What is this machine running?", Grafana's home page, opening on the machine Grafana runs on), `holochain-now`, `holochain-fleet` (now "Which Holochain node needs attention?"), `holochain-node` and `holochain-network`. (#35, #65, #67)
+- `services.holochain-services`: every module lists the units it installs, by name and with the version it runs, and the dashboards show each one's state; a timer reads the bootstrap server's `/health`. (#66, #67)
+- `nixosModules.holochain-bootstrap`, the Kitsune2 bootstrap and relay server as a service, with `packages.<system>.bootstrap-srv` and `bootstrap-srv-0_6`. The edgenode gains `relayAllowPlainText`, `requestTimeoutS`, `dbSyncLevel` and `wasmBackend`. (#62)
+- `nixosModules.sensorica-event-node`, the Sensorica workshop profile: Holochain 0.6.3 with hREA, Kando and Requests & Offers on one network seed. Not part of `nixosModules.default`. (#59)
+- `packages.x86_64-linux.wdocker-0_15`, Moss `wdocker` from tag v0.15.8 with the Holochain 0.6.1 it pins (#60), and `nixosModules.holochain-moss-node`, a Moss group's always-online node as a service, with its readings and its Grafana page (#67). Not part of `nixosModules.default`.
+- `packages.x86_64-linux.holoport-install`, which erases one disk, lays it out as ADR-017 says and installs a system that boots on legacy BIOS and on UEFI. (#61)
+- More checks built in CI: the VM tests `vmTestWdocker` (#60), `vmTestHoloportInstall` (#61), `vmTestBootstrap` (#62), `vmTestServices` and `vmTestServices-noBootstrap` (#66) and `vmTestMossNode` (#67); without a VM, `edgenodeBinaryCache` (#34), `dhtMetricsJq` (#47), `edgenodeConfigRender` (#62), `metricsHelpAgreement`, `metricsNameShape` and `edgenodeNamesWiring` (#63), `holochainRules` and `grafanaProvisioning` (#64), `dashboardLabels`, `dashboardWords` and `dashboardQueries` (#65), `moss-dashboard` and `moss-names` (#67).
+- The MIT `LICENSE` (#36); `SECURITY.md`, issue forms and a pull request template (#48); this changelog and a tag-driven release workflow (#49); the design record in `docs/adr/` (#51); and the documentation book, built from `docs/` and published at <https://sensorica.github.io/nixos-holochain/> (#67).
 
 ### Changed
 
@@ -47,11 +59,15 @@ Nothing has been released yet. This section records what `main` holds after the 
 - The boot loader moved out of the placeholder `hardware-configuration.nix` files into `configuration.nix` and `hosts/common.nix`, so replacing a stub with `nixos-generate-config` output keeps it. `#minimal` targets a stock UEFI install with systemd-boot. (#21)
 - The fleet template and the example put one `operatorKeys` list on the operator account and on root, so Colmena can log in. (#21)
 - The example fleet's lock follows `main` after the stack instead of the May tree. (#23)
+- The `holochain_conductor_*_total` counters are running totals across closed connections instead of sums over the connections open at that moment, and the metrics timer also calls `list-apps` and `dump-network-metrics`. (#35, #47)
+- `nixosModules.default` also imports `holochain-bootstrap`, which is off until enabled. (#62)
+- The example fleet's hosts are `sensorica-holoport-01` to `sensorica-holoport-05`, take their Holochain line and hApps from `sensorica-event-node`, and gain an operator desk, per-host switches and the Moss node on `sensorica-holoport-01`. Its `nixos-holochain` input follows `main`. (#59, #67, #68)
 
 ### Fixed
 
 - The hApp installer treats a failed `list-apps` while the conductor compiles wasm as "not yet" instead of ending the unit, and no fixed start timeout caps `installerTimeout`. (#16, #21)
 - The metrics jq sums `blocked_message_counts` at any depth; it used to write a JSON object into the textfile, which made node_exporter drop every `holochain_*` series. (#21)
 - The gateway's `--address` is shell-escaped. (#21)
+- The metrics timer no longer hands the whole `list-apps` reply to jq as one argument, which Linux caps at 128 KiB: a large reply stopped the script before it wrote anything. (#47)
 
 [Unreleased]: https://github.com/Sensorica/nixos-holochain/commits/main

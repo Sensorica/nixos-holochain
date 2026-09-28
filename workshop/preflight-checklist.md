@@ -29,7 +29,7 @@ You do not need to know Nix before the workshop. We will walk through the flake 
 - [ ] Flash 5 USB keys with the workshop ISO
 - [ ] Test ISO boots on at least one Holoport / NUC
 - [ ] Verify `colmena apply` reaches all 5 nodes over the local network
-- [ ] Confirm `windtunnel.happ` and `moss.happ` are in `happs/` and the hApp installer service starts cleanly
+- [ ] Confirm the hApp installer enabled hREA, Kando and Requests & Offers on every node (`journalctl -u holochain-happ-installer | grep 'Enabled app'`); the bundles are fetched by hash, nothing goes in `happs/`
 - [ ] Bring a dedicated router (tested) — do not rely on Sensorica lab wifi alone
 - [ ] Print or share the participant handout
 - [ ] Have Grafana dashboard URL ready on a shared screen
