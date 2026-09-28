@@ -72,4 +72,4 @@ Update `docs/` in the same PR as the behaviour it describes. `README.md` has a r
 
 ## Licence
 
-By contributing you agree that your work is licensed under AGPL-3.0, the same as the rest of the repository.
+By contributing you agree that your work is licensed under the [MIT License](LICENSE), the same as the rest of the repository and as nixpkgs.
