@@ -844,11 +844,16 @@
           text = builtins.readFile ./scripts/holoport-install.sh;
         };
 
-        # The Sensorica event node exactly as examples/sensorica-fleet builds
-        # it (same modules, same host file, same 0.6 line and hApp bundles),
-        # on this flake's nixpkgs rather than the fleet's own lock. The one
-        # addition is the test driver's backdoor, which nixpkgs'
-        # installer tests also put into the system they install.
+        # The Sensorica event node as examples/sensorica-fleet builds it (same
+        # modules, same host file, same 0.6 line and hApp bundles), on this
+        # flake's nixpkgs rather than the fleet's own lock. Two additions: the
+        # test driver's backdoor, which nixpkgs' installer tests also put into
+        # the system they install, and a stand-in for the fleet's operator
+        # desk (hosts/desk.nix), whose home-manager and plasma-manager inputs
+        # this flake does not carry. The stand-in declares the two switches
+        # the host file sets and keeps the Plasma session the desk turns on
+        # for "plasma", so the installed closure still carries the desktop;
+        # the desk's launchers and panel layout are not part of the rehearsal.
         holoportTarget = inputs.nixpkgs.lib.nixosSystem {
           inherit system;
           specialArgs = {inherit inputs;};
@@ -859,6 +864,25 @@
             # The line, hApps and seed, from the same export the fleet's
             # `fleetModules` import (#33).
             self.nixosModules.sensorica-event-node
+            # sensorica-holoport-01 hosts the Sensorica Moss group's node.
+            self.nixosModules.holochain-moss-node
+            ({
+              config,
+              lib,
+              ...
+            }: {
+              options.sensorica = {
+                desktop = lib.mkOption {
+                  type = lib.types.enum ["plasma" "gnome" "none"];
+                  default = "plasma";
+                };
+                eventMode.enable = lib.mkEnableOption "the desk's event mode, not rehearsed here";
+              };
+              config = lib.mkIf (config.sensorica.desktop == "plasma") {
+                services.desktopManager.plasma6.enable = true;
+                services.displayManager.sddm.enable = true;
+              };
+            })
             ./examples/sensorica-fleet/hosts/sensorica-holoport-01/configuration.nix
             "${inputs.nixpkgs}/nixos/modules/testing/test-instrumentation.nix"
           ];
