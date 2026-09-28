@@ -233,19 +233,18 @@
             system,
             lib,
             ...
-          }:
-            let
-              # The Moss page and the names program, checked without a VM.
-              mossChecks = import ./tests/moss.nix {
-                inherit pkgs;
-                nixos-holochain = self;
-                exporter = pkgs.callPackage ./packages/holochain-conductor-exporter.nix {
-                  hc = inputs.holonix-0_6.packages.${system}.hc;
-                };
-                dashboard = ./modules/dashboards-moss/sensorica-moss-node.json;
-                namesJq = ./modules/moss-node-names.jq;
+          }: let
+            # The Moss page and the names program, checked without a VM.
+            mossChecks = import ./tests/moss.nix {
+              inherit pkgs;
+              nixos-holochain = self;
+              exporter = pkgs.callPackage ./packages/holochain-conductor-exporter.nix {
+                hc = inputs.holonix-0_6.packages.${system}.hc;
               };
-            in
+              dashboard = ./modules/dashboards-moss/sensorica-moss-node.json;
+              namesJq = ./modules/moss-node-names.jq;
+            };
+          in
             lib.mkIf (system == "x86_64-linux") {
               # wdocker on the Moss 0.15 line, with the Holochain 0.6.1 binary it
               # expects. docs/moss-node.md runs it by hand.
