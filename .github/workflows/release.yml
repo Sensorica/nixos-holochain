@@ -1,0 +1,111 @@
+name: Release
+
+# A pushed tag vX.Y.Z or vX.Y.Z-rc.N becomes a GitHub release, and nothing
+# else does. The tag first has to carry a CHANGELOG.md section of its own, then
+# pass every CI job (ci.yml, called as is), and only then is the release
+# created, with that section as its text. There is nothing to build or upload:
+# consumers pin the tag itself, github:Sensorica/nixos-holochain/vX.Y.Z.
+#
+# workflow_dispatch is a rehearsal: it resolves a tag name, prints the notes
+# the release would carry and runs CI on the chosen branch, and publishes
+# nothing. How to cut a release: docs/releasing.md.
+on:
+  push:
+    tags:
+      - "v*.*.*"
+      - "v*.*.*-rc.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to rehearse, for example v0.1.0-rc.1 (nothing is published)"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  notes:
+    name: tag and release notes
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      version: ${{ steps.tag.outputs.version }}
+      prerelease: ${{ steps.tag.outputs.prerelease }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # The trigger's globs are wider than the policy (v*.*.* also matches
+      # v1.2.3-beta), so the exact shape is enforced here, before CI spends
+      # half an hour on a tag that would never be released.
+      - name: Resolve the tag
+        id: tag
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          if ! printf '%s\n' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$'; then
+            echo "::error::tag '$TAG' is neither vX.Y.Z nor vX.Y.Z-rc.N"
+            exit 1
+          fi
+          version=${TAG#v}
+          # A hyphen is the SemVer prerelease marker. A candidate is marked a
+          # GitHub prerelease, so it never becomes the repository's latest release.
+          case "$version" in
+            *-*) prerelease=true ;;
+            *) prerelease=false ;;
+          esac
+          {
+            echo "tag=$TAG"
+            echo "version=$version"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
+          echo "Resolved: tag=$TAG version=$version prerelease=$prerelease"
+
+      # Fails when CHANGELOG.md has no "## [X.Y.Z]" section with content, so a
+      # tag pushed before its section was written stops here, not after CI.
+      - name: Release notes from CHANGELOG.md
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          sh scripts/changelog-section.sh "$VERSION" > release-notes.md
+          cat release-notes.md
+          {
+            echo "## Release notes for v$VERSION"
+            echo
+            cat release-notes.md
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  checks:
+    name: checks
+    needs: notes
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
+  publish:
+    name: publish the GitHub release
+    needs: [notes, checks]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # --verify-tag refuses to create the tag if it does not exist, so the
+      # release always points at the commit that was pushed and checked.
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.notes.outputs.tag }}
+          VERSION: ${{ needs.notes.outputs.version }}
+          PRERELEASE: ${{ needs.notes.outputs.prerelease }}
+        run: |
+          sh scripts/changelog-section.sh "$VERSION" > release-notes.md
+          set -- --verify-tag --title "$TAG" --notes-file release-notes.md
+          if [ "$PRERELEASE" = true ]; then
+            set -- "$@" --prerelease
+          fi
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" "$@"
