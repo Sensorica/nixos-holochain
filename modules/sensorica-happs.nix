@@ -1,12 +1,15 @@
-# The hApps the Sensorica fleet runs in September (ADR-015).
+# The hApps the Sensorica workshop event profile runs (ADR-015). Used by
+# ./sensorica-event-node.nix, which is what examples/sensorica-fleet and any
+# external host rehearsing the same event build from (#33): moved here from
+# examples/sensorica-fleet/happs.nix so the bundle set is defined once.
 #
 # Nothing binary enters git (ADR-012): every bundle is fetched by hash at build
 # time. Each `sha256` is `nix-prefetch-url` cross-checked against `sha256sum` of
 # the resulting store path, and each URL was confirmed to answer 200 on
 # 2026-08-28.
 #
-# All three are 0.6-line bundles, which is why the fleet pins Holochain 0.6.3:
-# neither hREA, Kando nor Requests & Offers has published a 0.7 release.
+# All three are 0.6-line bundles, which is why the profile pins Holochain
+# 0.6.3: neither hREA, Kando nor Requests & Offers has published a 0.7 release.
 {
   pkgs,
   hc,

@@ -396,6 +396,10 @@
           "nixos-holochain",
           "holonix"
         ],
+        "holonix-0_6": [
+          "nixos-holochain",
+          "holonix-0_6"
+        ],
         "nixos-holochain": "nixos-holochain",
         "nixpkgs": "nixpkgs_4"
       }
