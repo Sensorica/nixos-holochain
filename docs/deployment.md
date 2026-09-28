@@ -103,7 +103,13 @@ nano examples/sensorica-fleet/hosts/common.nix
 nix --extra-experimental-features 'nix-command flakes' run --accept-flake-config .#holoport-install -- /dev/sda ./examples/sensorica-fleet#sensorica-holoport-01
 ```
 
-Type `/dev/sda` when it asks. It asks once more at the end, for a root password for the console. On the base HoloPort, with its slow disk and two cores, expect this to take a while; path 2b moves the work to a laptop.
+Type `/dev/sda` when it asks. It asks once more at the end, for a root password for the console.
+
+Before the first boot, keep the checkout (with your key) on the installed disk. The Sensorica fleet rebuilds from `/etc/nixos-holochain`, owned by root and the `wheel` group so the `sensorica` operator can edit it:
+
+```bash
+install -d -m 2775 -g wheel /mnt/etc/nixos-holochain && cp -a /root/nixos-holochain/. /mnt/etc/nixos-holochain/ && chgrp -R wheel /mnt/etc/nixos-holochain && chmod -R g+rwX /mnt/etc/nixos-holochain && git -C /mnt/etc/nixos-holochain config core.sharedRepository group
+``` On the base HoloPort, with its slow disk and two cores, expect this to take a while; path 2b moves the work to a laptop.
 
 ### 2b. Install from a laptop
 

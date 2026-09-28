@@ -61,9 +61,9 @@
     (launcher {
       name = "holoport-rebuild";
       desktopName = "Rebuild";
-      comment = "Apply this Holoport's configuration from /root/nixos-holochain";
+      comment = "Apply this Holoport's configuration from /etc/nixos-holochain";
       icon = "system-software-update";
-      exec = "${konsole} --hold -e sudo nixos-rebuild switch --flake /root/nixos-holochain/examples/sensorica-fleet";
+      exec = "${konsole} --hold -e sudo nixos-rebuild switch --flake /etc/nixos-holochain/examples/sensorica-fleet";
     })
   ];
 

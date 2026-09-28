@@ -49,11 +49,21 @@ in {
   users.users.root.openssh.authorizedKeys.keys = operatorKeys;
 
   # Every host's flake output carries its hostname, so one alias rebuilds
-  # whichever Holoport it runs on, from the checkout the install left in
-  # /root/nixos-holochain (docs/deployment.md). It does not pull: that checkout
+  # whichever Holoport it runs on, from the checkout the install leaves in
+  # /etc/nixos-holochain (docs/deployment.md). It does not pull: that checkout
   # carries the operator keys as a local commit, so updating it stays a
-  # separate, deliberate `git -C /root/nixos-holochain pull --rebase`.
-  environment.shellAliases.rebuild = "sudo nixos-rebuild switch --flake /root/nixos-holochain/examples/sensorica-fleet";
+  # separate, deliberate `git -C /etc/nixos-holochain pull --rebase`.
+  environment.shellAliases.rebuild = "sudo nixos-rebuild switch --flake /etc/nixos-holochain/examples/sensorica-fleet";
+
+  # The checkout belongs to root and the wheel group, so an operator logged in
+  # as sensorica can edit it from the desk (Kate, Dolphin) while `rebuild`
+  # still runs as root. setgid keeps new files in the group; git is told the
+  # directory is safe for every user and to keep its objects group-writable.
+  systemd.tmpfiles.rules = ["d /etc/nixos-holochain 2775 root wheel - -"];
+  programs.git = {
+    enable = true;
+    config.safe.directory = "/etc/nixos-holochain";
+  };
 
   # A Holoport is a server: it never sleeps, whoever is logged in or not.
   # Plasma's power management suspended sensorica-holoport-01 from the login

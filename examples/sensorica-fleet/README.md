@@ -34,7 +34,7 @@ Every Holoport has a `rebuild` alias, for root and for `sensorica`:
 rebuild
 ```
 
-It runs `sudo nixos-rebuild switch --flake /root/nixos-holochain/examples/sensorica-fleet`, from the checkout the install leaves in `/root/nixos-holochain`; the output matching the hostname is picked without a fragment. It does not pull: that checkout carries the operator key as a local commit, so updating it is a separate `git -C /root/nixos-holochain pull --rebase`. Only one switch can run at a time; a second one fails with "nixos-rebuild-switch-to-configuration.service was already loaded" and changes nothing.
+It runs `sudo nixos-rebuild switch --flake /etc/nixos-holochain/examples/sensorica-fleet`, from the checkout the install leaves in `/etc/nixos-holochain` (root and the `wheel` group, so `sensorica` can edit it from the desk); the output matching the hostname is picked without a fragment. It does not pull: that checkout carries the operator key as a local commit, so updating it is a separate `git -C /etc/nixos-holochain pull --rebase`. Only one switch can run at a time; a second one fails with "nixos-rebuild-switch-to-configuration.service was already loaded" and changes nothing.
 
 ## A Holoport never sleeps
 
