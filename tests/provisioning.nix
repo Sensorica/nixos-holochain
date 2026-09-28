@@ -55,6 +55,27 @@
     }
   ];
   noRoom = monitor [{services.holochain-grafana.dashboards = fixtures;}];
+  # A dashboards directory inside a package whose build always fails. Choosing
+  # the home page must not build it, or a system whose dashboards come from a
+  # package would not evaluate where import-from-derivation is off.
+  unbuilt = monitor [
+    {
+      services.holochain-grafana.dashboards = "${pkgs.runCommand "dashboards-never-built" {} "exit 1"}/dashboards";
+    }
+  ];
+  # The shipped dashboards under states other than every default, as a fleet
+  # recalibrated at the event would set them.
+  restated = monitor [
+    {
+      services.holochain-grafana.states = {
+        staleAfterSeconds = 120;
+        silentAfterSeconds = 900;
+        inStepShare = 0.8;
+        shareWindow = "15m";
+        historyWindow = "2d";
+      };
+    }
+  ];
 
   scrape = config: (lib.findFirst (c: c.job_name == "holochain-nodes") null config.services.prometheus.scrapeConfigs).static_configs;
   # This module's failed assertions; a bare evaluated system fails others
@@ -67,12 +88,15 @@
   # This module's warnings.
   warned = config: lib.filter (lib.hasPrefix "services.holochain-grafana") config.warnings;
   dashboardsOf = config: (builtins.head config.services.grafana.provision.dashboards.settings.providers).options.path;
+  homeOf = config: config.services.grafana.settings.dashboards.default_home_dashboard_path or null;
 
   facts = pkgs.writeText "provisioning-facts.json" (builtins.toJSON {
     list = {
       scrape = scrape list;
       failed = failed list;
       warnings = warned list;
+      home = homeOf list;
+      dashboards = dashboardsOf list;
     };
     shared.failed = failed shared;
     named = {
@@ -81,8 +105,14 @@
       warnings = warned named;
       units = named.services.holochain-grafana.overviewUnits;
       ruleFiles = map toString named.services.prometheus.ruleFiles;
+      home = homeOf named;
+      grafanaHome = "${named.services.grafana.package}/share/grafana/public/dashboards/home.json";
     };
+    # Its string alone: with its context, this check would build the package.
+    unbuilt.home = builtins.unsafeDiscardStringContext (homeOf unbuilt);
+    restated.dashboards = dashboardsOf restated;
   });
+  shipped = ../modules/dashboards;
 in
   pkgs.runCommand "grafana-provisioning" {
     nativeBuildInputs = [pkgs.jq pkgs.yq-go];
@@ -119,6 +149,16 @@ in
     check '.named.units["holochain-conductor.service"] == "Holochain conductor"
       and .named.units["caddy.service"] == null
       and .named.units["restic-backups-.*"] == "Backups"'
+
+    # Grafana's home page is the shipped room screen, as provisioned (so with
+    # its room constants); a dashboards directory without one gets a copy of
+    # Grafana's own home page. Making that choice builds nothing while
+    # evaluating: a package's directory that cannot be built still yields a
+    # home path.
+    cmp "$(jq -r .list.home ${facts})" "$(jq -r .list.dashboards ${facts})/holochain-now.json"
+    jq -e '.uid == "holochain-now"' "$(jq -r .list.home ${facts})"
+    cmp "$(jq -r .named.home ${facts})" "$(jq -r .named.grafanaHome ${facts})"
+    check '.unbuilt.home | type == "string" and endswith("-holochain-grafana-home.json")'
 
     # The rule file: evaluated every scrape, with the states given.
     rules=$(jq -r '.named.ruleFiles[0]' ${facts})
@@ -160,5 +200,38 @@ in
 
     # With no room, the room constants keep the dashboard's own defaults.
     jq -e '[.templating.list[] | {(.name): .query}] | add | .room_app == "" and .room_label == "the room'"'"'s app"' ${dashboardsOf noRoom}/rewrite.json
+
+    # The state thresholds on the shipped dashboards. With the default states
+    # the steps and the sentences are the shipped ones; with others, every
+    # step that names a state takes its value, the plain steps beside it keep
+    # their order, and no sentence still quotes a default.
+    texts='[.. | objects | (.description?, .options?.content?, .steps?) | select(. != null)]'
+    for f in ${shipped}/*.json; do
+      name=$(basename "$f")
+      if ! cmp -s <(jq "$texts" "$f") <(jq "$texts" "$(jq -r .list.dashboards ${facts})/$name"); then
+        echo "the default states changed a step or a sentence of $name" >&2
+        exit 1
+      fi
+    done
+    restated=$(jq -r .restated.dashboards ${facts})
+    jq -s '[.[] | .. | objects | select(has("fromOption"))]' "$restated"/*.json > marked.json
+    jq -c 'group_by(.fromOption) | map({(.[0].fromOption): map(.value) | unique}) | add' marked.json
+    jq -e 'length == 9 and (group_by(.fromOption) | map({(.[0].fromOption): map(.value) | unique}) | add)
+      == {staleAfterSeconds: [120], silentAfterSeconds: [900], inStepShare: [0.8]}' marked.json
+    steps() { jq -c --arg t "$2" '[.. | objects | select(.title? == $t)] | first | [.. | objects | select(has("steps")) | .steps | map(.value)]' "$restated/$1"; }
+    steps holochain-node.json "Readings" | tee /dev/stderr | grep -qxF '[[null,120,300]]'
+    steps holochain-node.json "Share held, per part" | tee /dev/stderr | grep -qxF '[[null,0.8,0.8]]'
+    steps holochain-now.json "Last heard from others, per app" | tee /dev/stderr | grep -qxF '[[null,120,900]]'
+    steps holochain-network.json "Same data everywhere" | tee /dev/stderr | grep -qxF '[[null,0.8,0.95]]'
+    for old in "more than 90 seconds old" "in 90 s" "at 600 s" "95%" "10 minutes" "24 hours"; do
+      if grep -lF -- "$old" "$restated"/*.json; then
+        echo "a sentence still quotes \"$old\"" >&2
+        exit 1
+      fi
+    done
+    for new in "more than 2 minutes old" "in 120 s" "at 900 s" "heard from them for 15 minutes" "under 80%" \
+      "less than 80%" "at least 80%" "averaged over 15 minutes" "over the last 15 minutes" "in the last 2 days"; do
+      grep -qF -- "$new" "$restated"/*.json || { echo "no sentence says \"$new\"" >&2; exit 1; }
+    done
     touch $out
   ''

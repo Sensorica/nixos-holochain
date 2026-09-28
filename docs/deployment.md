@@ -174,7 +174,7 @@ extra-trusted-public-keys = holochain-ci.cachix.org-1:5IUSkZc0aoRS53rfkvH9Kid40N
 
 The first boot is not fast even so: the conductor takes a minute or more to open its admin port on a VM, and installing a hApp is slower still.
 
-## Seeing the dashboard before deploying a fleet
+## Seeing the dashboards before deploying a fleet
 
 `observability-vm` is the whole observability stack on one machine: an edgenode exporting its conductor's `holochain_*` series, plus Prometheus and Grafana scraping and drawing them. Grafana and Prometheus are forwarded to the host, so a real browser reaches them.
 
@@ -186,21 +186,24 @@ nix build .#nixosConfigurations.observability-vm.config.system.build.vm
 ./result/bin/run-observability-vm-vm
 ```
 
-Then open <http://localhost:13000> (admin / workshop2026) and pick the **Holochain Fleet** dashboard; Prometheus itself is on <http://localhost:19090>. Give it a couple of minutes: the conductor needs a minute or more to come up, the metrics timer fires every 10 seconds in this VM, and the panels need a few points before they draw a line.
+Then open <http://localhost:13000> (admin / workshop2026). Grafana's home page is the room screen, **Is the Holochain network working?**; Prometheus itself is on <http://localhost:19090>. Give it a couple of minutes: the conductor needs a minute or more to come up, the metrics timer fires every 10 seconds in this VM, and the panels need a few points before they draw a line.
 
-The dashboard reads top to bottom, from "is anything wrong" to "why":
+Four dashboards ship, all tagged `holochain`, each titled with the one question its reader asks, and each linking to the others:
 
-| Row | Panels | What it answers |
+| Dashboard (uid) | Reader | What it answers |
 |---|---|---|
-| Overview | Fleet status, Services | Per node, one row each: is the node scraped (`up`), is the conductor answering and is that answer fresh (`holochain_conductor_up` read against the metrics age; where a node runs two conductors, the worse of the two), how many hApps are enabled and how many are installed but not, how many systemd units have failed, the fullest disk, memory in use, the hottest sensor, time since boot, and how old the conductor metrics are; then the state of every deployed service on every node, from `node_systemd_unit_state`. Anything that needs looking at turns orange or red |
-| Holochain | Conductors up, Conductor peers, Conductor network throughput, Conductor metrics age, Conductor messages, Blocked messages, DHT peers, DHT ops held here vs best peer, DHT seconds since last gossip | What each conductor is doing, from the `holochain_*` series the metrics timer writes, one line per conductor; Conductors up reads a node by its worst conductor; the three DHT panels draw one line or bar per network, named by its `network_label` (see [Names](architecture.md#names)), so five nodes sharing one app still read as one line per DHT, and a node that falls behind pulls its DHT's line down (on the gossip panel, the node silent longest sets the bar, and one that never gossiped reads never) |
-| Host health | CPU busy, Memory used, Load average, Disk space used, Disk IO, Temperatures, Host network throughput, Pressure | Whether the machine under the conductor is healthy, from node_exporter, one line per node where the per-device detail is not what you scan for |
+| Is the Holochain network working? (`holochain-now`) | The room, on a shared screen (add `?kiosk` to the URL), and anyone opening Grafana for the first time | Are the readings current, which machines are on, is each app working on each machine and connected to how many others, did the latest write in the room's app reach every machine, and how long since each app last heard from anyone |
+| Which Holochain node needs attention? (`holochain-fleet`) | Whoever runs the fleet | How many machines are unreachable, conductors silent or stale, app parts cut off or behind, machine problems; one row per machine, worst first; the problems in words; the watched services that are down; the app matrix; each machine's status over time; and a collapsed Machines row |
+| Is this node working, app by app? (`holochain-node`) | An operator with one machine, or anyone following a link from the fleet page | Each conductor on the machine, its apps, and one row per app part: its state, other computers, the share of its best peer's data it holds, when it last heard from anyone, what it is still fetching; then the machine itself in collapsed rows |
+| Is this app in step on every node? (`holochain-network`) | The facilitator asked "did my message reach the others?", or the operator after a Lost contact | One app network across every machine: how many run it, whether any is cut off or behind, a step chart of the data each holds, and each machine's status over time |
 
-Two variables at the top narrow it down. **Instance** picks nodes (All by default, which also takes in nodes that join later). **Units** is the regular expression the Services panel matches unit names against; its default is the units of `services.holochain-grafana.overviewUnits`. Setting that option replaces the default, so to add a service and keep the rest, write `overviewUnits = lib.mkOptionDefault { "caddy.service" = "Web server"; };` (the value is the name the dashboards give the unit; a list, `lib.mkOptionDefault [ "caddy.service" ]`, still works and shows the unit name). The Services panel has a row per node and a column for every listed unit that at least one selected node has: a node that lacks it shows absent in that column, and a unit no selected node has gets no column at all. A node Prometheus cannot reach gets a red cell in a `node unreachable` column. Temperatures, and the Temp column of Fleet status, are empty in this VM and on any machine without hardware sensors; that is expected.
+Every app part reads one of six words, worst first: **Not running**, **No fresh readings**, **Lost contact**, **No one else yet** (grey, and normal for a machine alone), **Catching up** and **In step**. The room and fleet pages explain each in a sentence at the bottom. They are computed once, by the recording rules of `modules/holochain-rules.nix`, so no two pages can disagree; a machine reads by its worst conductor, and an app by its worst part. No page shows a hash, an installed app id or a scrape address, except the collapsed "For bug reports" row of the network page, which exists to be pasted into an issue.
 
-The Conductor column reads more than up or down. **stale** means the metrics timer has not written for over two minutes, so the value it last wrote no longer says anything; **textfile error** means node_exporter rejected a file in its textfile directory and the `holochain_*` series went with it; **unknown** means the node itself is not answering. The two-minute threshold, like the Metrics age colours, assumes `conductorMetrics.interval` at its 30 s default; with an interval above about 90 s every node reads stale, so a fleet that needs a longer interval should provision its own copy of the dashboard (the `dashboards` option) with the 120 s and 300 s thresholds raised.
+Two options feed the pages. `overviewUnits` names the systemd units the fleet and node pages watch, and the name a person reads for each: setting it replaces the default, so to add a service and keep the rest, write `overviewUnits = lib.mkOptionDefault { "caddy.service" = "Web server"; };` (a list, `lib.mkOptionDefault [ "caddy.service" ]`, still works and shows the unit name). `room` (`app`, `part`, `label`) picks the one app part whose writes the room screen follows; left unset, that chart says so. Temperatures are empty in this VM and on any machine without hardware sensors; that is expected.
 
-The dashboard panels are provisioned, not saved by hand. Editing one in the browser will appear to work and will be discarded on the next rebuild; change `modules/dashboards/holochain-fleet.json` instead.
+The thresholds behind the words (readings older than 90 s, 10 minutes without contact, 95% of the best peer's data) are `services.holochain-grafana.states`. The provisioned dashboards follow them: every colour step that stands for a state threshold, and every sentence that quotes one, is rewritten from the option on its way into the store. A dashboards directory outside the store is not rewritten, so it keeps the defaults.
+
+The dashboards are provisioned, not saved by hand. Editing one in the browser will appear to work and will be discarded on the next rebuild; change the JSON in `modules/dashboards/` instead, and run `checks.dashboardLabels` and `checks.dashboardQueries`.
 
 ## First boot sequence
 
@@ -250,24 +253,24 @@ On the monitor node:
 # every configured scrape target should be "health":"up"
 curl -s localhost:9090/api/v1/targets | jq '.data.activeTargets[] | {scrapeUrl, health, lastError}'
 
-# the provisioned dashboard should be there
+# the four provisioned dashboards should be there
 # export GRAFANA_ADMIN_PASSWORD first; on a node that kept the module
 # default it is the workshop password
-curl -s -u "admin:$GRAFANA_ADMIN_PASSWORD" 'localhost:3000/api/search?query=Holochain'
+curl -s -u "admin:$GRAFANA_ADMIN_PASSWORD" 'localhost:3000/api/search?tag=holochain' | jq -r '.[].uid'
 
-# the Services panel's raw material: one active series per node for the conductor
+# every node by name, with its state (3 is Running)
 curl -s --get localhost:9090/api/v1/query \
-  --data-urlencode 'query=node_systemd_unit_state{name="holochain-conductor.service",state="active"} == 1' \
-  | jq '.data.result[] | .metric.instance'
+  --data-urlencode 'query=holochain:node_state' \
+  | jq '.data.result[] | {node: .metric.node, state: .value[1]}'
 
-# any failed unit, on any node, which the Fleet status panel counts
-# (mount units included; device, scope and slice units are left out)
+# what the problem lists say, one sentence per problem
+# (failed units, mount units included, full disks, silent conductors)
 curl -s --get localhost:9090/api/v1/query \
-  --data-urlencode 'query=node_systemd_unit_state{state="failed"} == 1' \
-  | jq '.data.result[] | {instance: .metric.instance, unit: .metric.name}'
+  --data-urlencode 'query=holochain:node_problem' \
+  | jq '.data.result[] | {node: .metric.node, problem: .metric.problem}'
 ```
 
-A node missing from the first answer is either not scraped (check the targets above) or not running its conductor. The second answer is empty on a healthy fleet; each entry is a unit to look at with `systemctl status` on that node.
+A node missing from the second answer is not scraped (check the targets above). The third answer is empty on a healthy fleet; each entry names what to look at, a failed unit with `systemctl status` on that node.
 
 ## Running your own bootstrap and relay
 

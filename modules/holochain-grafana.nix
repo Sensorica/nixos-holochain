@@ -27,7 +27,13 @@
   #     node_systemd_unit_state) gets the overviewUnits names as its value
   #     mappings, replacing any it had;
   #   * constant variables named `room_app`, `room_part` and `room_label` get
-  #     the `room` option's values, when it is set.
+  #     the `room` option's values, when it is set;
+  #   * a threshold step that names a `states` option in `fromOption` takes
+  #     that option's value, and the plain steps beside it move with it so
+  #     the steps stay in order, so a colour changes where the state word
+  #     the rules compute changes;
+  #   * the sentences that quote a state's threshold ("more than 90 seconds
+  #     old", "at least 95%") quote the value given instead.
   #
   # Everything else in the directory is copied unchanged. A directory outside
   # the store is read by Grafana at runtime and cannot be rewritten here, so it
@@ -53,6 +59,7 @@
     })
     namedUnits);
   roomJson = builtins.toJSON cfg.room;
+  statesJson = builtins.toJSON cfg.states;
   dashboardsPath = toString cfg.dashboards;
   dashboardsInStore =
     builtins.isPath cfg.dashboards
@@ -62,11 +69,12 @@
     then
       pkgs.runCommand "holochain-grafana-dashboards" {
         nativeBuildInputs = [pkgs.jq];
-        inherit unitsRegex unitMappings roomJson;
+        inherit unitsRegex unitMappings roomJson statesJson;
       } ''
         cp -rL --no-preserve=mode ${cfg.dashboards} $out
         find $out -type f -name '*.json' | while IFS= read -r f; do
-          jq --arg units "$unitsRegex" --argjson mappings "$unitMappings" --argjson room "$roomJson" '
+          jq --arg units "$unitsRegex" --argjson mappings "$unitMappings" --argjson room "$roomJson" \
+            --argjson states "$statesJson" '
             def default($v): .query = $v
               | .current = {text: $v, value: $v}
               | .options = [{selected: true, text: $v, value: $v}];
@@ -84,9 +92,50 @@
                 + [{id: "mappings", value: $mappings}]
               else .
               end;
+            # Steps that come from a state, and the plain steps around them
+            # clamped between them, so the colours keep their order.
+            def restateSteps:
+              if (.steps | type) == "array" and any(.steps[]; type == "object" and has("fromOption"))
+              then .steps |= (map(if type == "object" and has("fromOption") then .value = $states[.fromOption] else . end)
+                | . as $s
+                | [range(length) as $i | $s[$i]
+                   | if has("fromOption") or .value == null then .
+                     else ([$s[:$i][] | select(has("fromOption")) | .value] | max) as $lo
+                       | ([$s[$i + 1:][] | select(has("fromOption")) | .value] | min) as $hi
+                       | .value |= (if $lo != null and . < $lo then $lo else . end
+                           | if $hi != null and . > $hi then $hi else . end)
+                     end])
+              else .
+              end;
+            def plural($n; $unit): "\($n) \($unit)\(if $n == 1 then "" else "s" end)";
+            def seconds:
+              if . >= 3600 and . % 3600 == 0 then plural(. / 3600; "hour")
+              elif . >= 60 and . % 60 == 0 then plural(. / 60; "minute")
+              else plural(.; "second")
+              end;
+            def duration: capture("^(?<n>[0-9]+)(?<u>ms|s|m|h|d|w|y)$")
+              | plural(.n | tonumber; {ms: "millisecond", s: "second", m: "minute", h: "hour", d: "day", w: "week", y: "year"}[.u]);
+            def percent: "\((. * 1000 | round) / 10)%";
+            # Every sentence that quotes a state threshold, as the shipped
+            # dashboards word it with the default states, and as it reads
+            # with the states given. With the defaults each reads the same.
+            def sentences: [
+              ["more than 90 seconds old", "more than \($states.staleAfterSeconds | seconds) old"],
+              ["in 90 s", "in \($states.staleAfterSeconds) s"],
+              ["at 600 s", "at \($states.silentAfterSeconds) s"],
+              ["heard from them for 10 minutes", "heard from them for \($states.silentAfterSeconds | seconds)"],
+              ["under 95%", "under \($states.inStepShare | percent)"],
+              ["less than 95%", "less than \($states.inStepShare | percent)"],
+              ["at least 95%", "at least \($states.inStepShare | percent)"],
+              ["averaged over 10 minutes", "averaged over \($states.shareWindow | duration)"],
+              ["over the last 10 minutes", "over the last \($states.shareWindow | duration)"],
+              ["in the last 24 hours", "in the last \($states.historyWindow | duration)"]
+            ];
+            def restated: reduce sentences[] as [$old, $new] (.; split($old) | join($new));
             if type == "object" and has("panels")
             then (.templating.list // empty) |= map(variable)
               | (.. | objects | select(has("fieldConfig")) | .fieldConfig.overrides // empty) |= map(unitNames)
+              | walk(if type == "object" then restateSteps elif type == "string" then restated else . end)
             else .
             end
           ' "$f" > "$f.tmp"
@@ -94,6 +143,24 @@
         done
       ''
     else cfg.dashboards;
+
+  # Grafana's home page is the room screen, copied from the provisioned
+  # dashboards so it carries the room constants. Grafana answers a home path
+  # that does not exist with an error, so a directory without the room screen
+  # gets a copy of Grafana's own home page instead. The choice is made while
+  # building, not by looking into the directory while evaluating: a directory
+  # inside a package would otherwise be built during evaluation, which fails
+  # where import-from-derivation is disabled.
+  homeDashboard =
+    pkgs.runCommand "holochain-grafana-home.json" {
+      grafanaHome = "${config.services.grafana.package}/share/grafana/public/dashboards/home.json";
+    } ''
+      if [ -e ${provisionedDashboards}/holochain-now.json ]; then
+        cp ${provisionedDashboards}/holochain-now.json $out
+      else
+        cp "$grafanaHome" $out
+      fi
+    '';
 
   # The dashboard JSON refers to its data source by this uid rather than by
   # name, so the file stays valid whatever the datasource is called.
@@ -365,10 +432,21 @@ in {
       description = ''
         Directory of Grafana dashboard JSON files to provision. Everything in
         it is loaded at startup and re-read every 30 seconds. The module ships
-        `holochain-fleet.json` (uid `holochain-fleet`): an Overview row saying
-        per node whether the node, its conductor and its services are up, a
-        Holochain row drawn from the edgenode module's metrics timer, and a
-        Host health row drawn from node_exporter.
+        four, each titled with the question it answers and all tagged
+        `holochain`: `holochain-now` ("Is the Holochain network working?"),
+        the room screen and Grafana's home page; `holochain-fleet` ("Which
+        Holochain node needs attention?"), for whoever runs the fleet;
+        `holochain-node` ("Is this node working, app by app?"), one machine;
+        and `holochain-network` ("Is this app in step on every node?"), one
+        app network across every machine. They read the recording rules of
+        holochain-rules.nix, so they agree on every state.
+
+        For a directory in the Nix store, the module sets Grafana's home page
+        (`services.grafana.settings.dashboards.default_home_dashboard_path`,
+        at default priority, so a definition of your own wins): its
+        `holochain-now.json` when it has one, otherwise a copy of Grafana's
+        own home page. The choice is made while building, so a directory
+        inside a package is not built during evaluation.
 
         A directory in the Nix store (a path in your flake, or a directory
         inside a flake input or package such as `"''${inputs.x}/dashboards"`)
@@ -376,7 +454,11 @@ in {
         `overviewUnits` on its way in, every field override matched by name
         to `name` given the units' names as value mappings, and the
         `room_app`, `room_part` and `room_label` constants set from `room`
-        when that is set. A directory outside the store, or a
+        when that is set. Every threshold step that names a `states` option
+        in its `fromOption` key takes that option's value, and the sentences
+        that quote a state's threshold quote the value given, so the colours
+        and the words agree with the state the rules compute. A directory
+        outside the store, or a
         store path written as a bare string that carries no Nix string
         context, is provisioned as it is.
       '';
@@ -422,7 +504,7 @@ in {
         remains active once it has run. Two one-shot helpers are left out:
         `holochain-conductor-metrics.service` sits idle between runs, so its
         timer is listed instead, and `grafana-secret-key.service` runs once at
-        boot; if either fails, the Fleet status panel counts it. The Nix
+        boot; if either fails, the fleet page's problem list names it. The Nix
         daemon is listed by its socket: NixOS starts `nix-daemon.service` on
         demand, so the service is inactive on an idle node that is perfectly
         healthy.
@@ -431,11 +513,11 @@ in {
         matched by name to `name` (the unit label) in a provisioned dashboard
         gets one regex mapping per named unit.
 
-        The fleet dashboard's Services panel has one row per node and one
-        column per unit that some selected node has. A unit one node runs and
-        another does not shows as absent on the second node's row; a unit no
-        selected node runs has no column at all, so one set serves a whole
-        fleet whose machines run different things.
+        The fleet page's "Which watched services are down?" and the node
+        page's Background jobs list the watched units that are not active, one
+        row per unit and machine, and nothing else: a unit a machine does not
+        run is not listed, so one set serves a whole fleet whose machines run
+        different things.
 
         Each key is a regular expression Prometheus matches against the whole
         unit name, suffix included, so `restic-backups-.*` works, and its name
@@ -451,12 +533,12 @@ in {
         (a list, `lib.mkOptionDefault [ "caddy.service" ]`, merges the same
         way).
 
-        This only picks what the Services panel draws. The Fleet status panel
-        counts every failed unit on the node whatever is listed here, except
-        device, scope and slice units, which the node_exporter flags these
-        modules set leave out, and the `holochain:node_problem` rule gives
-        each failed unit a sentence of its own, naming it by its name here or,
-        when it has none or is not listed, by its unit name.
+        This only picks what those two tables list. The
+        `holochain:node_problem` rule, which the problem lists read, gives
+        every failed unit on the node a sentence of its own whatever is listed
+        here, except device, scope and slice units, which the node_exporter
+        flags these modules set leave out, naming it by its name here or, when
+        it has none or is not listed, by its unit name.
       '';
     };
 
@@ -526,6 +608,7 @@ in {
           secret_key = secretKeyPath;
         };
         analytics.reporting_enabled = false;
+        dashboards.default_home_dashboard_path = lib.mkIf dashboardsInStore (lib.mkDefault "${homeDashboard}");
       };
 
       provision = {

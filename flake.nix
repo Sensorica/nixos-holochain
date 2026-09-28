@@ -1351,10 +1351,29 @@
           # The whole exporter, run for an edgenode-shaped and a Moss-shaped
           # conductor on captured replies (tests/metrics.nix): the two files
           # declare every shared family with the same bytes and a real
-          # node_exporter keeps both, and no name a dashboard shows is a hash;
-          # then the fleet dashboard's conductor and DHT queries on both files
-          # at once, as the homelab's one instance serves them.
-          inherit (metricsChecks) metricsHelpAgreement metricsNameShape fleetDashboardQueries;
+          # node_exporter keeps both, and no name a dashboard shows is a hash.
+          inherit (metricsChecks) metricsHelpAgreement metricsNameShape;
+
+          # The provisioned dashboards, with no VM (tests/dashboards.nix): no
+          # label but a human one reaches a legend, a display name, a table
+          # column or a stat's field, no text shows a variable holding a key,
+          # every panel is described and every uid is its own; every stand-in
+          # value (1e9, an empty cell) reads as its word in its colour; and
+          # every Holochain query of every dashboard answers, through the rule
+          # file, on the homelab's two conductors plus a clone cell, the node
+          # reading its worst conductor, with every series it reads there and
+          # every rule it names recorded. Each is also run on broken input and
+          # must then fail.
+          inherit
+            (import ./tests/dashboards.nix {
+              inherit pkgs jqLib;
+              rules = holochainRulesFile;
+              inherit (metricsChecks) runs;
+            })
+            dashboardLabels
+            dashboardWords
+            dashboardQueries
+            ;
 
           # The recording rules every dashboard reads, under promtool's rule
           # tests: a node alone, nodes in step and catching up, contact lost
@@ -1508,6 +1527,13 @@
                 # option-default priority, so the test sees the default units
                 # and proves the option reaches the provisioned JSON.
                 overviewUnits = pkgs.lib.mkOptionDefault ["systemd-journald.service" "always-fails.service"];
+                # The Workshop fixture's app, so the room screen's write chart
+                # has lines once the fixtures are written.
+                room = {
+                  app = "requests-and-offers";
+                  part = "requests_and_offers";
+                  label = "Requests & Offers";
+                };
               };
               # A unit in the failed state, for the Overview to show as one.
               systemd.services.always-fails = {
@@ -1551,6 +1577,7 @@
               import base64
               import json
               import re
+              import shlex
 
               machine.wait_for_unit("grafana.service")
               machine.wait_for_unit("prometheus.service")
@@ -1619,14 +1646,39 @@
               machine.log("holochain_conductor_up in prometheus: " + series)
               assert '"__name__":"holochain_conductor_up"' in series, series
 
-              # ---- criterion 5: the dashboard is provisioned ----
-              search = machine.succeed(
-                  "curl -s -u admin:${grafanaTestPassword}"
-                  " 'http://localhost:3000/api/search?query=Holochain'"
-              )
-              machine.log("grafana search: " + search)
-              assert '"title":"Holochain Fleet"' in search, search
-              assert '"uid":"holochain-fleet"' in search, search
+              # ---- criterion 5: the four dashboards, the room screen at home ----
+              def grafana(path):
+                  return json.loads(machine.succeed(
+                      "curl -sf -u admin:${grafanaTestPassword}"
+                      f" 'http://localhost:3000{path}'"
+                  ))
+
+
+              # Exactly the four, and nothing else wearing their tag.
+              def the_four(path):
+                  uids = sorted(d["uid"] for d in grafana(path))
+                  machine.log(f"{path}: " + json.dumps(uids))
+                  return uids == ["holochain-fleet", "holochain-network", "holochain-node", "holochain-now"]
+
+
+              tagged = sorted(d["uid"] for d in grafana("/api/search?tag=holochain"))
+              assert the_four("/api/search?tag=holochain"), tagged
+              # The same test on an answer Grafana gives with one short must fail.
+              assert not the_four("/api/search?tag=holochain&limit=3")
+
+              # Grafana's home page is the room screen. Grafana answers with
+              # the dashboard itself, or with a redirect to it when the home
+              # page is a saved preference.
+              def is_room(answer):
+                  uid = answer.get("dashboard", {}).get("uid")
+                  machine.log(f"dashboard: uid {uid!r}, redirect {answer.get('redirectUri')!r}")
+                  return uid == "holochain-now" or "/d/holochain-now" in answer.get("redirectUri", "")
+
+
+              home = grafana("/api/dashboards/home")
+              assert is_room(home), "the home page is not the room screen: " + json.dumps(home)[:500]
+              # Another dashboard, in the same shape of answer, must not pass.
+              assert not is_room(grafana("/api/dashboards/uid/holochain-fleet"))
 
               # A provisioned dashboard that Grafana cannot bind to a data
               # source renders empty panels, which a search hit would not show.
@@ -1637,9 +1689,8 @@
               machine.log("grafana datasource: " + datasource)
               assert '"type":"prometheus"' in datasource, datasource
 
-              # ---- criterion 6: the overview answers "is everything up?" ----
-              # Prometheus must hold the series the Overview row is built on,
-              # not merely accept the queries.
+              # Prometheus must hold the series the pages are built on, not
+              # merely accept the queries.
               def prom_file(expr, name):
                   encoded = base64.b64encode(expr.encode()).decode()
                   machine.succeed(f"echo {encoded} | base64 -d > /tmp/{name}")
@@ -1667,220 +1718,107 @@
                   "q-conductor-unit",
               )
               machine.log("conductor unit active: " + json.dumps(result))
-              result = wait_non_empty(
-                  'node_filesystem_size_bytes{mountpoint="/", fstype!~"tmpfs|ramfs|overlay|squashfs"} > 0',
-                  "q-root-fs",
-              )
-              machine.log("root filesystem: " + json.dumps(result))
 
-              # The dashboard as Grafana serves it, after the module rewrote it.
-              served = json.loads(machine.succeed(
-                  "curl -s -u admin:${grafanaTestPassword}"
-                  " http://localhost:3000/api/dashboards/uid/holochain-fleet"
-              ))["dashboard"]
-              panels = []
-              for panel in served["panels"]:
-                  panels.append(panel)
-                  panels.extend(panel.get("panels", []))
-              titles = {p["title"] for p in panels}
-              machine.log("provisioned panels: " + ", ".join(sorted(titles)))
-              for title in [
-                  "Overview", "Fleet status", "Services",
-                  "Holochain", "Conductors up", "Conductor peers",
-                  "Conductor network throughput", "Conductor metrics age",
-                  "Conductor messages", "Blocked messages",
-                  "DHT peers", "DHT ops held here vs best peer",
-                  "DHT seconds since last gossip",
-                  "Host health", "CPU busy", "Memory used", "Load average",
-                  "Disk space used", "Disk IO", "Temperatures",
-                  "Host network throughput", "Pressure",
-              ]:
-                  assert title in titles, f"panel {title!r} missing: {sorted(titles)}"
+              # The live conductor's own app: one DHT per role, each with a
+              # name and none of them a key.
+              dht_names = {
+                  r["metric"]["network_label"]
+                  for r in wait_non_empty('holochain_dht_info{app_id="dino-adventure"}', "q-dht-names")
+              }
+              machine.log("live DHTs: " + json.dumps(sorted(dht_names)))
+              assert dht_names and all(n and "$" not in n and "uhC" not in n for n in dht_names), dht_names
 
-              variables = {v["name"]: v for v in served["templating"]["list"]}
-              units = variables["units"]["current"]["value"]
+              # The dashboards as Grafana serves them, after the module
+              # rewrote them.
+              served = {uid: grafana(f"/api/dashboards/uid/{uid}")["dashboard"] for uid in tagged}
+              panels = {}
+              for uid, dashboard in served.items():
+                  panels[uid] = []
+                  for panel in dashboard["panels"]:
+                      panels[uid].append(panel)
+                      panels[uid].extend(panel.get("panels", []))
+                  machine.log(f"{uid}: " + ", ".join(p["title"] for p in panels[uid]))
+              variables = {
+                  uid: {v["name"]: v for v in dashboard["templating"]["list"]}
+                  for uid, dashboard in served.items()
+              }
+
+              units = variables["holochain-fleet"]["units"]["current"]["value"]
               machine.log("units variable default: " + units)
               for unit in ["holochain-conductor.service", "systemd-journald.service"]:
                   assert unit in units.split("|"), f"{unit} not in the units default: {units}"
+              assert variables["holochain-node"]["units"]["current"]["value"] == units
 
-              # The instance variable's own definition, run the way Grafana
-              # runs label_values(): the label's values over the selector.
-              # Both targets have an up series, the dead one included.
-              definition = variables["instance"]["definition"]
+              # The room constants, rewritten from the room option.
+              room = {n: variables["holochain-now"][n]["current"]["value"] for n in ["room_app", "room_part", "room_label"]}
+              machine.log("room constants: " + json.dumps(room))
+              assert room == {
+                  "room_app": "requests-and-offers",
+                  "room_part": "requests_and_offers",
+                  "room_label": "Requests & Offers",
+              }, room
+
+              # The node page's node variable, run the way Grafana runs
+              # label_values(): both targets, by name, the dead one included.
+              definition = variables["holochain-node"]["node"]["definition"]
               m = re.fullmatch(r"label_values\((.*),\s*(\w+)\)", definition)
-              assert m, f"unexpected instance variable definition: {definition}"
-              selector_file = prom_file(m.group(1), "q-instance-selector")
-              instances = json.loads(machine.succeed(
+              assert m, f"unexpected node variable definition: {definition}"
+              selector_file = prom_file(m.group(1), "q-node-selector")
+              nodes = json.loads(machine.succeed(
                   f"curl -s --get localhost:9090/api/v1/label/{m.group(2)}/values"
                   f" --data-urlencode match[]@{selector_file}"
               ))["data"]
-              machine.log("instance variable values: " + json.dumps(instances))
-              assert sorted(instances) == ["127.0.0.1:9100", "${deadTarget}"], instances
+              machine.log("node variable values: " + json.dumps(nodes))
+              assert sorted(nodes) == ["machine", "unplugged"], nodes
 
-              # Every query on the dashboard, with its variables filled in the
-              # way Grafana fills them for "All", has to be valid PromQL over
-              # series that exist here, and has to answer for the live node
-              # alone too, its name escaped the way a regex match needs it.
-              # node_hwmon_temp_celsius is the one series a VM has nothing
-              # for: QEMU exposes no hwmon sensor. Those queries only have to
-              # be valid, and the collector that would feed them has to run.
-              live = "127\\\\.0\\\\.0\\\\.1:9100"
-              hwmon = wait_non_empty('node_scrape_collector_success{collector="hwmon"} == 1', "q-hwmon")
-              machine.log("hwmon collector: " + json.dumps(hwmon))
+              # What the states look like. A swapped colour or a lost word
+              # would leave every query passing.
+              def panel(uid, title):
+                  # A collapsed row can share its title with the panel in it.
+                  return next(p for p in panels[uid] if p["title"] == title and p["type"] != "row")
 
-              def fill(expr, instance):
-                  return expr.replace("''${units:raw}", units).replace("$instance", instance)
 
-              exprs = []
-              for panel in panels:
-                  for n, target in enumerate(panel.get("targets", [])):
-                      exprs.append((panel, target, n))
-              for panel, target, n in exprs:
-                  for scope, instance in [("all", ".*"), ("live", live)]:
-                      expr = fill(target["expr"], instance)
-                      assert "$" not in expr, f"unsubstituted variable in {expr}"
-                      name = f"q-panel-{panel['id']}-{n}-{scope}"
-                      label = f"{panel['title']} [{target['refId']}] ({scope})"
-                      if "node_hwmon_temp_celsius" in expr:
-                          reply = prom_query(prom_file(expr, name))
-                          assert reply["status"] == "success", f"{label}: {reply}"
-                          machine.log(f"{label}: {len(reply['data']['result'])} series (none expected in a VM)")
-                      else:
-                          result = wait_non_empty(expr, name)
-                          machine.log(f"{label}: {len(result)} series")
-
-              # A negative matcher keeps every series whatever the label is
-              # called, so a misspelled label would pass the loop above. Each
-              # label a query matches negatively has to exist on its metric.
-              negative = set()
-              for panel, target, n in exprs:
-                  for metric, matchers in re.findall(r"([a-zA-Z_:][a-zA-Z0-9_:]*)\{([^}]*)\}", target["expr"]):
-                      for label in re.findall(r"(\w+)\s*!(?:=|~)", matchers):
-                          negative.add((metric, label))
-              machine.log("negatively matched labels: " + json.dumps(sorted(negative)))
-              assert negative, "no negative matcher found; the parser is broken"
-              for n, (metric, label) in enumerate(sorted(negative)):
-                  wait_non_empty(f'count({metric}{{{label}!=""}})', f"q-negative-{n}")
-
-              # node_exporter leaves mount units out unless told otherwise; the
-              # modules tell it to, so a failed mount reaches Failed units.
-              wait_non_empty('node_systemd_unit_state{name=~".+[.]mount"}', "q-mount-units")
-
-              def by_instance(expr, name):
+              def words(mappings):
                   return {
-                      r["metric"].get("instance"): r["value"][1]
-                      for r in prom_query(prom_file(expr, name))["data"]["result"]
-                  }
-
-              def target_expr(title, ref):
-                  return fill(next(
-                      t["expr"] for p in panels if p["title"] == title for t in p["targets"] if t["refId"] == ref
-                  ), ".*")
-
-              # The Services panel's own query, in this node's terms: every
-              # listed unit active, the failing one failed, and the dead
-              # target a row of its own.
-              services_expr = prom_file(target_expr("Services", "A"), "q-services")
-              machine.wait_until_succeeds(
-                  f"curl -s --get localhost:9090/api/v1/query --data-urlencode query@{services_expr}"
-                  " | jq -e 'any(.data.result[]; .metric.name == \"always-fails.service\" and .value[1] == \"3\")'",
-                  timeout=120,
-              )
-              services = {
-                  (r["metric"]["instance"], r["metric"]["name"]): r["value"][1]
-                  for r in prom_query(services_expr)["data"]["result"]
-              }
-              machine.log("services: " + json.dumps({f"{i} {n}": v for (i, n), v in sorted(services.items())}))
-              for unit in [
-                  "holochain-conductor.service", "holochain-conductor-metrics.timer",
-                  "prometheus.service", "prometheus-node-exporter.service",
-                  "grafana.service", "nix-daemon.socket", "systemd-journald.service",
-              ]:
-                  assert services.get(("127.0.0.1:9100", unit)) == "1", f"{unit} not active on the Services panel: {services}"
-              assert services.get(("127.0.0.1:9100", "always-fails.service")) == "3", services
-              assert services.get(("${deadTarget}", "node unreachable")) == "4", services
-              assert not any(i == "${deadTarget}" and n != "node unreachable" for i, n in services), services
-
-              # Fleet status in the same terms.
-              node = by_instance(target_expr("Fleet status", "A"), "q-fleet-node")
-              assert node == {"127.0.0.1:9100": "1", "${deadTarget}": "0"}, node
-              failed = by_instance(target_expr("Fleet status", "D"), "q-fleet-failed")
-              assert int(failed["127.0.0.1:9100"]) >= 1, failed
-              conductor_expr = target_expr("Fleet status", "C")
-              conductor = by_instance(conductor_expr, "q-fleet-conductor")
-              assert conductor == {"127.0.0.1:9100": "1", "${deadTarget}": "5"}, conductor
-              assert target_expr("Conductors up", "A") == conductor_expr, "Conductors up and Fleet status disagree"
-              apps = by_instance(target_expr("Fleet status", "I"), "q-fleet-apps")
-              assert apps == {"127.0.0.1:9100": "1"}, apps
-
-              # The per-DHT panels in this node's terms: one line per DHT of
-              # the one app, each named by its network_label and never by a
-              # key, and a node alone on its network has no peer and has never
-              # gossiped, which the gossip panel reads as 1e9 so that max()
-              # keeps the worst node rather than hiding it.
-              def by_dht(title, ref, name):
-                  return {
-                      r["metric"]["network_label"]: r["value"][1]
-                      for r in prom_query(prom_file(target_expr(title, ref), name))["data"]["result"]
-                  }
-
-              dht_names = {
-                  r["metric"]["network_label"]
-                  for r in prom_query(prom_file(
-                      'holochain_dht_info{app_id="dino-adventure"}', "q-dht-names"
-                  ))["data"]["result"]
-              }
-              dht_peers = by_dht("DHT peers", "A", "q-dht-peers")
-              machine.log("DHT peers: " + json.dumps(dht_peers))
-              assert dht_peers and dht_peers.keys() == dht_names, (dht_peers, dht_names)
-              assert all(n and "$" not in n and "uhC" not in n for n in dht_names), dht_names
-              assert set(dht_peers.values()) == {"0"}, dht_peers
-              gossip = by_dht("DHT seconds since last gossip", "A", "q-dht-gossip")
-              assert gossip.keys() == dht_peers.keys() and set(gossip.values()) == {"1000000000"}, gossip
-              held = by_dht("DHT ops held here vs best peer", "A", "q-dht-held")
-              best = by_dht("DHT ops held here vs best peer", "B", "q-dht-best")
-              machine.log(f"DHT ops held here: {held}; best peer: {best}")
-              assert held.keys() == dht_peers.keys() and set(best.values()) == {"0"}, best
-
-              # What those numbers look like. A swapped colour or a lost
-              # mapping would leave every query above passing.
-              def mapping(panel_title, field=None):
-                  panel = next(p for p in panels if p["title"] == panel_title)
-                  if field is None:
-                      found = panel["fieldConfig"]["defaults"]["mappings"]
-                  else:
-                      found = next(
-                          prop["value"]
-                          for o in panel["fieldConfig"]["overrides"]
-                          if o["matcher"]["options"] == field
-                          for prop in o["properties"]
-                          if prop["id"] == "mappings"
-                      )
-                  values = {
                       value: (option["text"], option["color"])
-                      for m in found if m["type"] == "value"
+                      for m in mappings if m["type"] == "value"
                       for value, option in m["options"].items()
                   }
-                  ranges = {
-                      (m["options"]["from"], m["options"]["to"]): (m["options"]["result"]["text"], m["options"]["result"]["color"])
-                      for m in found if m["type"] == "range"
-                  }
-                  return {**values, **ranges}
 
-              conductor_states = {
-                  "0": ("down", "red"), "1": ("up", "green"),
-                  "2": ("stale, was down", "orange"), "3": ("stale, was up", "orange"),
-                  "4": ("textfile error", "red"), "5": ("unknown", "text"),
+
+              def override(p, field, prop):
+                  return next(
+                      q["value"]
+                      for o in p["fieldConfig"]["overrides"] if o["matcher"]["options"] == field
+                      for q in o["properties"] if q["id"] == prop
+                  )
+
+
+              grey, amber = "#8e8e8e", "#EAB839"
+              app_words = {
+                  "0": ("Not running", "red"), "1": ("No fresh readings", "orange"),
+                  "2": ("Lost contact", "red"), "3": ("No one else yet", grey),
+                  "4": ("Catching up", amber), "5": ("In step", "green"),
               }
-              assert mapping("Fleet status", "Conductor") == conductor_states, mapping("Fleet status", "Conductor")
-              assert mapping("Conductors up") == conductor_states, mapping("Conductors up")
-              assert mapping("Fleet status", "Node") == {"0": ("down", "red"), "1": ("up", "green")}
-              assert mapping("DHT seconds since last gossip") == {(1000000000, None): ("never", "orange")}, mapping("DHT seconds since last gossip")
-              assert mapping("Services") == {
-                  "0": ("inactive", "orange"), "1": ("active", "green"),
-                  "2": ("starting or stopping", "yellow"), "3": ("failed", "red"),
-                  "4": ("unreachable", "red"),
-              }, mapping("Services")
+              node_words = {
+                  "0": ("Unreachable", "red"), "1": ("Holochain not answering", "red"),
+                  "2": ("No fresh readings", "orange"), "3": ("Running", "green"),
+                  "4": ("No Holochain here", grey),
+              }
+              for uid, title in [("holochain-now", "Is each app working on each node?"),
+                                 ("holochain-fleet", "Is each app in step on each node?")]:
+                  assert words(panel(uid, title)["fieldConfig"]["defaults"]["mappings"]) == app_words, (uid, title)
+              assert words(override(panel("holochain-node", "Is each app part connected, complete and recent?"), "State", "mappings")) == app_words
+              assert words(panel("holochain-network", "Status on each node")["fieldConfig"]["defaults"]["mappings"]) == app_words
+              assert words(panel("holochain-now", "Which machines are on?")["fieldConfig"]["defaults"]["mappings"]) == node_words
+              assert words(override(panel("holochain-fleet", "Which node needs attention?"), "Status", "mappings")) == node_words
+              assert words(panel("holochain-node", "Conductors")["fieldConfig"]["defaults"]["mappings"]) == {
+                  "1": ("Not answering", "red"), "2": ("No fresh readings", "orange"), "3": ("Running", "green"),
+              }
+              # The watched units' names reached both service tables.
+              for uid, title in [("holochain-fleet", "Which watched services are down?"), ("holochain-node", "Background jobs")]:
+                  named = [m["options"]["result"]["text"] for m in override(panel(uid, title), "name", "mappings")]
+                  assert "Holochain conductor" in named, (uid, title, named)
 
               # ---- node names and the recording rules, over three conductors ----
               # Every target carries its node's name, and its site when it has one.
@@ -1984,33 +1922,180 @@
               machine.log("problems: " + json.dumps(sorted(problems)))
               assert problems == expected_problems, problems
 
+              # ---- every panel of the four pages, through Grafana's own query API ----
+              # With the three conductors present, each target goes to
+              # /api/ds/query with its variables filled as Grafana fills them:
+              # All for the multi-value ones, this node, the connected Moss
+              # chat for the network page, the rewritten units and room
+              # constants. Each must come back without an error and with at
+              # least one frame holding a value. Three may be empty here and
+              # must still not error: the two temperature panels, since QEMU
+              # exposes no hwmon sensor, and "Same data everywhere", which
+              # needs two nodes on one network (checks.dashboardQueries still
+              # requires the rule it reads to be recorded). A query that
+              # answers through an "or vector()" fallback answers here
+              # whatever its left side reads; checks.dashboardQueries requires
+              # every series its left side reads to be there.
+              network = next(
+                  r["metric"]["dna"]
+                  for r in wait_non_empty(
+                      'holochain_dht_info{conductor="Moss", network_label="General chat: Messages"}', "q-network"
+                  )
+              )
+              machine.log("network page variable: " + network)
+
+
+              def fill(expr):
+                  for name, value in [
+                      ("''${units:raw}", units),
+                      ("''${room_app}", room["room_app"]),
+                      ("''${room_part}", room["room_part"]),
+                      ("$network", network),
+                      ("$node", "machine"),
+                      ("$site", ".*"),
+                      ("$conductor", ".*"),
+                  ]:
+                      expr = expr.replace(name, value)
+                  assert "$" not in expr, f"unfilled variable in {expr}"
+                  return expr
+
+
+              answered = (
+                  "(.results.A.error == null)"
+                  " and ([.results.A.frames[]? | (.data.values // []) | length > 0 and (.[-1] | length > 0)] | any)"
+              )
+
+
+              def ds_query(expr, instant, name):
+                  # The shell command that posts one query and prints the reply.
+                  body = {
+                      "from": "now-10m",
+                      "to": "now",
+                      "queries": [{
+                          "refId": "A",
+                          "datasource": {"type": "prometheus", "uid": "holochain-prometheus"},
+                          "expr": expr,
+                          "instant": instant,
+                          "range": not instant,
+                          "intervalMs": 15000,
+                          "maxDataPoints": 200,
+                      }],
+                  }
+                  encoded = base64.b64encode(json.dumps(body).encode()).decode()
+                  machine.succeed(f"echo {encoded} | base64 -d > /tmp/{name}.json")
+                  return (
+                      "curl -s -u admin:${grafanaTestPassword} -H 'Content-Type: application/json'"
+                      f" -X POST --data @/tmp/{name}.json http://localhost:3000/api/ds/query"
+                  )
+
+
+              # No sensor, but the collector that would read one runs.
+              wait_non_empty('node_scrape_collector_success{collector="hwmon"} == 1', "q-hwmon")
+              may_be_empty = {"Same data everywhere"}
+              answered_labels, empty_allowed = [], []
+              for uid in tagged:
+                  for p in panels[uid]:
+                      for target in p.get("targets", []):
+                          expr = fill(target["expr"])
+                          name = f"ds-{uid}-{p['id']}-{target['refId']}"
+                          label = f"{uid} / {p['title']} [{target['refId']}]"
+                          command = ds_query(expr, target.get("instant", False), name)
+                          if "node_hwmon_temp_celsius" in expr or p["title"] in may_be_empty:
+                              machine.succeed(f"{command} | jq -e '.results.A.error == null'")
+                              machine.log(f"{label}: no error (may be empty here)")
+                              empty_allowed.append(label)
+                          else:
+                              try:
+                                  machine.wait_until_succeeds(f"{command} | jq -e '{answered}'", timeout=120)
+                              except Exception:
+                                  machine.log(f"{label} did not answer: " + machine.succeed(command)[:2000])
+                                  raise
+                              machine.log(f"{label}: answered")
+                              answered_labels.append(label)
+              # Counted apart, so the log says how many were required to
+              # answer; the ones let off are exactly these three.
+              machine.log(
+                  f"{len(answered_labels)} panel queries answered through /api/ds/query;"
+                  f" {len(empty_allowed)} only required not to error: " + json.dumps(empty_allowed)
+              )
+              assert sorted(empty_allowed) == [
+                  "holochain-fleet / Hottest sensor [A]",
+                  "holochain-network / Same data everywhere [A]",
+                  "holochain-node / Temperatures [A]",
+              ], empty_allowed
+              assert len(answered_labels) >= 70, len(answered_labels)
+
+              # The same test on a query that cannot answer must fail, or the
+              # sweep above proves nothing.
+              machine.fail(f"{ds_query('holochain:no_such_rule', True, 'ds-broken')} | jq -e '{answered}'")
+
+              # A negative matcher keeps every series whatever the label is
+              # called, so a misspelled label would pass the sweep. Each label
+              # a query matches negatively has to exist on its metric.
+              negative = set()
+              for uid in tagged:
+                  for p in panels[uid]:
+                      for target in p.get("targets", []):
+                          for metric, matchers in re.findall(r"([a-zA-Z_:][a-zA-Z0-9_:]*)\{([^}]*)\}", target["expr"]):
+                              for label in re.findall(r"(\w+)\s*!(?:=|~)", matchers):
+                                  negative.add((metric, label))
+              machine.log("negatively matched labels: " + json.dumps(sorted(negative)))
+              assert negative, "no negative matcher found; the parser is broken"
+              for n, (metric, label) in enumerate(sorted(negative)):
+                  wait_non_empty(f'count({metric}{{{label}!=""}})', f"q-negative-{n}")
+
+              # node_exporter leaves mount units out unless told otherwise; the
+              # modules tell it to, so a failed mount reaches the problem list.
+              wait_non_empty('node_systemd_unit_state{name=~".+[.]mount"}', "q-mount-units")
+
               # The fixtures go, so what follows sees the live conductor alone.
               machine.succeed("rm ${textfileDir}/fixture-workshop.prom ${textfileDir}/fixture-moss.prom")
               wait_values("count(holochain_conductor_up)", "q-live-alone", {"": "1"}, "none")
 
-              # ---- the conductor, failing in each of the ways the Overview names ----
+              # ---- the conductor, failing in each of the ways the pages name ----
+              def target_expr(uid, title, ref="A"):
+                  return fill(next(t["expr"] for t in panel(uid, title)["targets"] if t["refId"] == ref))
+
+
+              conductors = target_expr("holochain-node", "Conductors")
+              problems_expr = target_expr("holochain-fleet", "What needs a human?")
+
               def wait_conductor(value, timeout):
-                  path = prom_file(conductor_expr, f"q-conductor-{value}")
+                  wait_values(conductors, f"q-conductor-{value}", {"Holochain": str(value)}, "conductor", timeout=timeout)
+
+              def wait_problem(sentence, timeout):
+                  path = prom_file(problems_expr, "q-problem")
                   machine.wait_until_succeeds(
                       f"curl -s --get localhost:9090/api/v1/query --data-urlencode query@{path}"
-                      f" | jq -e 'any(.data.result[]; .metric.instance == \"127.0.0.1:9100\" and .value[1] == \"{value}\")'",
+                      f" | jq -e --arg p {shlex.quote(sentence)} 'any(.data.result[]; .metric.node == \"machine\" and .metric.problem == $p)'",
                       timeout=timeout,
                   )
-                  machine.log(f"conductor state {value} ({conductor_states[str(value)][0]}) reached")
+                  machine.log(f"problem named: {sentence}")
 
-              # Down: the timer still writes, and says so.
-              machine.succeed("systemctl stop holochain-conductor.service")
-              wait_conductor(0, 180)
-
-              # Stale: nothing writes any more, and the last file stays.
+              # The rule reads Not answering before it reads stale, so the
+              # stale case comes first, while the last file still says up.
+              # No fresh readings: nothing writes any more, and the last file stays.
               machine.succeed("systemctl stop holochain-conductor-metrics.timer")
               wait_conductor(2, 360)
+              wait_problem("Holochain readings are over 90 s old", 60)
 
-              # A textfile node_exporter cannot parse drops every series in it.
+              # Not answering: the timer writes again, and says so.
+              machine.succeed("systemctl stop holochain-conductor.service")
+              machine.succeed("systemctl start holochain-conductor-metrics.timer")
+              wait_conductor(1, 180)
+              wait_problem("Holochain is not answering", 60)
+
+              # A textfile node_exporter cannot parse drops every series in
+              # it: the problem list says so, and the room screen's readings
+              # tile reads 1e9, which its mapping shows as "No readings" in red
+              # (checks.dashboardWords holds the mapping). The timer
+              # stops first, or its next run would replace the file.
+              machine.succeed("systemctl stop holochain-conductor-metrics.timer")
               machine.succeed(
                   "echo 'not a metric line' > /var/lib/prometheus-node-exporter-text-files/holochain-conductor.prom"
               )
-              wait_conductor(4, 120)
+              wait_problem("A metrics file could not be read (see the node_exporter log)", 120)
+              wait_values(target_expr("holochain-now", "Are these readings current?"), "q-no-readings", {"": "1000000000"}, "none", timeout=120)
 
               # A dashboard Grafana could not provision leaves an error in its
               # journal and nothing else.
