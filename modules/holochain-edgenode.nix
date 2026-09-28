@@ -201,6 +201,10 @@
 
   textfileDir = cfg.metricsExporter.textfileDirectory;
   conductorMetricsFile = "${textfileDir}/holochain-conductor.prom";
+  conductorCountersFile = "${cfg.dataDir}/conductor-metrics-counters.json";
+  # [.] rather than an escaped dot: the flag reaches ExecStart unquoted, and
+  # systemd would parse a backslash as an escape sequence of its own.
+  systemdUnitExclude = ".+[.](device|scope|slice)";
 
   conductorMetricsScript = pkgs.writeShellApplication {
     name = "holochain-conductor-metrics";
@@ -222,8 +226,35 @@
         stats='{}'
       fi
 
+      # null, not [], when the call fails: an unanswered list-apps must not
+      # read as a conductor with no apps.
+      if ! { apps=$(timeout 15 ${callPrefix} list-apps 2>/dev/null) \
+        && printf '%s' "$apps" | jq -e 'type == "array"' > /dev/null 2>&1; }; then
+        apps=null
+      fi
+      # The reply carries every DNA's properties and reaches jq below as one
+      # command-line argument, which Linux caps at 128 KiB (MAX_ARG_STRLEN):
+      # a Moss node with three apps already answers 110 KB. Only the status
+      # is read from it there.
+      app_status=$(printf '%s' "$apps" | jq -c 'if type == "array" then [.[] | {status: {type: .status.type}}] else . end')
+
+      # The reply counts bytes and messages per open connection only, so the
+      # running totals live here between runs (see conductor-counters.jq). A
+      # missing or unreadable file starts them from zero, which Prometheus
+      # reads as the counter reset it is.
+      state=${lib.escapeShellArg conductorCountersFile}
+      prev=$(cat "$state" 2>/dev/null || true)
+      if ! printf '%s' "$prev" | jq -e 'type == "object"' > /dev/null 2>&1; then
+        prev='{}'
+      fi
+      counters=$(printf '%s' "$stats" | jq -c --argjson prev "$prev" -f ${./conductor-counters.jq})
+      printf '%s\n' "$counters" > "$state.tmp"
+      mv -f "$state.tmp" "$state"
+
       printf '%s' "$stats" \
         | jq -r --argjson up "$up" --argjson now "$(date +%s)" \
+            --argjson totals "$(printf '%s' "$counters" | jq -c .totals)" \
+            --argjson apps "$app_status" \
             -f ${./conductor-metrics.jq} > "$tmp"
 
       # The collector may read the directory at any moment, so the file is
@@ -506,7 +537,10 @@ in {
         This is the fleet dashboard's Holochain data source. It calls
         `dump-network-stats` on the admin interface, which answers with
         Kitsune2's `TransportStats` on both the 0.6 and 0.7 lines, and derives
-        connection, byte and message gauges from it. Requires
+        connection gauges and byte and message counters from it; it also
+        counts installed apps by status from `list-apps`. The counters are
+        running totals kept in `conductor-metrics-counters.json` under
+        `dataDir`, so a peer disconnecting does not pull them down. Requires
         `metricsExporter.enable`
       '';
 
@@ -684,7 +718,15 @@ in {
       enable = true;
       port = cfg.metricsExporter.port;
       enabledCollectors = ["systemd" "textfile"];
-      extraFlags = ["--collector.textfile.directory=${textfileDir}"];
+      extraFlags = [
+        "--collector.textfile.directory=${textfileDir}"
+        # node_exporter leaves mount and automount units out by default, so a
+        # data disk that fails to mount would never reach the dashboard's
+        # failed-unit count. Kept in step with holochain-grafana, which sets
+        # the same flag at mkDefault for a monitor that is not an edgenode:
+        # node_exporter refuses to start when the flag is given twice.
+        "--collector.systemd.unit-exclude=${systemdUnitExclude}"
+      ];
     };
 
     systemd.tmpfiles.rules = lib.mkIf cfg.metricsExporter.enable [

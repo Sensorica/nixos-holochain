@@ -188,6 +188,18 @@ nix build .#nixosConfigurations.observability-vm.config.system.build.vm
 
 Then open <http://localhost:13000> (admin / workshop2026) and pick the **Holochain Fleet** dashboard; Prometheus itself is on <http://localhost:19090>. Give it a couple of minutes: the conductor needs a minute or more to come up, the metrics timer fires every 10 seconds in this VM, and the panels need a few points before they draw a line.
 
+The dashboard reads top to bottom, from "is anything wrong" to "why":
+
+| Row | Panels | What it answers |
+|---|---|---|
+| Overview | Fleet status, Services | Per node, one row each: is the node scraped (`up`), is the conductor answering and is that answer fresh (`holochain_conductor_up` read against the metrics age), how many hApps are enabled and how many are installed but not, how many systemd units have failed, the fullest disk, memory in use, the hottest sensor, time since boot, and how old the conductor metrics are; then the state of every deployed service on every node, from `node_systemd_unit_state`. Anything that needs looking at turns orange or red |
+| Holochain | Conductors up, Conductor peers, Conductor network throughput, Conductor metrics age, Conductor messages, Blocked messages | What each conductor is doing, from the `holochain_*` series the metrics timer writes |
+| Host health | CPU busy, Memory used, Load average, Disk space used, Disk IO, Temperatures, Host network throughput, Pressure | Whether the machine under the conductor is healthy, from node_exporter, one line per node where the per-device detail is not what you scan for |
+
+Two variables at the top narrow it down. **Instance** picks nodes (All by default, which also takes in nodes that join later). **Units** is the regular expression the Services panel matches unit names against; its default is `services.holochain-grafana.overviewUnits`. Setting that option replaces the default list, so to add a service and keep the rest, write `overviewUnits = lib.mkOptionDefault [ "caddy.service" ];`. The Services panel has a row per node and a column for every listed unit that at least one selected node has: a node that lacks it shows absent in that column, and a unit no selected node has gets no column at all. A node Prometheus cannot reach gets a red cell in a `node unreachable` column. Temperatures, and the Temp column of Fleet status, are empty in this VM and on any machine without hardware sensors; that is expected.
+
+The Conductor column reads more than up or down. **stale** means the metrics timer has not written for over two minutes, so the value it last wrote no longer says anything; **textfile error** means node_exporter rejected a file in its textfile directory and the `holochain_*` series went with it; **unknown** means the node itself is not answering. The two-minute threshold, like the Metrics age colours, assumes `conductorMetrics.interval` at its 30 s default; with an interval above about 90 s every node reads stale, so a fleet that needs a longer interval should provision its own copy of the dashboard (the `dashboards` option) with the 120 s and 300 s thresholds raised.
+
 The dashboard panels are provisioned, not saved by hand. Editing one in the browser will appear to work and will be discarded on the next rebuild; change `modules/dashboards/holochain-fleet.json` instead.
 
 ## First boot sequence
@@ -230,7 +242,20 @@ curl -s localhost:9090/api/v1/targets | jq '.data.activeTargets[] | {scrapeUrl, 
 # export GRAFANA_ADMIN_PASSWORD first; on a node that kept the module
 # default it is the workshop password
 curl -s -u "admin:$GRAFANA_ADMIN_PASSWORD" 'localhost:3000/api/search?query=Holochain'
+
+# the Services panel's raw material: one active series per node for the conductor
+curl -s --get localhost:9090/api/v1/query \
+  --data-urlencode 'query=node_systemd_unit_state{name="holochain-conductor.service",state="active"} == 1' \
+  | jq '.data.result[] | .metric.instance'
+
+# any failed unit, on any node, which the Fleet status panel counts
+# (mount units included; device, scope and slice units are left out)
+curl -s --get localhost:9090/api/v1/query \
+  --data-urlencode 'query=node_systemd_unit_state{state="failed"} == 1' \
+  | jq '.data.result[] | {instance: .metric.instance, unit: .metric.name}'
 ```
+
+A node missing from the first answer is either not scraped (check the targets above) or not running its conductor. The second answer is empty on a healthy fleet; each entry is a unit to look at with `systemctl status` on that node.
 
 ## Running your own bootstrap and relay
 

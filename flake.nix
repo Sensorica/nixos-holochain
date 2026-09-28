@@ -322,6 +322,9 @@
         # invocation in this file.
         grafanaTestPassword = "vmtest";
 
+        # A scrape target vmTestGrafana names and nothing listens on.
+        deadTarget = "127.0.0.1:9999";
+
         on06 = {
           services.holochain-edgenode = {
             package = holonix06.holochain;
@@ -414,6 +417,10 @@
                   "holochain_conductor_metrics_scrape_timestamp_seconds",
               ]:
                   assert name in series, f"{name} missing:\n{series}"
+
+              # list-apps answered on this line too, with no app installed; an
+              # unanswered call would leave the line out rather than write 0.
+              assert 'holochain_conductor_apps{status="enabled"} 0' in series, series
             '';
           };
 
@@ -740,10 +747,6 @@
             assert !(has off);
               pkgs.runCommand "edgenode-binary-cache" {} "echo on=${builtins.toJSON (has on)} off=${builtins.toJSON (has off)} > $out";
 
-          # The metrics jq against replies a bare conductor in a VM never
-          # produces: live connections and nested blocked_message_counts. One
-          # malformed line makes node_exporter drop the whole textfile, so the
-          # output must pass promtool as well as carry the right sums.
           # The #54 passthroughs, rendered on both lines and then handed to
           # that line's real conductor, which rejects unknown keys and bad
           # values: "Conductor ready." is the proof each rendered key is one
@@ -822,6 +825,11 @@
               touch $out
             '';
 
+          # The metrics jq against replies a bare conductor in a VM never
+          # produces: live connections, nested blocked_message_counts, installed
+          # apps, and a peer disconnecting between two runs. One malformed line
+          # makes node_exporter drop the whole textfile, so the output must pass
+          # promtool as well as carry the right sums.
           conductorMetricsJq =
             pkgs.runCommand "conductor-metrics-jq" {
               nativeBuildInputs = [pkgs.jq pkgs.prometheus.cli];
@@ -833,18 +841,82 @@
                   {"pub_key":"b","send_message_count":5,"send_bytes":50,"recv_message_count":1,"recv_bytes":10,"opened_at_s":2,"is_direct":false}]},
                "blocked_message_counts":{"space1":{"reasonA":{"incoming":2,"outgoing":3}},"space2":{"reasonB":{"incoming":1,"outgoing":0}}}}
               EOF
-              for input in busy.json <(echo '{}'); do
+              # b has disconnected and a has moved 20 more bytes; c is new, and
+              # a reconnected under a new opened_at_s is a new connection too.
+              cat > later.json <<'EOF'
+              {"transport_stats":{"backend":"iroh","peer_urls":["u1"],
+                "connections":[
+                  {"pub_key":"a","send_message_count":4,"send_bytes":120,"recv_message_count":4,"recv_bytes":200,"opened_at_s":1,"is_direct":true},
+                  {"pub_key":"c","send_message_count":1,"send_bytes":7,"recv_message_count":0,"recv_bytes":0,"opened_at_s":9,"is_direct":false}]},
+               "blocked_message_counts":{}}
+              EOF
+              cat > apps.json <<'EOF'
+              [{"installed_app_id":"x","status":{"type":"enabled"}},
+               {"installed_app_id":"y","status":{"type":"disabled","value":{"reason":"user"}}},
+               {"installed_app_id":"z","status":{"type":"awaiting_memproofs"}}]
+              EOF
+
+              # prev is a state file's contents; prints the textfile and leaves
+              # the new state in state.json, as the timer's script does.
+              run() {
+                jq -c --argjson prev "$2" -f ${./modules/conductor-counters.jq} < "$1" > state.json
                 jq -r --argjson up 1 --argjson now 1700000000 \
-                  -f ${./modules/conductor-metrics.jq} < "$input" > out.prom
-                cat out.prom
-                promtool check metrics < out.prom
+                  --argjson totals "$(jq -c .totals state.json)" --argjson apps "$3" \
+                  -f ${./modules/conductor-metrics.jq} < "$1"
+              }
+
+              echo '{}' > empty.json
+              for input in busy.json empty.json; do
+                for apps in null '[]' "$(cat apps.json)"; do
+                  run "$input" '{}' "$apps" > out.prom
+                  cat out.prom
+                  promtool check metrics < out.prom
+                done
               done
-              jq -r --argjson up 1 --argjson now 1700000000 \
-                -f ${./modules/conductor-metrics.jq} < busy.json > out.prom
+
+              run busy.json '{}' "$(cat apps.json)" > out.prom
               grep -qx 'holochain_conductor_blocked_messages_total 6' out.prom
               grep -qx 'holochain_conductor_peer_connections 2' out.prom
               grep -qx 'holochain_conductor_direct_peer_connections 1' out.prom
               grep -qx 'holochain_conductor_network_sent_bytes_total 150' out.prom
+              grep -qx 'holochain_conductor_apps{status="enabled"} 1' out.prom
+              grep -qx 'holochain_conductor_apps{status="disabled"} 1' out.prom
+              grep -qx 'holochain_conductor_apps{status="awaiting_memproofs"} 1' out.prom
+
+              # The totals only go up: 150 + a's 20 more + c's 7, although b and
+              # its 50 bytes are gone from the reply.
+              run later.json "$(cat state.json)" null > out.prom
+              cat out.prom
+              grep -qx 'holochain_conductor_network_sent_bytes_total 177' out.prom
+              grep -qx 'holochain_conductor_network_sent_messages_total 10' out.prom
+              grep -qx 'holochain_conductor_network_received_bytes_total 210' out.prom
+              if grep -q '^holochain_conductor_apps' out.prom; then
+                echo "an unanswered list-apps must not read as zero apps" >&2
+                exit 1
+              fi
+
+              # A down conductor answers nothing: the totals hold.
+              run empty.json "$(cat state.json)" '[]' > out.prom
+              grep -qx 'holochain_conductor_network_sent_bytes_total 177' out.prom
+              grep -qx 'holochain_conductor_apps{status="enabled"} 0' out.prom
+              grep -qx 'holochain_conductor_apps{status="disabled"} 0' out.prom
+
+              # ...and the connections it held survive the silence: when it
+              # answers again, only what moved since counts. a sent 5 more
+              # bytes and c 3 more, so 177 + 8, not 177 + a's and c's whole
+              # lifetimes.
+              cat > grown.json <<'EOF'
+              {"transport_stats":{"backend":"iroh","peer_urls":["u1"],
+                "connections":[
+                  {"pub_key":"a","send_message_count":5,"send_bytes":125,"recv_message_count":4,"recv_bytes":200,"opened_at_s":1,"is_direct":true},
+                  {"pub_key":"c","send_message_count":2,"send_bytes":10,"recv_message_count":0,"recv_bytes":0,"opened_at_s":9,"is_direct":false}]},
+               "blocked_message_counts":{}}
+              EOF
+              run grown.json "$(cat state.json)" null > out.prom
+              cat out.prom
+              grep -qx 'holochain_conductor_network_sent_bytes_total 185' out.prom
+              grep -qx 'holochain_conductor_network_sent_messages_total 12' out.prom
+              grep -qx 'holochain_conductor_network_received_bytes_total 210' out.prom
               touch $out
             '';
 
@@ -877,11 +949,27 @@
                 # The file path, not the plaintext option: this is what the
                 # fleet uses, and the credential hand-off is what can break.
                 adminPasswordFile = "/var/lib/secrets/grafana-admin-password";
-                scrapeTargets = ["127.0.0.1:9100"];
+                # The second target has nothing listening, so the dashboard
+                # has a node that is down to show, next to one that is up.
+                scrapeTargets = ["127.0.0.1:9100" deadTarget];
                 openFirewall = true;
+                # Added to the default list rather than replacing it, both at
+                # option-default priority, so the test sees the default units
+                # and proves the option reaches the provisioned JSON.
+                overviewUnits = pkgs.lib.mkOptionDefault ["systemd-journald.service" "always-fails.service"];
+              };
+              # A unit in the failed state, for the Overview to show as one.
+              systemd.services.always-fails = {
+                description = "A unit that always fails, for vmTestGrafana";
+                wantedBy = ["multi-user.target"];
+                script = "exit 1";
               };
             };
             testScript = ''
+              import base64
+              import json
+              import re
+
               machine.wait_for_unit("grafana.service")
               machine.wait_for_unit("prometheus.service")
               machine.wait_for_open_port(3000)
@@ -916,11 +1004,11 @@
                   "the conductor answered dump-network-stats nowhere:\n" + holochain_metrics
               )
 
-              # ---- criterion 3: every configured target is up ----
+              # ---- criterion 3: the live target is up, the dead one down ----
               machine.wait_until_succeeds(
                   "curl -s localhost:9090/api/v1/targets"
-                  " | jq -e '.data.activeTargets | length > 0"
-                  " and all(.[]; .health == \"up\")'",
+                  " | jq -e '[.data.activeTargets[] | {(.labels.instance): .health}] | add"
+                  " | .[\"127.0.0.1:9100\"] == \"up\" and .[\"${deadTarget}\"] == \"down\"'",
                   timeout=120,
               )
               targets = machine.succeed(
@@ -928,8 +1016,6 @@
                   " | jq -c '.data.activeTargets[] | {scrapeUrl, health, lastError}'"
               )
               machine.log("prometheus targets:\n" + targets)
-              assert '"health":"up"' in targets, targets
-              assert '"health":"down"' not in targets, targets
 
               # Prometheus has to have kept the conductor series, not merely
               # scraped it once: this is what the dashboard actually queries.
@@ -967,6 +1053,248 @@
               )
               machine.log("grafana datasource: " + datasource)
               assert '"type":"prometheus"' in datasource, datasource
+
+              # ---- criterion 6: the overview answers "is everything up?" ----
+              # Prometheus must hold the series the Overview row is built on,
+              # not merely accept the queries.
+              def prom_file(expr, name):
+                  encoded = base64.b64encode(expr.encode()).decode()
+                  machine.succeed(f"echo {encoded} | base64 -d > /tmp/{name}")
+                  return f"/tmp/{name}"
+
+
+              def prom_query(path):
+                  return json.loads(machine.succeed(
+                      f"curl -s --get localhost:9090/api/v1/query --data-urlencode query@{path}"
+                  ))
+
+
+              def wait_non_empty(expr, name, timeout=180):
+                  path = prom_file(expr, name)
+                  machine.wait_until_succeeds(
+                      f"curl -s --get localhost:9090/api/v1/query --data-urlencode query@{path}"
+                      " | jq -e '.status == \"success\" and (.data.result | length > 0)'",
+                      timeout=timeout,
+                  )
+                  return prom_query(path)["data"]["result"]
+
+
+              result = wait_non_empty(
+                  'node_systemd_unit_state{name="holochain-conductor.service",state="active"} == 1',
+                  "q-conductor-unit",
+              )
+              machine.log("conductor unit active: " + json.dumps(result))
+              result = wait_non_empty(
+                  'node_filesystem_size_bytes{mountpoint="/", fstype!~"tmpfs|ramfs|overlay|squashfs"} > 0',
+                  "q-root-fs",
+              )
+              machine.log("root filesystem: " + json.dumps(result))
+
+              # The dashboard as Grafana serves it, after the module rewrote it.
+              served = json.loads(machine.succeed(
+                  "curl -s -u admin:${grafanaTestPassword}"
+                  " http://localhost:3000/api/dashboards/uid/holochain-fleet"
+              ))["dashboard"]
+              panels = []
+              for panel in served["panels"]:
+                  panels.append(panel)
+                  panels.extend(panel.get("panels", []))
+              titles = {p["title"] for p in panels}
+              machine.log("provisioned panels: " + ", ".join(sorted(titles)))
+              for title in [
+                  "Overview", "Fleet status", "Services",
+                  "Holochain", "Conductors up", "Conductor peers",
+                  "Conductor network throughput", "Conductor metrics age",
+                  "Conductor messages", "Blocked messages",
+                  "Host health", "CPU busy", "Memory used", "Load average",
+                  "Disk space used", "Disk IO", "Temperatures",
+                  "Host network throughput", "Pressure",
+              ]:
+                  assert title in titles, f"panel {title!r} missing: {sorted(titles)}"
+
+              variables = {v["name"]: v for v in served["templating"]["list"]}
+              units = variables["units"]["current"]["value"]
+              machine.log("units variable default: " + units)
+              for unit in ["holochain-conductor.service", "systemd-journald.service"]:
+                  assert unit in units.split("|"), f"{unit} not in the units default: {units}"
+
+              # The instance variable's own definition, run the way Grafana
+              # runs label_values(): the label's values over the selector.
+              # Both targets have an up series, the dead one included.
+              definition = variables["instance"]["definition"]
+              m = re.fullmatch(r"label_values\((.*),\s*(\w+)\)", definition)
+              assert m, f"unexpected instance variable definition: {definition}"
+              selector_file = prom_file(m.group(1), "q-instance-selector")
+              instances = json.loads(machine.succeed(
+                  f"curl -s --get localhost:9090/api/v1/label/{m.group(2)}/values"
+                  f" --data-urlencode match[]@{selector_file}"
+              ))["data"]
+              machine.log("instance variable values: " + json.dumps(instances))
+              assert sorted(instances) == ["127.0.0.1:9100", "${deadTarget}"], instances
+
+              # Every query on the dashboard, with its variables filled in the
+              # way Grafana fills them for "All", has to be valid PromQL over
+              # series that exist here, and has to answer for the live node
+              # alone too, its name escaped the way a regex match needs it.
+              # node_hwmon_temp_celsius is the one series a VM has nothing
+              # for: QEMU exposes no hwmon sensor. Those queries only have to
+              # be valid, and the collector that would feed them has to run.
+              live = "127\\\\.0\\\\.0\\\\.1:9100"
+              hwmon = wait_non_empty('node_scrape_collector_success{collector="hwmon"} == 1', "q-hwmon")
+              machine.log("hwmon collector: " + json.dumps(hwmon))
+
+              def fill(expr, instance):
+                  return expr.replace("''${units:raw}", units).replace("$instance", instance)
+
+              exprs = []
+              for panel in panels:
+                  for n, target in enumerate(panel.get("targets", [])):
+                      exprs.append((panel, target, n))
+              for panel, target, n in exprs:
+                  for scope, instance in [("all", ".*"), ("live", live)]:
+                      expr = fill(target["expr"], instance)
+                      assert "$" not in expr, f"unsubstituted variable in {expr}"
+                      name = f"q-panel-{panel['id']}-{n}-{scope}"
+                      label = f"{panel['title']} [{target['refId']}] ({scope})"
+                      if "node_hwmon_temp_celsius" in expr:
+                          reply = prom_query(prom_file(expr, name))
+                          assert reply["status"] == "success", f"{label}: {reply}"
+                          machine.log(f"{label}: {len(reply['data']['result'])} series (none expected in a VM)")
+                      else:
+                          result = wait_non_empty(expr, name)
+                          machine.log(f"{label}: {len(result)} series")
+
+              # A negative matcher keeps every series whatever the label is
+              # called, so a misspelled label would pass the loop above. Each
+              # label a query matches negatively has to exist on its metric.
+              negative = set()
+              for panel, target, n in exprs:
+                  for metric, matchers in re.findall(r"([a-zA-Z_:][a-zA-Z0-9_:]*)\{([^}]*)\}", target["expr"]):
+                      for label in re.findall(r"(\w+)\s*!(?:=|~)", matchers):
+                          negative.add((metric, label))
+              machine.log("negatively matched labels: " + json.dumps(sorted(negative)))
+              assert negative, "no negative matcher found; the parser is broken"
+              for n, (metric, label) in enumerate(sorted(negative)):
+                  wait_non_empty(f'count({metric}{{{label}!=""}})', f"q-negative-{n}")
+
+              # node_exporter leaves mount units out unless told otherwise; the
+              # modules tell it to, so a failed mount reaches Failed units.
+              wait_non_empty('node_systemd_unit_state{name=~".+[.]mount"}', "q-mount-units")
+
+              def by_instance(expr, name):
+                  return {
+                      r["metric"].get("instance"): r["value"][1]
+                      for r in prom_query(prom_file(expr, name))["data"]["result"]
+                  }
+
+              def target_expr(title, ref):
+                  return fill(next(
+                      t["expr"] for p in panels if p["title"] == title for t in p["targets"] if t["refId"] == ref
+                  ), ".*")
+
+              # The Services panel's own query, in this node's terms: every
+              # listed unit active, the failing one failed, and the dead
+              # target a row of its own.
+              services_expr = prom_file(target_expr("Services", "A"), "q-services")
+              machine.wait_until_succeeds(
+                  f"curl -s --get localhost:9090/api/v1/query --data-urlencode query@{services_expr}"
+                  " | jq -e 'any(.data.result[]; .metric.name == \"always-fails.service\" and .value[1] == \"3\")'",
+                  timeout=120,
+              )
+              services = {
+                  (r["metric"]["instance"], r["metric"]["name"]): r["value"][1]
+                  for r in prom_query(services_expr)["data"]["result"]
+              }
+              machine.log("services: " + json.dumps({f"{i} {n}": v for (i, n), v in sorted(services.items())}))
+              for unit in [
+                  "holochain-conductor.service", "holochain-conductor-metrics.timer",
+                  "prometheus.service", "prometheus-node-exporter.service",
+                  "grafana.service", "nix-daemon.socket", "systemd-journald.service",
+              ]:
+                  assert services.get(("127.0.0.1:9100", unit)) == "1", f"{unit} not active on the Services panel: {services}"
+              assert services.get(("127.0.0.1:9100", "always-fails.service")) == "3", services
+              assert services.get(("${deadTarget}", "node unreachable")) == "4", services
+              assert not any(i == "${deadTarget}" and n != "node unreachable" for i, n in services), services
+
+              # Fleet status in the same terms.
+              node = by_instance(target_expr("Fleet status", "A"), "q-fleet-node")
+              assert node == {"127.0.0.1:9100": "1", "${deadTarget}": "0"}, node
+              failed = by_instance(target_expr("Fleet status", "D"), "q-fleet-failed")
+              assert int(failed["127.0.0.1:9100"]) >= 1, failed
+              conductor_expr = target_expr("Fleet status", "C")
+              conductor = by_instance(conductor_expr, "q-fleet-conductor")
+              assert conductor == {"127.0.0.1:9100": "1", "${deadTarget}": "5"}, conductor
+              assert target_expr("Conductors up", "A") == conductor_expr, "Conductors up and Fleet status disagree"
+              apps = by_instance(target_expr("Fleet status", "I"), "q-fleet-apps")
+              assert apps == {"127.0.0.1:9100": "0"}, apps
+
+              # What those numbers look like. A swapped colour or a lost
+              # mapping would leave every query above passing.
+              def mapping(panel_title, field=None):
+                  panel = next(p for p in panels if p["title"] == panel_title)
+                  if field is None:
+                      found = panel["fieldConfig"]["defaults"]["mappings"]
+                  else:
+                      found = next(
+                          prop["value"]
+                          for o in panel["fieldConfig"]["overrides"]
+                          if o["matcher"]["options"] == field
+                          for prop in o["properties"]
+                          if prop["id"] == "mappings"
+                      )
+                  return {
+                      value: (option["text"], option["color"])
+                      for m in found if m["type"] == "value"
+                      for value, option in m["options"].items()
+                  }
+
+              conductor_states = {
+                  "0": ("down", "red"), "1": ("up", "green"),
+                  "2": ("stale, was down", "orange"), "3": ("stale, was up", "orange"),
+                  "4": ("textfile error", "red"), "5": ("unknown", "text"),
+              }
+              assert mapping("Fleet status", "Conductor") == conductor_states, mapping("Fleet status", "Conductor")
+              assert mapping("Conductors up") == conductor_states, mapping("Conductors up")
+              assert mapping("Fleet status", "Node") == {"0": ("down", "red"), "1": ("up", "green")}
+              assert mapping("Services") == {
+                  "0": ("inactive", "orange"), "1": ("active", "green"),
+                  "2": ("starting or stopping", "yellow"), "3": ("failed", "red"),
+                  "4": ("unreachable", "red"),
+              }, mapping("Services")
+
+              # ---- the conductor, failing in each of the ways the Overview names ----
+              def wait_conductor(value, timeout):
+                  path = prom_file(conductor_expr, f"q-conductor-{value}")
+                  machine.wait_until_succeeds(
+                      f"curl -s --get localhost:9090/api/v1/query --data-urlencode query@{path}"
+                      f" | jq -e 'any(.data.result[]; .metric.instance == \"127.0.0.1:9100\" and .value[1] == \"{value}\")'",
+                      timeout=timeout,
+                  )
+                  machine.log(f"conductor state {value} ({conductor_states[str(value)][0]}) reached")
+
+              # Down: the timer still writes, and says so.
+              machine.succeed("systemctl stop holochain-conductor.service")
+              wait_conductor(0, 180)
+
+              # Stale: nothing writes any more, and the last file stays.
+              machine.succeed("systemctl stop holochain-conductor-metrics.timer")
+              wait_conductor(2, 360)
+
+              # A textfile node_exporter cannot parse drops every series in it.
+              machine.succeed(
+                  "echo 'not a metric line' > /var/lib/prometheus-node-exporter-text-files/holochain-conductor.prom"
+              )
+              wait_conductor(4, 120)
+
+              # A dashboard Grafana could not provision leaves an error in its
+              # journal and nothing else.
+              journal = machine.succeed("journalctl -u grafana --no-pager")
+              offenders = [
+                  line
+                  for line in journal.splitlines()
+                  if "level=error" in line and "provisioning" in line
+              ]
+              assert not offenders, "grafana provisioning errors:\n" + "\n".join(offenders)
             '';
           };
 
