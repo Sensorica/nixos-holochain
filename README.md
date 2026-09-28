@@ -2,7 +2,7 @@
 
 > A declarative substrate for running Holochain edgenodes, hApps, and developer environments. Built at Sensorica, intended for the Holochain community.
 
-**Status:** the modules work and are VM-tested. A conductor and its hApps come up at boot on both supported Holochain lines (0.7.0 and 0.6.3), a fleet's traffic is on a provisioned Grafana dashboard, and an HTTP gateway serves zome reads over HTTP. Eight NixOS VM tests run in CI. What is still open is hardware: the five-machine fleet has not been deployed to real Holoports yet (issues [#8](https://github.com/Sensorica/nixos-holochain/issues/8) to [#12](https://github.com/Sensorica/nixos-holochain/issues/12)).
+**Status:** the modules work and are VM-tested. A conductor and its hApps come up at boot on both supported Holochain lines (0.7.0 and 0.6.3), a fleet's traffic is on a provisioned Grafana dashboard, and an HTTP gateway serves zome reads over HTTP. Ten NixOS VM tests run in CI. What is still open is hardware: the five-machine fleet has not been deployed to real Holoports yet (issues [#8](https://github.com/Sensorica/nixos-holochain/issues/8) to [#12](https://github.com/Sensorica/nixos-holochain/issues/12)).
 **License:** [MIT](LICENSE), the license of nixpkgs, so any module here can be reused in other flakes or proposed upstream to nixpkgs as it is. The hApps these modules run keep their own licenses (Holochain itself and Moss are CAL-1.0, hREA is Apache-2.0).
 **Origin:** Successor to the archived [Sensorica/holoports-workshop](https://github.com/Sensorica/holoports-workshop), pivoting from HolOS appliance-image deployment to vanilla NixOS authorship.
 
@@ -170,7 +170,7 @@ The full reference for all five modules is [`docs/module-options.md`](docs/modul
 
 ## Tests
 
-Nine NixOS VM tests and a conductor config check, all built in CI:
+Ten NixOS VM tests and a conductor config check, all built in CI:
 
 | Check | What it proves |
 |---|---|
@@ -180,6 +180,7 @@ Nine NixOS VM tests and a conductor config check, all built in CI:
 | `vmTestGrafana` | Conductor series reach Prometheus and the dashboard is provisioned with its data source |
 | `vmTestGateway` | A zome read answers 200 with JSON through the HTTP gateway, and a function outside the allow list answers 403 |
 | `vmTestWindtunnel` | The generated container unit carries the flags the runner requires, and stays stopped when `autoStart = false` |
+| `vmTestWdocker` | The packaged Moss `wdocker` starts its pinned Holochain 0.6.1 conductor through `wdaemon` in an offline VM, downloads nothing into its `bins` directory, and `wdocker stop` ends the conductor |
 | `vmTestBootstrap` | Two 0.6 edgenodes with no internet find each other through a `holochain-bootstrap` server and its plain-HTTP relay; its falsifier, with one node on the wrong port, must fail |
 | `edgenodeConfigRender` | `relayAllowPlainText`, `requestTimeoutS`, `dbSyncLevel` and `wasmBackend` render on each line, and that line's real conductor starts on the result |
 

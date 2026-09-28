@@ -25,7 +25,8 @@ flake.nix
 │   ├── holochain-bootstrap.nix    ← optional: Kitsune2 bootstrap and relay server
 │   └── default.nix                ← aggregator
 ├── packages/
-│   └── holochain-http-gateway.nix ← the hc-http-gw build, one release per Holochain line
+│   ├── holochain-http-gateway.nix ← the hc-http-gw build, one release per Holochain line
+│   └── wdocker.nix                ← Moss wdocker, with the Holochain it pins
 └── templates/
     ├── minimal/                   ← nix flake init -t …#minimal: one edgenode
     └── fleet/                     ← nix flake init -t …#fleet: five nodes, Grafana, ISO
