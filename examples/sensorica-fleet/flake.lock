@@ -304,11 +304,11 @@
         "nixpkgs": "nixpkgs_3"
       },
       "locked": {
-        "lastModified": 1790555006,
-        "narHash": "sha256-bcI4LnKIQhE/83ky6CnyyumSkXP07MD04X22CMd22wA=",
+        "lastModified": 1790556889,
+        "narHash": "sha256-DI/N85+bcXkmvHfmVNk4BWII/gEvZdXIGbPUgH/jNFs=",
         "owner": "Sensorica",
         "repo": "nixos-holochain",
-        "rev": "55acb4831319c8337ca34e77c355aef2ccfdd5e8",
+        "rev": "88aab6d45b349471acbc2fee78bc304ab02e7e8b",
         "type": "github"
       },
       "original": {
