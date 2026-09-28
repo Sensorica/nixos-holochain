@@ -55,6 +55,18 @@ in {
   # separate, deliberate `git -C /root/nixos-holochain pull --rebase`.
   environment.shellAliases.rebuild = "sudo nixos-rebuild switch --flake /root/nixos-holochain/examples/sensorica-fleet";
 
+  # A Holoport is a server: it never sleeps, whoever is logged in or not.
+  # Plasma's power management suspended sensorica-holoport-01 from the login
+  # screen on 2026-09-27, taking the conductors and the dashboards with it.
+  # With the sleep targets gone, no desktop, logind idle action or key can
+  # suspend or hibernate it.
+  systemd.targets = {
+    sleep.enable = false;
+    suspend.enable = false;
+    hibernate.enable = false;
+    hybrid-sleep.enable = false;
+  };
+
   services.desktopManager.plasma6.enable = true;
   services.displayManager.sddm.enable = true;
 
