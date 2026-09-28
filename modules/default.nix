@@ -7,5 +7,6 @@
     ./holochain-grafana.nix
     ./holochain-windtunnel.nix
     ./holochain-http-gateway.nix
+    ./holochain-bootstrap.nix
   ];
 }

@@ -145,6 +145,7 @@ nixos-holochain/
 | `holochain-grafana` | Prometheus and Grafana on the monitor node, with the "Holochain Fleet" dashboard and its data source provisioned. |
 | `holochain-http-gateway` | `hc-http-gw` in front of the conductor, exposing named zome functions over HTTP. Nothing is exposed by default. |
 | `holochain-windtunnel` | Opt-in, off by default: joins the machine to the Holochain Foundation's Nomad cluster to run their Wind Tunnel scenarios. |
+| `holochain-bootstrap` | The Kitsune2 bootstrap and relay server on your own machine, so a fleet finds itself without the Foundation's test server or the internet. See [Running your own bootstrap and relay](docs/deployment.md#running-your-own-bootstrap-and-relay). |
 
 Key options for `services.holochain-edgenode`:
 
@@ -161,13 +162,13 @@ Key options for `services.holochain-edgenode`:
 | `conductorMetrics.enable` | `false` | The conductor's own `holochain_*` series |
 | `openFirewall` | `false` | Open firewall ports |
 
-The full reference for all four modules is [`docs/module-options.md`](docs/module-options.md), generated from the declarations by `nix build .#options-doc`.
+The full reference for all five modules is [`docs/module-options.md`](docs/module-options.md), generated from the declarations by `nix build .#options-doc`.
 
 ---
 
 ## Tests
 
-Eight NixOS VM tests, all built in CI:
+Nine NixOS VM tests and a conductor config check, all built in CI:
 
 | Check | What it proves |
 |---|---|
@@ -177,6 +178,8 @@ Eight NixOS VM tests, all built in CI:
 | `vmTestGrafana` | Conductor series reach Prometheus and the dashboard is provisioned with its data source |
 | `vmTestGateway` | A zome read answers 200 with JSON through the HTTP gateway, and a function outside the allow list answers 403 |
 | `vmTestWindtunnel` | The generated container unit carries the flags the runner requires, and stays stopped when `autoStart = false` |
+| `vmTestBootstrap` | Two 0.6 edgenodes with no internet find each other through a `holochain-bootstrap` server and its plain-HTTP relay; its falsifier, with one node on the wrong port, must fail |
+| `edgenodeConfigRender` | `relayAllowPlainText`, `requestTimeoutS`, `dbSyncLevel` and `wasmBackend` render on each line, and that line's real conductor starts on the result |
 
 ```bash
 nix flake check --no-build --all-systems
