@@ -47,7 +47,7 @@ The placeholder targets a machine that may boot **legacy BIOS or UEFI**, because
 - the UEFI half by NixOS from `boot.loader.grub` in `hosts/common.nix` (`device = "nodev"`, `efiSupport`, `efiInstallAsRemovable`, ESP mounted at `/efi-boot`);
 - the BIOS half by one command in the install runbook, `grub-install --target=i386-pc --boot-directory=/mnt/boot /dev/sda`.
 
-`efiInstallAsRemovable` writes `EFI/BOOT/BOOTX64.EFI`, so firmware that keeps no boot variables still finds it. If your machines are UEFI only you can drop the `bios_grub` partition and the `i386-pc` command; if they are BIOS only, the ESP and the EFI half are what you drop. Layout and both commands after holochain/wind-tunnel-runner (`base-install.nix`, `installer.nix`); a written partitioning runbook is tracked upstream in Sensorica/nixos-holochain#6.
+`efiInstallAsRemovable` writes `EFI/BOOT/BOOTX64.EFI`, so firmware that keeps no boot variables still finds it. If your machines are UEFI only you can drop the `bios_grub` partition and the `i386-pc` command; if they are BIOS only, the ESP and the EFI half are what you drop. Layout and both commands after holochain/wind-tunnel-runner (`base-install.nix`, `installer.nix`); the whole partition, install and `grub-install` sequence is one command, `nix run github:Sensorica/nixos-holochain#holoport-install -- DISK FLAKE#HOST`, written up in the upstream `docs/deployment.md` § "Installing on a Holoport (legacy BIOS)".
 
 ## Deploy
 

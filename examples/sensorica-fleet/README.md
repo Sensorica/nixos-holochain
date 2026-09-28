@@ -62,7 +62,7 @@ nix flake check --no-build --override-input nixos-holochain "$(git rev-parse --s
 
 ## Hardware configuration
 
-Each host ships a placeholder `hardware-configuration.nix` so the fleet evaluates before any machine exists. It is not a bare stub: it carries the Holoport disk layout of ADR-017, so a machine partitioned that way boots on this file as written. The partitioning and `grub-install` sequence follows holochain/wind-tunnel-runner and is not yet written up in `docs/deployment.md` (tracked in #6).
+Each host ships a placeholder `hardware-configuration.nix` so the fleet evaluates before any machine exists. It is not a bare stub: it carries the Holoport disk layout of ADR-017, so a machine partitioned that way boots on this file as written. The partitioning and `grub-install` sequence follows holochain/wind-tunnel-runner; `scripts/holoport-install.sh` runs it, and `docs/deployment.md` § "Installing on a Holoport (legacy BIOS)" is the runbook.
 
 GPT with a 1 MiB `bios_grub` partition *and* a vfat ESP labelled `boot`, an ext4 root labelled `nixos`, swap labelled `swap`; GRUB installed twice, the UEFI half by NixOS (`device = "nodev"`, `efiSupport`, `efiInstallAsRemovable`, ESP at `/efi-boot`) and the BIOS half by one `grub-install --target=i386-pc` in the runbook. A Holoport boots legacy BIOS only; the laptops the fleet is installed from are usually UEFI; this serves both.
 

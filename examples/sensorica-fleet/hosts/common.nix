@@ -11,10 +11,11 @@ in {
   # ADR-017: the Holoport is a legacy-BIOS x86_64 box, and the same tree has to
   # install on a UEFI laptop, so the disk is GPT with a 1 MiB `bios_grub`
   # partition *and* an ESP, and GRUB is installed twice. NixOS writes the EFI
-  # half from this block; the install runbook runs
+  # half from this block; the install script (scripts/holoport-install.sh in
+  # nixos-holochain, docs/deployment.md § "Installing on a Holoport") runs
   #   grub-install --target=i386-pc --boot-directory=/mnt/boot /dev/sda
   # for the BIOS half. `device = "nodev"` is what leaves that half to the
-  # runbook. `efiInstallAsRemovable` writes EFI/BOOT/BOOTX64.EFI, which firmware
+  # script. `efiInstallAsRemovable` writes EFI/BOOT/BOOTX64.EFI, which firmware
   # that keeps no boot variables still finds. Layout and both commands follow
   # holochain/wind-tunnel-runner (`base-install.nix`, `installer.nix`).
   boot.loader.grub = {

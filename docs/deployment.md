@@ -64,6 +64,105 @@ sudo dd if=result/iso/*.iso of=/dev/sdX bs=4M status=progress
 sync
 ```
 
+## Installing on a Holoport (legacy BIOS)
+
+A Holoport boots legacy BIOS only, so the NixOS graphical installer's default UEFI layout does not boot on it. One script, [`scripts/holoport-install.sh`](../scripts/holoport-install.sh), does the whole sequence of ADR-017: GPT with a 1 MiB `bios_grub` partition, a vfat ESP labelled `boot`, an ext4 root labelled `nixos` and 8 GiB of swap labelled `swap` at the end; root mounted at `/mnt` and the ESP at `/mnt/efi-boot`; `nixos-install`; then `grub-install --target=i386-pc` for the BIOS half. The same disk also boots on UEFI, because NixOS writes the EFI half from `hosts/common.nix`. The flake publishes the script as `packages.x86_64-linux.holoport-install` with every tool it calls pinned, and `checks.x86_64-linux.vmTestHoloportInstall` runs that package under SeaBIOS.
+
+The script erases exactly the disk you name and nothing else. It refuses to run without one, shows that disk and the disks it will leave alone, and waits for you to type the disk's name back. It also refuses when another disk already carries one of its three labels, because the installed system mounts by label.
+
+### The machines
+
+| | HoloPort | HoloPort+ |
+|---|---|---|
+| CPU, RAM | dual-core Pentium 3.5 GHz, 8 GB | quad-core i7, 16 GB |
+| Disks | 1 TB HDD at `/dev/sda` | 128 GB SSD at `/dev/sda`, 2 TB HDD at `/dev/sdb` |
+| Install on | `/dev/sda` | `/dev/sda` (the SSD); `/dev/sdb` stays as it is |
+
+Both have Ethernet and no Wi-Fi, HDMI and a USB keyboard, no DMI data, and legacy BIOS. On the base HoloPort, tapping Esc at power-on opens the firmware boot menu; pick the stick there, because the GRUB menu on the internal disk belongs to HoloOS and never lists it. The key for the BIOS setup, and the HoloPort+'s keys, are not known yet: try Del or F2 for setup, and F7, F8, F11 or F12 for the boot menu.
+
+### 1. Boot an installer and get network
+
+Write the workshop ISO (above) or the stock NixOS 26.05 minimal ISO to a USB stick with `dd`, plug the Holoport into the lab router with Ethernet, and boot the stick from the boot menu. Use a USB 2 port: from a USB 3 port the base HoloPort's live system fails with `SQUASHFS error: Unable to read page` and freezes. Prefer a text console to a graphical ISO, whose desktop freezes on the base HoloPort's Intel HD 610; if you booted one and it froze, Ctrl+Alt+F1 then Ctrl+Alt+F3 reaches a console logged in as `nixos`, and `sudo systemctl stop display-manager` stops the frozen session. Then, in a root shell (`sudo -i` on either ISO):
+
+```bash
+ip -br -4 a
+nix --extra-experimental-features nix-command store info --store https://cache.nixos.org
+lsblk -d -o NAME,SIZE,ROTA,MODEL
+```
+
+The first line shows the address the router gave the box; the second prints `Store URL: https://cache.nixos.org` once the binary cache is reachable; the third confirms which disk is which before anything is erased.
+
+### 2a. Install from the Holoport itself
+
+Nearly everything is downloaded rather than built: packages come from cache.nixos.org and from the Holochain cache, which the script passes to `nixos-install` since the target has no `nix.conf` yet; only small derivations such as the unpacked Requests & Offers bundle and the configuration files are built on the box. Clone the repository, put your SSH public key in the `operatorKeys` list at the top of `examples/sensorica-fleet/hosts/common.nix`, then run the script against your checkout:
+
+```bash
+git clone https://github.com/Sensorica/nixos-holochain /root/nixos-holochain
+cd /root/nixos-holochain
+nano examples/sensorica-fleet/hosts/common.nix
+nix --extra-experimental-features 'nix-command flakes' run --accept-flake-config .#holoport-install -- /dev/sda ./examples/sensorica-fleet#edgenode-01
+```
+
+Type `/dev/sda` when it asks. It asks once more at the end, for a root password for the console, but only when it runs in a terminal: `nixos-install` skips that prompt when its input is not one (a background or piped SSH session), and then `passwd`, run in the shell `nixos-enter --root /mnt` opens, sets it before the reboot. On the base HoloPort, with its slow disk and two cores, expect this to take a while; path 2b moves the work to a laptop.
+
+### 2b. Install from a laptop
+
+The laptop builds the system and copies it straight onto the Holoport's new root partition over SSH, so the Holoport only partitions, receives and writes the boot loader. The laptop needs the Holochain cache in its own `nix.conf` (see [Trying it without hardware](#trying-it-without-hardware)), or it compiles the conductor.
+
+On the laptop, from a checkout with your key already in `operatorKeys`:
+
+```bash
+nix build ./examples/sensorica-fleet#nixosConfigurations.edgenode-01.config.system.build.toplevel --out-link edgenode-01-system
+```
+
+On the Holoport, give root a password for the installer session and start its SSH server (the installer ships one but does not start it):
+
+```bash
+passwd
+systemctl start sshd
+```
+
+Back on the laptop, with `HOLOPORT_IP` being the address from step 1, send your key, then start the install over SSH:
+
+```bash
+ssh-copy-id root@HOLOPORT_IP
+ssh -t root@HOLOPORT_IP "nix --extra-experimental-features 'nix-command flakes' run --accept-flake-config github:Sensorica/nixos-holochain#holoport-install -- /dev/sda $(readlink -f edgenode-01-system)"
+```
+
+The script partitions the disk, sees that the system is not on the Holoport yet, prints the exact `nix copy` command and waits. Run it in a second terminal on the laptop; it has this shape:
+
+```bash
+nix copy --to "ssh://root@HOLOPORT_IP?remote-store=/mnt" "$(readlink -f edgenode-01-system)"
+```
+
+`remote-store=/mnt` writes into the new root partition rather than the installer's own store, which lives in RAM and is too small for the event node's closure (about 10 GiB, most of it the desktop). The script carries on by itself once the copy lands.
+
+### 3. Before the first boot
+
+`/mnt` is still mounted when the script ends. edgenode-01 runs Grafana with its admin password read from a file, which has to exist before Grafana first starts; `NEW_PASSWORD` is the one you choose:
+
+```bash
+install -d -m 0700 /mnt/var/lib/secrets
+install -m 0400 /dev/null /mnt/var/lib/secrets/grafana-admin-password
+printf '%s' 'NEW_PASSWORD' > /mnt/var/lib/secrets/grafana-admin-password
+umount -R /mnt && swapoff -a && reboot
+```
+
+Remove the USB stick while the Holoport restarts. It boots from its disk through the BIOS GRUB.
+
+### 4. Verify
+
+On the Holoport, or over SSH as `sensorica` or root with the key from `operatorKeys`:
+
+```bash
+systemctl is-active holochain-conductor
+systemctl status holochain-happ-installer
+journalctl -u holochain-happ-installer --no-pager | grep 'Enabled app'
+curl -s -u "admin:NEW_PASSWORD" 'localhost:3000/api/search?query=Holochain'
+```
+
+The first boot compiles three hApps, so `holochain-happ-installer` can take several minutes to finish on a Holoport (about a minute in the VM check). The conductor should answer `active`; the journal should end with `hc-sandbox: Enabled app: "hrea"`, `"kando"` and `"requests-and-offers"`; and the last line should return the **Holochain Fleet** dashboard, which is also at `http://HOLOPORT_IP:3000` from a laptop on the same network. [Verifying the deployment](#verifying-the-deployment) has the metrics checks.
+
 ## Rescuing an install from another machine
 
 When the graphical installer fails on a machine in front of you (a Holoport, a homelab box), take it over from a laptop on the same network instead of debugging at its console. Every step below was run on 2026-09-26, rescuing a homelab install of NixOS 26.05.
