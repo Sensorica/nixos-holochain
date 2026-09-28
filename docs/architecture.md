@@ -11,6 +11,10 @@ The Holochain ecosystem has two deployment stories today:
 
 The architectural bet is simple. HolOS gives you a minimal Buildroot image to flash. This project takes the opposite approach: declarative NixOS configuration you own, so the community can compose Holochain with the rest of their infrastructure rather than around it.
 
+## Design record
+
+The decisions behind this layout are recorded one per file in [`adr/`](adr/README.md), from ADR-005 (the fleet becomes an example) to ADR-017 (the Holoport as a legacy-BIOS target), with their amendments. ADR-001 to ADR-004 belong to an earlier design document that is not in the repository. When this document cites an ADR by number, that is where its full text lives.
+
 ## Module hierarchy
 
 ```
