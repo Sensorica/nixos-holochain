@@ -98,12 +98,30 @@
 
         # Reusable modules for downstream consumers.
         # The Sensorica fleet that exercises them lives in examples/sensorica-fleet.
-        nixosModules = {
+        nixosModules = let
+          # The bootstrap server's package comes from this flake rather than
+          # from the consumer's `inputs`, which need not carry a holonix 0.6
+          # input at all. The module file itself declares no default, so this
+          # wrapper is what fills it.
+          bootstrapPackage = {
+            lib,
+            pkgs,
+            ...
+          }: {
+            services.holochain-bootstrap.package =
+              lib.mkDefault self.packages.${pkgs.stdenv.hostPlatform.system}.bootstrap-srv-0_6;
+          };
+        in {
           holochain-edgenode = ./modules/holochain-edgenode.nix;
           holochain-windtunnel = ./modules/holochain-windtunnel.nix;
           holochain-http-gateway = ./modules/holochain-http-gateway.nix;
           holochain-grafana = ./modules/holochain-grafana.nix;
-          default = ./modules;
+          holochain-bootstrap = {
+            imports = [./modules/holochain-bootstrap.nix bootstrapPackage];
+          };
+          default = {
+            imports = [./modules bootstrapPackage];
+          };
         };
 
         # The one system in the root flake: a single edgenode with no hApp, so
@@ -212,13 +230,14 @@
             # The modules define NixOS options (systemd units, firewall,
             # assertions) that only a full NixOS evaluation declares. None of
             # them is read here, so the definitions are left unchecked rather
-            # than dragging in the whole NixOS module set to document four
+            # than dragging in the whole NixOS module set to document five
             # files' worth of options.
             {_module.check = false;}
             ./modules/holochain-edgenode.nix
             ./modules/holochain-grafana.nix
             ./modules/holochain-windtunnel.nix
             ./modules/holochain-http-gateway.nix
+            ./modules/holochain-bootstrap.nix
           ];
         };
 
@@ -462,10 +481,212 @@
               assert_installed_once("after reboot")
             '';
           };
+
+        # Two 0.6 edgenodes and a holochain-bootstrap server on a network with
+        # no way out: the only place alice and bob can learn about each other,
+        # and the only relay they can get a peer URL from, is `bootstrap`.
+        # The pass condition is that each conductor holds the other's agent
+        # info for Kando's DNA, with a peer URL on that relay.
+        #
+        # `bobBootstrapPort` exists for the falsifier: pointed at a port
+        # nothing listens on, bob never registers and the same assertion has
+        # to fail (legacyPackages.falsifiers). Relay and bootstrap are both
+        # plain HTTP, which is what relayAllowPlainText is for.
+        bootstrapTest = {
+          name,
+          bobBootstrapPort ? 443,
+        }:
+          pkgs.testers.nixosTest {
+            inherit name;
+            nodes = let
+              edgenode = port: {
+                imports = [edgenodeNode hcOnPath on06];
+                virtualisation = {
+                  cores = 2;
+                  memorySize = 2048;
+                  diskSize = 4096;
+                };
+                services.holochain-edgenode = {
+                  enable = true;
+                  bootstrapUrl = "http://bootstrap:${toString port}";
+                  relayUrl = "http://bootstrap:443/relay";
+                  relayAllowPlainText = true;
+                  # The conductor default, set so the rendered key is proven
+                  # accepted by a real 0.6 conductor without changing behaviour.
+                  requestTimeoutS = 60;
+                  happs.kando = {
+                    src = kandoHapp;
+                    networkSeed = "ci-bootstrap-seed";
+                  };
+                };
+              };
+            in {
+              bootstrap = {
+                imports = [self.nixosModules.holochain-bootstrap];
+                services.holochain-bootstrap = {
+                  enable = true;
+                  openFirewall = true;
+                };
+                environment.systemPackages = [pkgs.procps];
+              };
+              alice = edgenode 443;
+              bob = edgenode bobBootstrapPort;
+            };
+            testScript = ''
+              import json
+              import re
+              import time
+
+              CALL = "${adminCall."0.6"}"
+
+
+              def cpu_ns():
+                  return int(bootstrap.succeed(
+                      "systemctl show -p CPUUsageNSec --value holochain-bootstrap.service"
+                  ))
+
+
+              def report(label, cpu0, t0):
+                  """The server's RSS now, and its CPU since (cpu0, t0), from the unit's accounting."""
+                  cpu1, t1 = cpu_ns(), time.monotonic()
+                  pid = bootstrap.succeed(
+                      "systemctl show -p MainPID --value holochain-bootstrap.service"
+                  ).strip()
+                  rss_kb = int(bootstrap.succeed(f"ps -o rss= -p {pid}").strip())
+                  threads = bootstrap.succeed(f"ps -o nlwp= -p {pid}").strip()
+                  peak = bootstrap.succeed(
+                      "systemctl show -p MemoryPeak --value holochain-bootstrap.service"
+                  ).strip()
+                  cpu_pct = (cpu1 - cpu0) / ((t1 - t0) * 1e9) * 100
+                  bootstrap.log(
+                      f"MEASURE {label}: rss={rss_kb} KiB ({rss_kb / 1024:.1f} MiB)"
+                      f" cgroup_memory_peak={peak} B"
+                      f" cpu={cpu_pct:.3f}% of one core over {t1 - t0:.0f}s"
+                      f" cpu_time={(cpu1 - cpu0) / 1e6:.0f} ms threads={threads}"
+                  )
+
+
+              def window(label, seconds):
+                  cpu0, t0 = cpu_ns(), time.monotonic()
+                  time.sleep(seconds)
+                  report(label, cpu0, t0)
+
+
+              def app_facts(node):
+                  apps = json.loads(node.succeed(f"{CALL} list-apps"))
+                  app = next(a for a in apps if a["installed_app_id"] == "kando")
+                  dna = sorted(set(re.findall(r"uhC0k[A-Za-z0-9_-]+", json.dumps(app))))
+                  assert len(dna) == 1, f"expected one DNA hash, got {dna}"
+                  return app["agent_pub_key"], dna[0]
+
+
+              def agent_infos(node, dna):
+                  """Every agent info the conductor holds for the DNA.
+
+                  hc 0.6.3 answers with one object per agent, carrying the
+                  peer `url`, which for an iroh peer is
+                  `<relay>/<endpoint id>` and so unique to one conductor. It
+                  fills `agent_pub_key` only for the conductor's own cells and
+                  leaves it null for a remote agent, so a remote agent is
+                  recognised by its URL, not its key.
+                  """
+                  out = node.succeed(f"{CALL} list-agents --dna {dna}")
+                  node.log(f"list-agents on {node.name}: {out}")
+                  return json.loads(out)
+
+
+              # ---- the server, alone ----
+              bootstrap.start()
+              bootstrap.wait_for_unit("holochain-bootstrap.service")
+              bootstrap.wait_for_open_port(443)
+              bootstrap.succeed("curl -sf http://127.0.0.1:443/health")
+              user = bootstrap.succeed(
+                  "ps -o user= -p $(systemctl show -p MainPID --value holochain-bootstrap.service)"
+              ).strip()
+              assert user != "root", "the server runs as root"
+              bootstrap.log(f"server runs as dynamic user {user}")
+              window("idle, no conductors", 30)
+
+              # ---- two edgenodes on the same seed ----
+              exchange_cpu, exchange_t = cpu_ns(), time.monotonic()
+              alice.start()
+              bob.start()
+              for node in [alice, bob]:
+                  node.wait_for_unit("holochain-conductor.service")
+                  node.wait_for_unit("holochain-happ-installer.service")
+                  # The server answers over the vlan, not only on loopback.
+                  node.succeed("curl -sf http://bootstrap:443/health")
+                  # The config path is on the running conductor's command line.
+                  path = node.succeed(
+                      "tr '\\0' ' ' < /proc/$(systemctl show -p MainPID --value"
+                      " holochain-conductor.service)/cmdline"
+                      " | grep -o '/nix/store/[^ ]*conductor-config.yaml'"
+                  ).strip()
+                  config = node.succeed(f"cat {path}")
+                  assert '"relayAllowPlainText":true' in config, config
+                  assert "request_timeout_s: 60" in config, config
+
+              alice_id, dna = app_facts(alice)
+              bob_id, bob_dna = app_facts(bob)
+              assert dna == bob_dna, f"different DNAs: {dna} vs {bob_dna}"
+              assert alice_id != bob_id
+              alice.log(f"dna={dna} alice={alice_id} bob={bob_id}")
+
+
+              # iroh writes the relay host as a fully qualified name, with a
+              # trailing dot: http://bootstrap.:443/relay/<endpoint id>.
+              ON_OUR_RELAY = re.compile(r"^http://bootstrap\.?:443/relay/")
+
+
+              def own_url(node, key):
+                  """The peer URL a conductor published for its own agent, if any yet."""
+                  for info in agent_infos(node, dna):
+                      if info["agent_pub_key"] == key:
+                          return info.get("url")
+                  return None
+
+
+              def sees(node, other, other_key):
+                  url = own_url(other, other_key)
+                  if url is None or ON_OUR_RELAY.match(url) is None:
+                      return False
+                  holds_info = any(
+                      info.get("url") == url and info["agent_pub_key"] is None
+                      for info in agent_infos(node, dna)
+                  )
+                  # And a live connection to that conductor's endpoint, the
+                  # last path segment of its URL.
+                  stats = json.loads(node.succeed(f"{CALL} dump-network-stats"))
+                  endpoint = url.rstrip("/").rsplit("/", 1)[-1]
+                  connected = any(
+                      c.get("pub_key") == endpoint
+                      for c in stats["transport_stats"]["connections"]
+                  )
+                  return holds_info and connected
+
+
+              start = time.monotonic()
+              try:
+                  with alice.nested("each conductor holds the other's agent info"):
+                      retry(lambda _: sees(alice, bob, bob_id) and sees(bob, alice, alice_id), timeout_seconds=300)
+              finally:
+                  alice.succeed(f"{CALL} dump-network-stats >&2")
+                  bob.succeed(f"{CALL} dump-network-stats >&2")
+              alice.log(f"MEASURE discovery: both sides saw each other after {time.monotonic() - start:.0f}s")
+              report("boot to mutual discovery of two conductors", exchange_cpu, exchange_t)
+              window("two conductors connected, steady state", 60)
+            '';
+          };
       in {
         packages = {
           holochain-0_6 = holonix06.holochain;
           hc-0_6 = holonix06.hc;
+
+          # kitsune2-bootstrap-srv, bootstrap and iroh relay in one binary:
+          # 0.4.1 from holonix main-0.6, 0.5.0 from main-0.7. The
+          # holochain-bootstrap module defaults to the 0.6 one.
+          bootstrap-srv-0_6 = holonix06.bootstrap-srv;
+          bootstrap-srv = inputs.holonix.packages.${system}.bootstrap-srv;
 
           # One gateway build per Holochain line, so an operator can check
           # which binary a node would run without evaluating a whole system.
@@ -479,11 +700,131 @@
           '';
         };
 
+        # Tests that must FAIL, kept next to the check they falsify so anyone
+        # can re-run them. Never in `checks`. Build the driver, run it, and
+        # read a non-zero exit as the falsifier holding:
+        #   nix build .#legacyPackages.x86_64-linux.falsifiers.vmTestBootstrap-wrongPort.driver
+        #   ./result/bin/nixos-test-driver
+        legacyPackages.falsifiers = {
+          # bob's bootstrap URL points at 444, where nothing listens.
+          vmTestBootstrap-wrongPort = bootstrapTest {
+            name = "holochain-bootstrap-wrong-port";
+            bobBootstrapPort = 444;
+          };
+        };
+
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [nixos-rebuild colmena nil nixd alejandra];
         };
 
         checks = {
+          # The edgenode declares the Holochain Foundation cache by default, and
+          # the option really turns it off (#26). Evaluation only: a host that
+          # forgets the cache compiles Holochain from source on its first switch.
+          edgenodeBinaryCache = let
+            eval = extra:
+              (nixpkgs.lib.nixosSystem {
+                inherit system;
+                modules = [
+                  self.nixosModules.holochain-edgenode
+                  {
+                    _module.args.inputs = inputs;
+                    services.holochain-edgenode.enable = true;
+                    fileSystems."/".device = "none";
+                    boot.loader.grub.enable = false;
+                    system.stateVersion = "26.05";
+                  }
+                  extra
+                ];
+              }).config.nix.settings;
+            on = eval {};
+            off = eval {services.holochain-edgenode.binaryCache.enable = false;};
+            has = st:
+              builtins.elem "https://holochain-ci.cachix.org" (st.extra-substituters or [])
+              && builtins.elem "holochain-ci.cachix.org-1:5IUSkZc0aoRS53rfkvH9Kid40NpyjwCMCzwRTXy+QN8=" (st.extra-trusted-public-keys or []);
+          in
+            assert has on;
+            assert !(has off);
+              pkgs.runCommand "edgenode-binary-cache" {} "echo on=${builtins.toJSON (has on)} off=${builtins.toJSON (has off)} > $out";
+
+          # The #54 passthroughs, rendered on both lines and then handed to
+          # that line's real conductor, which rejects unknown keys and bad
+          # values: "Conductor ready." is the proof each rendered key is one
+          # the conductor accepts, not merely one the module writes. No VM
+          # and no network needed; the bootstrap and relay URLs are never
+          # reached before readiness.
+          edgenodeConfigRender = let
+            render = extra:
+              (inputs.nixpkgs.lib.nixosSystem {
+                inherit system;
+                modules = [
+                  edgenodeNode
+                  extra
+                  {
+                    services.holochain-edgenode = {
+                      enable = true;
+                      bootstrapUrl = "http://bootstrap.invalid";
+                      relayUrl = "http://bootstrap.invalid/relay";
+                      relayAllowPlainText = true;
+                      requestTimeoutS = 90;
+                      dbSyncLevel = "Off";
+                      wasmBackend = "cranelift";
+                    };
+                  }
+                ];
+              })
+              .config
+              .services
+              .holochain-edgenode;
+            e07 = render {};
+            e06 = render on06;
+          in
+            pkgs.runCommand "edgenode-config-render" {} ''
+              has() {
+                grep -qxF -- "$2" "$1" || { echo "missing from $1: $2"; cat "$1"; exit 1; }
+              }
+              lacks() {
+                if grep -q -- "$2" "$1"; then echo "unexpected in $1: $2"; cat "$1"; exit 1; fi
+              }
+
+              for cfg in ${e07.conductorConfigFile} ${e06.conductorConfigFile}; do
+                has "$cfg" '  relay_url: http://bootstrap.invalid/relay'
+                has "$cfg" '  request_timeout_s: 90'
+                has "$cfg" '  advanced: {"irohTransport":{"relayAllowPlainText":true}}'
+              done
+              has ${e07.conductorConfigFile} 'db_sync_level: Off'
+              has ${e07.conductorConfigFile} 'wasm_backend: cranelift'
+              # Below 0.7 both keys are unknown to the conductor.
+              lacks ${e06.conductorConfigFile} 'db_sync_level'
+              lacks ${e06.conductorConfigFile} 'wasm_backend'
+
+              # Each line's conductor on its own rendered config. The data root
+              # moves under the build directory, whose path is short enough
+              # for lair's unix socket.
+              ready() {
+                name=$1 conductor=$2 cfg=$3
+                mkdir -p "$TMPDIR/$name"
+                sed "s|/var/lib/holochain|$TMPDIR/$name|g" "$cfg" > "$name.yaml"
+                echo pass | "$conductor" --piped -c "$name.yaml" > "$name.log" 2>&1 &
+                pid=$!
+                for _ in $(seq 1 120); do
+                  if grep -q "Conductor ready" "$name.log"; then
+                    echo "$name: Conductor ready"
+                    kill "$pid"
+                    wait "$pid" || true
+                    return 0
+                  fi
+                  sleep 1
+                done
+                echo "$name: the conductor never became ready on its rendered config"
+                cat "$name.yaml" "$name.log"
+                exit 1
+              }
+              ready h07 ${pkgs.lib.getExe' e07.package "holochain"} ${e07.conductorConfigFile}
+              ready h06 ${pkgs.lib.getExe' e06.package "holochain"} ${e06.conductorConfigFile}
+              touch $out
+            '';
+
           # The metrics jq against replies a bare conductor in a VM never
           # produces: live connections, nested blocked_message_counts, installed
           # apps, and a peer disconnecting between two runs. One malformed line
@@ -1114,6 +1455,10 @@
             name = "holochain-conductor-metrics-0_6";
             nodeExtra = on06;
           };
+
+          # Two 0.6 edgenodes find each other through a holochain-bootstrap
+          # server with no internet, over its plain-HTTP relay.
+          vmTestBootstrap = bootstrapTest {name = "holochain-bootstrap";};
 
           vmTestWithHapp-0_6 = happTest {
             name = "holochain-edgenode-happ-installer-0_6";

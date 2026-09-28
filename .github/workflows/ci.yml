@@ -3,10 +3,13 @@ name: CI
 # Every PR runs the checks whatever its base branch, so the stacked slice
 # PRs (which target slice branches, not main) show them on the PR page
 # and `gh pr checks` works; pushes to main run them after each merge (ADR-011).
+# release.yml calls this workflow on a release tag, so a release is gated by
+# exactly these jobs and there is no second copy of them to drift.
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_call:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -125,4 +128,6 @@ jobs:
             .#checks.x86_64-linux.vmTestConductorMetrics-0_6 \
             .#checks.x86_64-linux.vmTestGateway \
             .#checks.x86_64-linux.vmTestWindtunnel \
+            .#checks.x86_64-linux.vmTestBootstrap \
+            .#checks.x86_64-linux.edgenodeConfigRender \
             .#checks.x86_64-linux.conductorMetricsJq

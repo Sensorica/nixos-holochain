@@ -1,0 +1,52 @@
+name: Feature request
+description: A new module, a new option, or a change to what an existing one does.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        CONTRIBUTING.md asks for an issue before any code. For a new module or a new option it helps to say what the machine should end up doing, and how you would tell whether it did. The second answer usually becomes the VM test.
+
+  - type: textarea
+    id: end-state
+    attributes:
+      label: What the machine should end up doing
+      description: The state you want after `nixos-rebuild switch`, from the point of view of someone using the node. Not the implementation.
+    validations:
+      required: true
+
+  - type: textarea
+    id: how-to-tell
+    attributes:
+      label: How you would tell whether it did
+      description: The command, request or observation that would prove it, for example a unit that is active, a port that answers, or a value a service returns.
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: What you are running, and what this unblocks or makes easier.
+    validations:
+      required: false
+
+  - type: textarea
+    id: options
+    attributes:
+      label: Options you have in mind
+      description: If you already picture the options, sketch them here. Leave it empty if not.
+      render: nix
+    validations:
+      required: false
+
+  - type: dropdown
+    id: contribute
+    attributes:
+      label: Would you open the PR?
+      options:
+        - "Yes"
+        - With some help
+        - "No"
+    validations:
+      required: false
