@@ -86,6 +86,8 @@
     '';
   };
 in {
+  imports = [./holochain-services.nix];
+
   options.services.admin-plane = {
     enable = lib.mkEnableOption "the fleet's admin plane: Headscale (and optionally Grafana) on public names behind nginx with ACME";
 
@@ -249,8 +251,31 @@ in {
       networking.firewall.allowedTCPPorts = [80 443];
 
       # This machine's own `tailscale up` reaches the server through local
-      # nginx, so it never depends on the router looping the public IP back.
-      networking.hosts."127.0.0.1" = [cfg.headscale.domain];
+      # nginx, so it never depends on the router looping the public IP back;
+      # the health checks below reach both names the same way.
+      networking.hosts."127.0.0.1" = [cfg.headscale.domain] ++ lib.optional (cfg.grafana.domain != null) cfg.grafana.domain;
+
+      # On the dashboards' service list. The health checks go through nginx by
+      # the public names and verify the certificate, so a service reads Not
+      # answering while nginx still serves the self-signed placeholder, which
+      # is exactly the state a failed Let's Encrypt order leaves behind.
+      services.holochain-services = {
+        units = {
+          "headscale.service" = {
+            name = "Remote access (Headscale)";
+            version = lib.getVersion hs.package;
+          };
+          "nginx.service" = {
+            name = "Public web front (nginx)";
+            version = lib.getVersion config.services.nginx.package;
+          };
+        };
+        healthChecks."headscale.service".url = "https://${cfg.headscale.domain}/health";
+        healthChecks."nginx.service".url =
+          if cfg.grafana.domain != null
+          then "https://${cfg.grafana.domain}/api/health"
+          else "https://${cfg.headscale.domain}/health";
+      };
 
       # The CLI (`headscale nodes list`, `preauthkeys create`) is the admin
       # interface; it talks to the server over its unix socket.
@@ -295,6 +320,7 @@ in {
           ReadWritePaths = [cfg.dnsDrift.textfileDirectory];
         };
       };
+      services.holochain-services.units."admin-plane-dns-drift.timer" = "Public DNS check (timer)";
       systemd.timers.admin-plane-dns-drift = {
         wantedBy = ["timers.target"];
         timerConfig = {
