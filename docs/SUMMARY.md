@@ -19,6 +19,7 @@
   - [A fleet](templates/fleet.md)
 - [hApp bundles](happs.md)
 - [Moss always-online node](moss-node.md)
+- [Admin plane: Headscale and a public Grafana](admin-plane.md)
 
 # Contributing
 
