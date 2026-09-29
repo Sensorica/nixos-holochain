@@ -34,6 +34,22 @@
     ];
   };
 
+  # The fleet's admin plane (docs/admin-plane.md): Headscale at hs.sensorica.co
+  # and Grafana at grafana.sensorica.co, behind nginx with Let's Encrypt. The
+  # lab router forwards TCP 80 and 443 here and nothing else. Both names are
+  # fixed A records at GoDaddy, whose API is closed to small accounts, so the
+  # drift check publishes admin_plane_dns_matches_public_ip and a change of
+  # the lab's IP is fixed by hand in GoDaddy. Grafana's login is the only gate
+  # on the public name: its admin password file above must hold a strong one.
+  services.admin-plane = {
+    enable = true;
+    headscale = {
+      domain = "hs.sensorica.co";
+      baseDomain = "sensorica.internal";
+    };
+    grafana.domain = "grafana.sensorica.co";
+  };
+
   # The Sensorica Moss group's always-online node (docs/moss-node.md). Two
   # steps per machine, once: write the conductor password to the file below
   # (root-only, no trailing newline), then `sudo moss-node join "INVITE_LINK"`
