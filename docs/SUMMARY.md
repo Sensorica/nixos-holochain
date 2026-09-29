@@ -20,6 +20,7 @@
 - [hApp bundles](happs.md)
 - [Moss always-online node](moss-node.md)
 - [The Moss pilot's node and bootstrap server](pilot-node.md)
+- [Admin plane: Headscale and a public Grafana](admin-plane.md)
 
 # Contributing
 
