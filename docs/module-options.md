@@ -8,7 +8,324 @@ cp "$(nix build .#options-doc --print-out-paths)" docs/module-options.md
 
 The prose about how the modules fit together lives in [`architecture.md`](architecture.md).
 
+## services\.admin-plane\.enable
+
+
+
+Whether to enable the fleet’s admin plane: Headscale (and optionally Grafana) on public names behind nginx with ACME\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+
+
+*Example:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [modules/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/admin-plane.nix)
+
+
+
+## services\.admin-plane\.acmeEmail
+
+Contact address registered with Let’s Encrypt for the account;
+` null ` registers without one\. It lands in the repository with the
+host’s configuration, so use a shared operations address rather than
+a person’s\. The
+certificates are ordered when the configuration is switched, over port
+80, so the DNS records and the router’s forwards have to exist before
+that switch; an order that fails leaves nginx on a self-signed
+placeholder until ` systemctl restart acme-order-renew-<name> ` succeeds\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+"ops@example.org"
+```
+
+*Declared by:*
+ - [modules/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/admin-plane.nix)
+
+
+
+## services\.admin-plane\.dnsDrift\.enable
+
+
+
+Check every ` interval ` that the public names still resolve to this
+site’s public IPv4, and publish ` admin_plane_dns_matches_public_ip `
+through node_exporter’s textfile collector\. Meant for a site whose IP
+can change and whose registrar cannot be updated automatically; turn
+it off when a dynamic-DNS client keeps the records current\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [modules/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/admin-plane.nix)
+
+
+
+## services\.admin-plane\.dnsDrift\.interval
+
+
+
+How often the check runs, as a systemd time span\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+
+```nix
+"15min"
+```
+
+*Declared by:*
+ - [modules/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/admin-plane.nix)
+
+
+
+## services\.admin-plane\.dnsDrift\.ipEchoUrl
+
+
+
+URL that answers with the caller’s public IPv4 as plain text\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+
+```nix
+"https://api.ipify.org"
+```
+
+*Declared by:*
+ - [modules/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/admin-plane.nix)
+
+
+
+## services\.admin-plane\.dnsDrift\.resolver
+
+
+
+Public resolver asked for the names\. Never this machine’s own resolver: the module pins the Headscale name to 127\.0\.0\.1 locally\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+
+```nix
+"1.1.1.1"
+```
+
+*Declared by:*
+ - [modules/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/admin-plane.nix)
+
+
+
+## services\.admin-plane\.dnsDrift\.textfileDirectory
+
+
+
+Directory node_exporter’s textfile collector reads; it must already exist (the edgenode’s metrics exporter creates it)\. Pointing it elsewhere writes a file nobody scrapes, and a missing directory fails the check in the journal\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+the edgenode’s ` metricsExporter.textfileDirectory ` when that module is imported, else ` /var/lib/prometheus-node-exporter-text `
+
+*Declared by:*
+ - [modules/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/admin-plane.nix)
+
+
+
+## services\.admin-plane\.grafana\.domain
+
+
+
+When set, Grafana (from ` holochain-grafana `) also answers on this
+public name over HTTPS, with secure cookies and its root URL rewritten
+to match\. Its login page becomes the only gate, so set
+` services.holochain-grafana.adminPasswordFile ` to a strong password
+before enabling this; anonymous access and sign-up stay off\. ` null `
+keeps Grafana on the LAN and the tailnet only\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+"grafana.example.org"
+```
+
+*Declared by:*
+ - [modules/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/admin-plane.nix)
+
+
+
+## services\.admin-plane\.headscale\.baseDomain
+
+
+
+MagicDNS suffix: inside the tailnet machines answer as
+` <hostname>.<baseDomain> `\. Headscale refuses to start when the
+public ` domain ` sits under it\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+
+```nix
+"tailnet.internal"
+```
+
+
+
+*Example:*
+
+```nix
+"sensorica.internal"
+```
+
+*Declared by:*
+ - [modules/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/admin-plane.nix)
+
+
+
+## services\.admin-plane\.headscale\.domain
+
+
+
+Public name the Tailscale clients log into
+(` tailscale up --login-server https://<domain> `)\. It is baked into
+every client’s state: changing it later means re-joining every
+machine, so pick a name that can follow the server to another host\.
+
+
+
+*Type:*
+string
+
+
+
+*Example:*
+
+```nix
+"hs.example.org"
+```
+
+*Declared by:*
+ - [modules/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/admin-plane.nix)
+
+
+
+## services\.admin-plane\.headscale\.nameservers
+
+
+
+Resolvers Headscale hands to the clients for every name outside the tailnet\.
+
+
+
+*Type:*
+list of string
+
+
+
+*Default:*
+
+```nix
+[
+  "1.1.1.1"
+  "9.9.9.9"
+]
+```
+
+*Declared by:*
+ - [modules/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/admin-plane.nix)
+
+
+
 ## services\.holochain-bootstrap\.enable
+
+
 
 Whether to enable the Kitsune2 bootstrap and relay server (` kitsune2-bootstrap-srv `)\.
 
@@ -2744,8 +3061,6 @@ string
 
 
 ## services\.holochain-windtunnel\.enable
-
-
 
 Donate this machine to the Holochain Foundation’s Wind Tunnel test
 network\.
