@@ -2095,8 +2095,11 @@
                 services.nginx.virtualHosts.${hsName} = noAcme hsName;
                 services.nginx.virtualHosts.${grafanaName} = noAcme grafanaName;
                 security.pki.certificateFiles = ["${cert}/cert.pem"];
-                networking.hosts."127.0.0.1" = [grafanaName];
                 environment.systemPackages = [pkgs.curl];
+                # The service list and health readings go where a fleet
+                # host's node_exporter would read them.
+                services.holochain-services.textfileDirectory = "/var/lib/node-text";
+                systemd.tmpfiles.rules = ["d /var/lib/node-text 0755 root root - -"];
               };
               nodes.client = {nodes, ...}: {
                 services.tailscale.enable = true;
@@ -2135,6 +2138,14 @@
                     client.succeed(f"tailscale up --login-server https://${hsName} --authkey {key} --hostname client")
                     server.wait_until_succeeds("headscale nodes list -o json | ${pkgs.jq}/bin/jq -e 'map(select(.name == \"client\")) | length == 1'")
                     client.wait_until_succeeds("tailscale ip -4 | grep -E '^100\\.'")
+
+                with subtest("The dashboards list the admin plane, healthy through the certificate"):
+                    server.succeed("systemctl start holochain-service-health.service")
+                    health = server.succeed("cat /var/lib/node-text/holochain-service-health.prom")
+                    for unit in ["headscale.service", "nginx.service"]:
+                        assert f'holochain_service_healthy{{name="{unit}"}} 1' in health, health
+                    listed = server.succeed("cat /var/lib/node-text/holochain-services.prom")
+                    assert 'service="Remote access (Headscale)"' in listed, listed
 
                 with subtest("The drift check is installed"):
                     server.succeed("systemctl cat admin-plane-dns-drift.timer")
