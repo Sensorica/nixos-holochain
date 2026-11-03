@@ -140,6 +140,8 @@ jobs:
             .#checks.x86_64-linux.dashboardQueries \
             .#checks.x86_64-linux.vmTestWdocker \
             .#checks.x86_64-linux.vmTestMossNode \
+            .#checks.x86_64-linux.vmTestPilotNode \
+            .#checks.x86_64-linux.pilotNodeAcmeWiring \
             .#checks.x86_64-linux.moss-dashboard \
             .#checks.x86_64-linux.moss-names \
             .#checks.x86_64-linux.vmTestBootstrap \

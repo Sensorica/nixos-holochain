@@ -22,10 +22,22 @@
   cfg = config.services.holochain-bootstrap;
 
   tls = cfg.tlsCertFile != null;
+  proxied = cfg.nginx.enable;
+
+  # Behind nginx the server listens on the loopback only, in plain HTTP, on the
+  # backend port; nginx holds the public port and the certificate.
+  listenAddresses =
+    if proxied
+    then ["127.0.0.1"]
+    else cfg.listenAddresses;
+  port =
+    if proxied
+    then cfg.nginx.backendPort
+    else cfg.port;
 
   args =
     ["--production"]
-    ++ lib.concatMap (addr: ["--listen" "${addr}:${toString cfg.port}"]) cfg.listenAddresses
+    ++ lib.concatMap (addr: ["--listen" "${addr}:${toString port}"]) listenAddresses
     ++ ["--quic-bind-addr" "${cfg.quicAddress}:${toString cfg.quicPort}"]
     # The files are handed over as systemd credentials, so the dynamic user
     # reads a private copy and never needs access to the originals. `%d` is
@@ -40,9 +52,9 @@
   # this address, so the check accepts any certificate.
   # An empty list is refused by an assertion, which must get to say so.
   firstAddress =
-    if cfg.listenAddresses == []
+    if listenAddresses == []
     then "[::]"
-    else builtins.head cfg.listenAddresses;
+    else builtins.head listenAddresses;
   healthHost =
     if builtins.elem firstAddress ["[::]" "0.0.0.0"]
     then "127.0.0.1"
@@ -51,7 +63,7 @@
     if tls
     then "https"
     else "http";
-  healthUrl = "${scheme}://${healthHost}:${toString cfg.port}/health";
+  healthUrl = "${scheme}://${healthHost}:${toString port}/health";
 in {
   # The services this node runs, by name, for the dashboards.
   imports = [./holochain-services.nix];
@@ -190,7 +202,42 @@ in {
       description = ''
         Open `port` on TCP and `quicPort` on UDP. Conductors on other machines
         cannot reach the server without this or an equivalent firewall rule.
+        With `nginx.enable`, the TCP ports are 80 (the certificate challenge)
+        and 443 instead.
       '';
+    };
+
+    nginx = {
+      enable = lib.mkEnableOption ''
+        nginx in front of the server, on `nginx.host`, with a Let's Encrypt
+        certificate. The server then listens on the loopback only, in plain
+        HTTP, on `nginx.backendPort`; `port`, `listenAddresses` and the TLS
+        options are ignored. nginx forwards `/relay` as a WebSocket, which is
+        how the iroh relay talks.
+
+        Needs `security.acme.acceptTerms` and an address in
+        `security.acme.defaults.email`, and a public DNS name for `nginx.host`
+        that reaches this machine on ports 80 and 443. The QUIC address
+        discovery endpoint cannot sit behind a TCP proxy: it stays on
+        `quicPort`, UDP, directly on this machine, with the server's
+        self-signed certificate
+      '';
+
+      host = lib.mkOption {
+        type = lib.types.str;
+        example = "bootstrap.example.org";
+        description = ''
+          The public DNS name nginx serves and requests the certificate for.
+          Conductors use `https://<host>` as their bootstrap URL and
+          `https://<host>/relay` as their relay URL.
+        '';
+      };
+
+      backendPort = lib.mkOption {
+        type = lib.types.port;
+        default = 7843;
+        description = "The loopback TCP port the server listens on behind nginx.";
+      };
     };
   };
 
@@ -206,6 +253,14 @@ in {
       {
         assertion = cfg.listenAddresses != [];
         message = "services.holochain-bootstrap.listenAddresses must name at least one address.";
+      }
+      {
+        assertion = !proxied || !tls;
+        message = ''
+          services.holochain-bootstrap: nginx.enable and tlsCertFile are two
+          ways to terminate TLS. With nginx in front the server speaks plain HTTP
+          on the loopback, so drop tlsCertFile and tlsKeyFile.
+        '';
       }
     ];
 
@@ -274,8 +329,30 @@ in {
     };
 
     networking.firewall = lib.mkIf cfg.openFirewall {
-      allowedTCPPorts = [cfg.port];
+      allowedTCPPorts =
+        if proxied
+        then [80 443]
+        else [cfg.port];
       allowedUDPPorts = [cfg.quicPort];
+    };
+
+    services.nginx = lib.mkIf proxied {
+      enable = true;
+      recommendedProxySettings = true;
+      virtualHosts.${cfg.nginx.host} = {
+        enableACME = true;
+        forceSSL = true;
+        locations."/" = {
+          proxyPass = "http://127.0.0.1:${toString port}";
+          # The relay (`/relay`) upgrades to a WebSocket, which nginx closes
+          # after a minute without traffic unless told otherwise.
+          proxyWebsockets = true;
+          extraConfig = ''
+            proxy_read_timeout 1h;
+            proxy_send_timeout 1h;
+          '';
+        };
+      };
     };
   };
 }

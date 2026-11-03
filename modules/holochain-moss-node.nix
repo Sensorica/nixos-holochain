@@ -13,6 +13,15 @@
 # restarts the daemon, which pings Moss only for the groups present when it
 # starts (docs/moss-node.md).
 #
+# On the Moss 0.16 line the join needs no person: wdocker reads the password,
+# the profile name and the node description from the environment and accepts an
+# invite as an argument, so `inviteFile` names a root-only file holding the
+# invite and a oneshot unit joins the group once and restarts the daemon (#166).
+# The invite is the group's network seed and never reaches the Nix store or the
+# journal. The same line points the node at a bootstrap and relay of your own
+# (`bootstrapUrl`, `relayUrl`), which the Moss pilot needs because its members
+# run Moss in dev mode against a server we host (#122).
+#
 # The readings are nixos-holochain's own conductor exporter under the conductor
 # name "Moss", beside the edgenode's (one program, one set of HELP texts, which
 # node_exporter needs when two files share its textfile directory, #47). wdocker
@@ -27,6 +36,7 @@
 }: let
   cfg = config.services.holochain-moss-node;
   edge = config.services.holochain-edgenode;
+  metrics = cfg.metrics.enable;
   stateDir = "/var/lib/moss-node";
   wdockerData = "${stateDir}/.local/share/wdocker";
   out = "${toString edge.metricsExporter.textfileDirectory}/moss-node.prom";
@@ -40,6 +50,61 @@
   # find the conductor the daemon runs.
   asNode = pkgs.writeShellScript "moss-node-as-user" ''
     exec ${pkgs.util-linux}/bin/runuser -u moss-node -- env HOME=${stateDir} ${cfg.package}/bin/wdocker "$@"
+  '';
+
+  # Joins the group the invite file names, once. The daemon creates the
+  # conductor on its first start and a join needs it running, so the script
+  # retries until `list-apps` answers; a group app already installed means there
+  # is nothing to do, which is what makes every later start a no-op.
+  #
+  # wdocker prints the invite it was given and, on success, the installed app
+  # (whose manifest carries the network seed), so its output goes to a private
+  # file and the journal gets only a reason that cannot echo the invite.
+  joinScript = pkgs.writeShellScript "moss-node-join" ''
+    set -u
+    PATH=${lib.makeBinPath [pkgs.coreutils pkgs.gnugrep]}
+    export HOME=${stateDir}
+    export WDOCKER_PASSWORD
+    WDOCKER_PASSWORD=$(cat "$CREDENTIALS_DIRECTORY/password")
+    ${lib.optionalString (cfg.profileName != null) "export WDOCKER_PROFILE_NAME=${lib.escapeShellArg cfg.profileName}"}
+    ${lib.optionalString (cfg.nodeDescription != null) "export WDOCKER_NODE_DESCRIPTION=${lib.escapeShellArg cfg.nodeDescription}"}
+    wdocker=${cfg.package}/bin/wdocker
+    out=$(mktemp)
+    trap 'rm -f "$out"' EXIT
+
+    tries=0
+    until "$wdocker" list-apps ${lib.escapeShellArg cfg.name} >"$out" 2>&1; do
+      tries=$((tries + 1))
+      if [ "$tries" -ge 60 ]; then
+        echo "moss-node-join: the conductor did not answer in 10 minutes; see 'journalctl -u moss-node'" >&2
+        exit 1
+      fi
+      sleep 10
+    done
+
+    if grep -q "installed_app_id: 'group#" "$out"; then
+      echo "moss-node-join: a group is already joined; nothing to do"
+      exit 0
+    fi
+
+    if "$wdocker" join-group ${lib.escapeShellArg cfg.name} "$(cat "$CREDENTIALS_DIRECTORY/invite")" >"$out" 2>&1; then
+      echo "moss-node-join: joined the group; restarting the node so Moss sees it online"
+      touch ${stateDir}/.restart-after-join
+    else
+      echo "moss-node-join: join-group failed" >&2
+      # Only lines that cannot carry the invite or the seed.
+      grep -oE 'invalid invite \((wrong-format|version-mismatch|invalid-seed|invalid-progenitor)\)|Failed to fetch resource|sha256 of the group happ[^,]*' "$out" >&2 || true
+      echo "moss-node-join: run 'moss-node join' at a terminal to see the whole error" >&2
+      exit 1
+    fi
+  '';
+
+  # Root, after the join: the daemon pings Moss only for the groups present when
+  # it starts. The marker outlives a failed restart, so the retry still restarts.
+  restartAfterJoin = pkgs.writeShellScript "moss-node-restart-after-join" ''
+    if [ -e ${stateDir}/.restart-after-join ]; then
+      ${config.systemd.package}/bin/systemctl restart moss-node.service && rm -f ${stateDir}/.restart-after-join
+    fi
   '';
 
   helper = pkgs.writeShellScriptBin "moss-node" ''
@@ -118,6 +183,10 @@
       ${./dashboards-moss/sensorica-moss-node.json} > $out/sensorica-moss-node.json
   '';
 in {
+  # The node page's unit list, for a machine that runs this module without the
+  # edgenode (the module that otherwise brings it).
+  imports = [./holochain-services.nix];
+
   options.services.holochain-moss-node = {
     enable = lib.mkEnableOption "a Moss always-online node (wdocker's daemon) as a systemd service, with its readings";
 
@@ -125,8 +194,13 @@ in {
       type = lib.types.package;
       description = ''
         wdocker, with the Holochain binary it runs. The flake's
-        `nixosModules.holochain-moss-node` sets it to its `wdocker-0_15`
-        (Moss 0.15.8, Holochain 0.6.1).
+        `nixosModules.holochain-moss-node` defaults it to its `wdocker-0_15`
+        (Moss 0.15.8, Holochain 0.6.1), the line the Sensorica group runs. The
+        Moss pilot runs `wdocker-0_16` (Moss 0.16.0-rc.4 with the patched
+        Holochain 0.7.1): set `package = nixos-holochain.packages.''${system}.wdocker-0_16`.
+        wdocker and the group it joins must be on the same line: an invite from
+        the other line is refused. Only `wdocker-0_16` honours `bootstrapUrl`
+        and `relayUrl`.
       '';
     };
 
@@ -145,6 +219,76 @@ in {
         newline. Only the path reaches the Nix store; systemd passes the file
         to the daemon as a credential and the daemon reads it on stdin. The
         same password is asked for once by `moss-node join`.
+      '';
+    };
+
+    inviteFile = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "/var/lib/secrets/moss-node-invite";
+      description = ''
+        A root-only file holding a Moss group invite (a link, or the bare
+        `moss-<version>-...` code, with no trailing newline). When set, a
+        oneshot unit joins the group once the daemon answers and restarts the
+        daemon so Moss sees it online; a node that already holds a group does
+        nothing, so the file is read only on the one start that joins. The
+        invite carries the group's network seed: only the path reaches the Nix
+        store, systemd passes the file as a credential, and the unit's output
+        never prints the invite. Needs the 0.16 line, whose wdocker takes the
+        profile name from the environment; on 0.15 join with `moss-node join`.
+
+        Delete the file after the join if the machine's disk is not trusted
+        with the seed; the group stays joined.
+      '';
+    };
+
+    profileName = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "holoport-01";
+      description = "The name the node's profile takes inside the group when `inviteFile` joins it. `null` keeps wdocker's random `wdocker-xxxx`.";
+    };
+
+    nodeDescription = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "Sensorica always-online node on holoport-01";
+      description = "The description shown for the node in the group when `inviteFile` joins it. `null` keeps wdocker's default.";
+    };
+
+    bootstrapUrl = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "https://bootstrap.example.org";
+      description = ''
+        The bootstrap server the node's conductor uses, in place of Moss's
+        production one. A node and the members it serves must use the same
+        server or they never find each other. `null` keeps wdocker's default.
+        Needs `wdocker-0_16`.
+      '';
+    };
+
+    relayUrl = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "https://bootstrap.example.org/relay";
+      description = ''
+        The iroh relay the node's conductor uses; `kitsune2-bootstrap-srv`
+        serves it at `/relay` on the bootstrap's own port. `null` keeps
+        wdocker's default. Needs `wdocker-0_16`.
+      '';
+    };
+
+    metrics.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Write the node's readings for node_exporter (the timer below), which
+        needs `services.holochain-edgenode` with its `metricsExporter`. The
+        exporter asks the conductor through the edgenode's `hc`, so the
+        conductor and that `hc` must be on one Holochain line: leave it on for
+        the 0.15 package beside a 0.6 edgenode, and turn it off for the 0.16
+        package, whose readings were not checked against any `hc` (#166).
       '';
     };
 
@@ -221,8 +365,16 @@ in {
     (lib.mkIf cfg.enable {
       assertions = [
         {
-          assertion = edge.enable && edge.metricsExporter.enable;
-          message = "services.holochain-moss-node needs services.holochain-edgenode with its metricsExporter: the Moss readings go through the same exporter and textfile directory.";
+          assertion = !metrics || (edge.enable && edge.metricsExporter.enable);
+          message = "services.holochain-moss-node needs services.holochain-edgenode with its metricsExporter: the Moss readings go through the same exporter and textfile directory. Set services.holochain-moss-node.metrics.enable = false to run the node without them.";
+        }
+        {
+          assertion = (cfg.bootstrapUrl == null && cfg.relayUrl == null) || (cfg.package.overridesBootstrap or false);
+          message = "services.holochain-moss-node.bootstrapUrl and relayUrl need a wdocker that reads WDOCKER_BOOTSTRAP_URL and WDOCKER_RELAY_URL: set services.holochain-moss-node.package to the flake's wdocker-0_16.";
+        }
+        {
+          assertion = cfg.inviteFile == null || (cfg.package.takesInviteFromEnvironment or false);
+          message = "services.holochain-moss-node.inviteFile needs a wdocker that joins a group without a terminal (WDOCKER_PASSWORD, WDOCKER_PROFILE_NAME): set services.holochain-moss-node.package to the flake's wdocker-0_16, or join with `moss-node join`.";
         }
       ];
 
@@ -238,7 +390,10 @@ in {
         wantedBy = ["multi-user.target"];
         after = ["network-online.target"];
         wants = ["network-online.target"];
-        environment.HOME = stateDir;
+        environment =
+          {HOME = stateDir;}
+          // lib.optionalAttrs (cfg.bootstrapUrl != null) {WDOCKER_BOOTSTRAP_URL = cfg.bootstrapUrl;}
+          // lib.optionalAttrs (cfg.relayUrl != null) {WDOCKER_RELAY_URL = cfg.relayUrl;};
         serviceConfig = {
           User = "moss-node";
           Group = "moss-node";
@@ -266,6 +421,57 @@ in {
 
       environment.systemPackages = [helper];
 
+      services.holochain-services.units."moss-node.service" = {
+        # wdocker's version, and the Holochain it brings, from the package.
+        name = "Moss node";
+        conductor = "Moss";
+        version = lib.getVersion cfg.package;
+        holochainVersion = cfg.package.holochainVersion or "";
+      };
+    })
+
+    (lib.mkIf (cfg.enable && cfg.inviteFile != null) {
+      # Joins the group the invite names, once. See joinScript. It runs as the
+      # node's user, so the conductor and its files stay that user's; only the
+      # restart after the join is root's (the `+` on ExecStartPost).
+      systemd.services.moss-node-join = {
+        description = "Join the Moss group of the invite file (wdocker, conductor ${cfg.name})";
+        wantedBy = ["multi-user.target"];
+        after = ["moss-node.service"];
+        wants = ["moss-node.service"];
+        serviceConfig = {
+          Type = "oneshot";
+          User = "moss-node";
+          Group = "moss-node";
+          # Both files are handed over as credentials, so a missing one fails
+          # the unit with status=243/CREDENTIALS and names the path.
+          LoadCredential = [
+            "password:${cfg.passwordFile}"
+            "invite:${cfg.inviteFile}"
+          ];
+          ExecStart = joinScript;
+          ExecStartPost = "+${restartAfterJoin}";
+          # A join that fails (no network, the conductor still starting) tries
+          # again; one that has happened is a no-op.
+          Restart = "on-failure";
+          RestartSec = "60s";
+          # Ten minutes of waiting for the conductor, plus the join.
+          TimeoutStartSec = "20min";
+          NoNewPrivileges = true;
+          PrivateTmp = true;
+          ProtectSystem = "strict";
+          ProtectHome = true;
+          # The home is the state directory; the join writes the conductor's
+          # config and a marker there.
+          StateDirectory = "moss-node";
+          StateDirectoryMode = "0700";
+          WorkingDirectory = stateDir;
+          UMask = "0077";
+        };
+      };
+    })
+
+    (lib.mkIf (cfg.enable && metrics) {
       systemd.services.moss-node-metrics = {
         description = "Export the Moss node's conductor and per-DHT metrics for node_exporter";
         path = [pkgs.jq];
@@ -319,16 +525,7 @@ in {
         };
       };
 
-      services.holochain-services.units = {
-        # wdocker's version, and the Holochain it brings, from the package.
-        "moss-node.service" = {
-          name = "Moss node";
-          conductor = "Moss";
-          version = lib.getVersion cfg.package;
-          holochainVersion = cfg.package.holochainVersion or "";
-        };
-        "moss-node-metrics.timer" = "Moss readings (timer)";
-      };
+      services.holochain-services.units."moss-node-metrics.timer" = "Moss readings (timer)";
     })
 
     (lib.mkIf cfg.dashboard.enable {

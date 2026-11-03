@@ -19,6 +19,7 @@
   - [A fleet](templates/fleet.md)
 - [hApp bundles](happs.md)
 - [Moss always-online node](moss-node.md)
+- [The Moss pilot's node and bootstrap server](pilot-node.md)
 
 # Contributing
 
