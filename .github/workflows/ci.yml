@@ -112,10 +112,10 @@ jobs:
       # swap the runner is killed and reports "lost communication".
       - name: Add swap
         run: |
-          sudo fallocate -l 16G /swapfile
-          sudo chmod 600 /swapfile
-          sudo mkswap /swapfile
-          sudo swapon /swapfile
+          sudo fallocate -l 16G /mnt/flake-check-swap
+          sudo chmod 600 /mnt/flake-check-swap
+          sudo mkswap /mnt/flake-check-swap
+          sudo swapon /mnt/flake-check-swap
           free -h
 
       - name: nix flake check (root)
