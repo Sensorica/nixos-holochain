@@ -107,6 +107,17 @@ jobs:
           sudo udevadm trigger --name-match=kvm
           ls -la /dev/kvm
 
+      # The whole-flake evaluation below peaks near 18 GB resident (17.8 GB
+      # measured locally), more than the 16 GB hosted runner holds; without
+      # swap the runner is killed and reports "lost communication".
+      - name: Add swap
+        run: |
+          sudo fallocate -l 16G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+          free -h
+
       - name: nix flake check (root)
         run: nix flake check --no-build --all-systems --show-trace
 
