@@ -244,11 +244,26 @@
               dashboard = ./modules/dashboards-moss/sensorica-moss-node.json;
               namesJq = ./modules/moss-node-names.jq;
             };
+            pilotChecks = import ./tests/pilot-node.nix {
+              inherit pkgs;
+              nixos-holochain = self;
+              wdocker = self.packages.${system}.wdocker-0_16;
+              bootstrapSrv = self.packages.${system}.bootstrap-srv-0_7_1;
+            };
           in
             lib.mkIf (system == "x86_64-linux") {
               # wdocker on the Moss 0.15 line, with the Holochain 0.6.1 binary it
               # expects. docs/moss-node.md runs it by hand.
               packages.wdocker-0_15 = pkgs.callPackage ./packages/wdocker.nix {};
+
+              # wdocker on the Moss 0.16 line, at the build the Moss pilot runs:
+              # `@theweave/wdocker@next` with the patched Holochain 0.7.1
+              # (`holochain-0.7.1-mdns.8`) its Moss ships (#166).
+              packages.wdocker-0_16 = pkgs.callPackage ./packages/wdocker-0_16.nix {};
+
+              # The bootstrap and relay server the Moss pilot points at, the
+              # stock holochain-0.7.1 release asset Moss itself pins (#122).
+              packages.bootstrap-srv-0_7_1 = pkgs.callPackage ./packages/bootstrap-srv-0_7_1.nix {};
 
               # The packaged wdocker brings up a throwaway conductor on NixOS
               # without nix-ld and without downloading a Holochain binary. The
@@ -391,6 +406,12 @@
                     emptypassword.fail("ls /var/lib/moss-node/.local/share/wdocker/0.15.x/conductors/vmtest")
                   '';
                 };
+
+              # The pilot's always-online node and the bootstrap and relay server
+              # it uses (#166, #122): the services in one network, and the ACME
+              # wiring evaluated (tests/pilot-node.nix).
+              checks.vmTestPilotNode = pilotChecks.vm;
+              checks.pilotNodeAcmeWiring = pilotChecks.acmeWiring;
 
               # The Moss page and the names program, without a VM (tests/moss.nix).
               checks.moss-dashboard = mossChecks.mossDashboard;

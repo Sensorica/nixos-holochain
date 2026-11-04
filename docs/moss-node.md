@@ -47,6 +47,10 @@ printf '%s' "$(systemd-ask-password 'Moss conductor password:')" | install -m 04
 
 The checks: `checks.x86_64-linux.vmTestMossNode` starts the service in a VM with no terminal, waits for "Daemon ready.", checks the user, the helper, the `holochain_conductor_up{conductor="Moss"} 1` reading and a restart, and boots a second machine without the password file that must never reach "Daemon ready."; `checks.x86_64-linux.moss-dashboard` and `checks.x86_64-linux.moss-names` check the page and the names program, each also run on broken copies of its input that it must reject.
 
+### The 0.16 line
+
+`packages.x86_64-linux.wdocker-0_16` is the same node on Moss 0.16 with the patched Holochain 0.7.1 the Moss pilot runs. The module takes it through `package`, and with it three more things the 0.15 package cannot do: `inviteFile` joins the group at the first start with no terminal, `bootstrapUrl` and `relayUrl` point the node at a bootstrap and relay of your own, and `metrics.enable = false` runs the node without the readings. [The Moss pilot's node and bootstrap server](pilot-node.md) is the setup and says what is and is not shown.
+
 ## By hand
 
 The rest of this page runs the packaged `wdocker` by hand, which is what the service automates. It is still the way to try a group on a machine that is not NixOS.

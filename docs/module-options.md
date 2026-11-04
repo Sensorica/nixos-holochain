@@ -192,12 +192,108 @@ string
 
 
 
+## services\.holochain-bootstrap\.nginx\.enable
+
+
+
+Whether to enable nginx in front of the server, on ` nginx.host `, with a Let’s Encrypt
+certificate\. The server then listens on the loopback only, in plain
+HTTP, on ` nginx.backendPort `; ` port `, ` listenAddresses ` and the TLS
+options are ignored\. nginx forwards ` /relay ` as a WebSocket, which is
+how the iroh relay talks\.
+
+Needs ` security.acme.acceptTerms ` and an address in
+` security.acme.defaults.email `, and a public DNS name for ` nginx.host `
+that reaches this machine on ports 80 and 443\. The QUIC address
+discovery endpoint cannot sit behind a TCP proxy: it stays on
+` quicPort `, UDP, directly on this machine, with the server’s
+self-signed certificate
+\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+
+
+*Example:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [modules/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-bootstrap.nix)
+
+
+
+## services\.holochain-bootstrap\.nginx\.backendPort
+
+
+
+The loopback TCP port the server listens on behind nginx\.
+
+
+
+*Type:*
+16 bit unsigned integer; between 0 and 65535 (both inclusive)
+
+
+
+*Default:*
+
+```nix
+7843
+```
+
+*Declared by:*
+ - [modules/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-bootstrap.nix)
+
+
+
+## services\.holochain-bootstrap\.nginx\.host
+
+
+
+The public DNS name nginx serves and requests the certificate for\.
+Conductors use ` https://<host> ` as their bootstrap URL and
+` https://<host>/relay ` as their relay URL\.
+
+
+
+*Type:*
+string
+
+
+
+*Example:*
+
+```nix
+"bootstrap.example.org"
+```
+
+*Declared by:*
+ - [modules/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-bootstrap.nix)
+
+
+
 ## services\.holochain-bootstrap\.openFirewall
 
 
 
 Open ` port ` on TCP and ` quicPort ` on UDP\. Conductors on other machines
 cannot reach the server without this or an equivalent firewall rule\.
+With ` nginx.enable `, the TCP ports are 80 (the certificate challenge)
+and 443 instead\.
 
 
 
