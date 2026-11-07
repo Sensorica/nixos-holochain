@@ -58,6 +58,9 @@
   # person reads for it, or to null. Watched on every node that runs it, on
   # top of the units each node lists in holochain_service_info.
   unitNames ? {},
+  # How old the admin plane's public DNS check (admin-plane.nix, dnsDrift)
+  # may get before it counts as broken: two of its default 15 min intervals.
+  dnsCheckStaleAfterSeconds ? 1800,
 }: let
   num = builtins.toJSON;
   # A PromQL string literal, and a label_replace replacement that is taken as
@@ -81,6 +84,14 @@
   virtualFs = ''fstype!~"tmpfs|ramfs|overlay|squashfs|nsfs"'';
 
   problem = text: expr: ''label_replace(${expr}, "problem", "${text}", "", "")'';
+
+  # The admin plane's public names (admin-plane.nix, dnsDrift): a name that
+  # no longer resolves to the site's public IPv4, so certificates cannot renew
+  # and nothing outside reaches the site by name until its record is updated.
+  dnsDrift = ''
+    max by (instance, node, site, problem) (
+      label_replace(admin_plane_dns_matches_public_ip == 0,
+        "problem", "Public name $1 no longer resolves to this site", "name", "(.*)"))'';
 
   # A conductor's problem, which says which conductor, except for one named
   # "Holochain" (conductorMetrics.name's default, so every single-conductor
@@ -372,7 +383,9 @@ in {
             or ${problem "A metrics file could not be read (see the node_exporter log)" "max by (instance, node, site) (node_textfile_scrape_error) > 0"}
             or ${conductorProblem "is not answering" "holochain_conductor_up == 0"}
             or ${conductorProblem "readings are over ${stale} s old" "holochain:conductor_fresh == 0"}
-            or ${problem "Some app parts have no name yet" ''count by (instance, node, site) (holochain:dht_names{app_name="Unnamed app"}) > 0''}'';
+            or ${problem "Some app parts have no name yet" ''count by (instance, node, site) (holochain:dht_names{app_name="Unnamed app"}) > 0''}
+            or ${dnsDrift}
+            or ${problem "The public DNS check is over ${num dnsCheckStaleAfterSeconds} s old" "max by (instance, node, site) (time() - admin_plane_dns_check_timestamp_seconds) > ${num dnsCheckStaleAfterSeconds}"}'';
         }
       ];
     }
