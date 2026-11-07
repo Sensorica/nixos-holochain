@@ -712,6 +712,48 @@
     }
 
     {
+      # admin-plane.nix's DNS drift check: one public name moved away, the
+      # other still matches, and the check itself keeps running.
+      name = "admin plane: a public name no longer resolves to the site";
+      input_series = [
+        (up "lab-1" 1)
+        (series "admin_plane_dns_matches_public_ip" (target "lab-1" // {name = "hs.sensorica.co";}) (hold 0))
+        (series "admin_plane_dns_matches_public_ip" (target "lab-1" // {name = "grafana.sensorica.co";}) (hold 1))
+        (series "admin_plane_dns_check_timestamp_seconds" (target "lab-1") fresh)
+      ];
+      promql_expr_test = [
+        (expect "count by (node, problem) (holochain:node_problem)" "30m" [
+          (sample {
+              node = "lab-1";
+              problem = "Public name hs.sensorica.co no longer resolves to this site";
+            }
+            1)
+        ])
+      ];
+    }
+
+    {
+      # Both names match, but the check stopped writing: its last run is
+      # older than two intervals, so its 1s say nothing any more.
+      name = "admin plane: the public DNS check stopped";
+      input_series = [
+        (up "lab-1" 1)
+        (series "admin_plane_dns_matches_public_ip" (target "lab-1" // {name = "hs.sensorica.co";}) (hold 1))
+        (series "admin_plane_dns_check_timestamp_seconds" (target "lab-1") (hold 0))
+      ];
+      promql_expr_test = [
+        (expect "count by (node, problem) (holochain:node_problem)" "20m" [])
+        (expect "count by (node, problem) (holochain:node_problem)" "40m" [
+          (sample {
+              node = "lab-1";
+              problem = "The public DNS check is over 1800 s old";
+            }
+            1)
+        ])
+      ];
+    }
+
+    {
       name = "services: every state in words, and what each does to its node";
       input_series = let
         on = node: target node;
