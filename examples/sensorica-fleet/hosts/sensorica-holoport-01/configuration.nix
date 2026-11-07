@@ -41,6 +41,23 @@
   # drift check publishes admin_plane_dns_matches_public_ip and a change of
   # the lab's IP is fixed by hand in GoDaddy. Grafana's login is the only gate
   # on the public name: its admin password file above must hold a strong one.
+  # A fixed LAN address, because the router forwards 80 and 443 to it. Set
+  # here rather than reserved on the router: the lab's Virgin Plus hub shows
+  # no reservation form, and `.5` sits below its DHCP pool (.10 to .254), so
+  # no lease can collide. Ethernet only, as on every NixOS server we run.
+  networking.useDHCP = false;
+  networking.interfaces.enp1s0.ipv4.addresses = [
+    {
+      address = "192.168.2.5";
+      prefixLength = 24;
+    }
+  ];
+  networking.defaultGateway = {
+    address = "192.168.2.1";
+    interface = "enp1s0";
+  };
+  networking.nameservers = ["192.168.2.1" "1.1.1.1" "9.9.9.9"];
+
   services.admin-plane = {
     enable = true;
     headscale = {
