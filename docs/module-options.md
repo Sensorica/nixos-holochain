@@ -3122,8 +3122,6 @@ string
 
 ## services\.holochain-services\.units\.\<name>\.version
 
-
-
 The version of what the unit runs, from the package the module
 runs it from, never guessed at runtime; published as the
 ` version ` label\. Empty when the unit has none worth naming (a
@@ -3157,6 +3155,8 @@ string
 
 
 ## services\.holochain-windtunnel\.enable
+
+
 
 Donate this machine to the Holochain Foundation’s Wind Tunnel test
 network\.
