@@ -13,14 +13,18 @@ examples/sensorica-fleet/
 │   ├── sensorica-holoport-01/
 │   │   ├── configuration.nix      # monitor node: adds Grafana/Prometheus and the Moss node
 │   │   └── hardware-configuration.nix   # placeholder, replace per machine (below)
-│   ├── sensorica-holoport-02 … 05/          # peer nodes: hostname + hardware only
+│   ├── sensorica-holoport-02 … 05/          # peer nodes: hostname, fixed address, hardware
 │   └── workshop-iso/configuration.nix   # KDE Plasma live ISO with the repo cloned on boot
 └── README.md
 ```
 
 ## Host names
 
-The five machines are `sensorica-holoport-01` to `sensorica-holoport-05`, and each flake output carries its hostname. A NixOS Holoport runs more than a Holochain edgenode (a Moss node, Grafana, a bootstrap server), so the machine is named for what it is and the edgenode stays a role. `sensorica-holoport-01` is the monitor node: Grafana and Prometheus for the whole fleet, and the Sensorica Moss group's always-online node. `02` to `05` are peer nodes, hostname and hardware only.
+The five machines are `sensorica-holoport-01` to `sensorica-holoport-05`, and each flake output carries its hostname. A NixOS Holoport runs more than a Holochain edgenode (a Moss node, Grafana, a bootstrap server), so the machine is named for what it is and the edgenode stays a role. `sensorica-holoport-01` is the monitor node: Grafana and Prometheus for the whole fleet, and the Sensorica Moss group's always-online node. `02` to `05` are peer nodes: hostname, fixed address and hardware.
+
+## Addresses
+
+Every Holoport has a fixed LAN address set in its own `configuration.nix`, Ethernet only: `sensorica-holoport-0N` answers at `192.168.2.(4+N)`, so `01` is `.5` and `02` to `05` are `.6` to `.9`, with the router at `.1`. They sit below the lab hub's DHCP pool (`.10` to `.254`), so no lease can collide, and they are set on the machine rather than reserved on the router because the hub has no reservation form. `01` needs its address fixed for the admin plane, since the router forwards TCP 80 and 443 to it (`docs/admin-plane.md`).
 
 ## Which nixos-holochain the fleet reads
 
