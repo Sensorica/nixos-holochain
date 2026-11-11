@@ -25,6 +25,7 @@ Nothing has been released yet. This section records what `main` holds after the 
 
 ### Added
 
+- `services.admin-plane.grafana.cookieSecure` (default `true`): turn off the `Secure` flag on Grafana's session cookie on a host that must also take logins over `http://<address>:3000`, where a `Secure` cookie makes the login page loop.
 - `holochain-edgenode` installs and enables the hApps in `happs` at boot through the real admin CLI, on Holochain 0.7.0 (`hc client call`) and 0.6.3 (`hc sandbox call`), from one option set. The installer is idempotent and verifies each outcome from `list-apps`. New options: `relayUrl`, `installerTimeout`, `passphraseFileName`, `useSystemdNotify`. (#16)
 - `packages.<system>.holochain-0_6` and `hc-0_6`, for fleets on the 0.6 line. (#16)
 - `services.holochain-edgenode.conductorMetrics`: ten `holochain_conductor_*` series from the conductor's own `dump-network-stats`, written for node_exporter's textfile collector on both lines, with `metricsExporter.textfileDirectory`. (#17)

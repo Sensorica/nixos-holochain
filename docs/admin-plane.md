@@ -11,6 +11,7 @@ In the Sensorica fleet, `sensorica-holoport-01` runs it at `https://hs.sensorica
 1. **DNS.** An A record for the Headscale name pointing at the site's public IPv4, and the Grafana name as a CNAME to it. At Sensorica both live at GoDaddy, whose DNS API is closed to accounts under ten domains, so they are plain records edited by hand.
 2. **Router.** A fixed LAN address for the admin-plane machine (a DHCP reservation, or a static address outside the DHCP pool set in the host's NixOS config, as `sensorica-holoport-01` does with `192.168.2.5`), and TCP 80 and 443 forwarded to it. Nothing else: SSH (22), Grafana (3000) and Prometheus (9090) stay closed on the public address. Port 80 only serves the ACME challenge and the redirect to HTTPS.
 3. **Grafana password.** With `grafana.domain` set, Grafana's login page is the only gate on a public name. `services.holochain-grafana.adminPasswordFile` must hold a strong password before the switch.
+   The session cookie is then `Secure` (`grafana.cookieSecure`, default `true`), so logging in works on the public name and on `localhost` only: on `http://<host>:3000` the login page loops. Set `grafana.cookieSecure = false` on a host that must also take logins by LAN or tailnet address.
 
 Order matters: the certificates are ordered during the switch, over port 80. A switch made before the DNS records resolve and the forwards exist leaves nginx on a self-signed placeholder; fix the cause, then `sudo systemctl restart acme-order-renew-<name>`.
 

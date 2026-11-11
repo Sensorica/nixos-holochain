@@ -198,6 +198,36 @@ the edgenode’s ` metricsExporter.textfileDirectory ` when that module is impor
 
 
 
+## services\.admin-plane\.grafana\.cookieSecure
+
+
+
+With ` grafana.domain ` set, mark Grafana’s session cookie ` Secure `\.
+A browser then keeps it only over HTTPS (or on ` localhost `), so a
+login on the plain ` http://<host>:3000 ` address loops back to the
+login page\. Keep ` true ` when the public name is the way in; set
+` false ` on a host whose operators also log in over the LAN or the
+tailnet by address, accepting a session cookie sent without TLS on
+those links (the tailnet’s own WireGuard still encrypts it there)\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [modules/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/admin-plane.nix)
+
+
+
 ## services\.admin-plane\.grafana\.domain
 
 
@@ -3098,8 +3128,6 @@ string
 
 ## services\.holochain-services\.units\.\<name>\.name
 
-
-
 The name a person reads for the unit on the dashboards\.
 
 
@@ -3121,6 +3149,8 @@ string
 
 
 ## services\.holochain-services\.units\.\<name>\.version
+
+
 
 The version of what the unit runs, from the package the module
 runs it from, never guessed at runtime; published as the
