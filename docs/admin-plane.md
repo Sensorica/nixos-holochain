@@ -74,7 +74,9 @@ sudo headscale nodes delete --identifier ID
 
 With `dnsDrift.enable` (the default), a timer compares the site's public IPv4 with what each public name resolves to at a public resolver, every 15 minutes, and publishes `admin_plane_dns_matches_public_ip{name="..."}` through node_exporter's textfile collector: 1 when they agree, 0 when they do not. The journal of `admin-plane-dns-drift.service` names the old and new address. A 0 also appears on the fleet dashboard's problem lists as "Public name NAME no longer resolves to this site", and a check that stops writing for over 30 minutes (two default intervals) as "The public DNS check is over 1800 s old", both from `holochain:node_problem`.
 
-When it reads 0: update the A record at the registrar to the new address (the CNAME follows), then wait for the TTL. Clients that are already joined keep working through the change as long as the coordination server is reachable again; nothing on them needs to change, because they know the server by name.
+When it reads 0: update the A record at the registrar to the new address (the CNAME follows), then wait for the TTL.
+
+To stop correcting it by hand, set `duckdns = { enable = true; name = "<name>"; }` and write the account's Duck DNS token root-only to `duckdns.tokenFile` (`/var/lib/secrets/duckdns-token` by default). ddclient then keeps `<name>.duckdns.org` on the site's public IPv4 every five minutes, and the Headscale name becomes, once, a CNAME to it at the registrar. The drift check keeps working through the CNAME. Clients that are already joined keep working through the change as long as the coordination server is reachable again; nothing on them needs to change, because they know the server by name.
 
 ## Moving the admin plane to another site
 

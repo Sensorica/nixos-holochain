@@ -198,6 +198,90 @@ the edgenode’s ` metricsExporter.textfileDirectory ` when that module is impor
 
 
 
+## services\.admin-plane\.duckdns\.enable
+
+
+
+Whether to enable keeping a Duck DNS name on this site’s public IPv4 with ddclient, for a
+site whose address changes\. Point the public names at it with a CNAME
+once (` headscale.domain ` → ` <name>.duckdns.org `), and the registrar
+never has to change again\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+
+
+*Example:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [modules/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/admin-plane.nix)
+
+
+
+## services\.admin-plane\.duckdns\.name
+
+
+
+The Duck DNS subdomain, without ` .duckdns.org `\.
+
+
+
+*Type:*
+string
+
+
+
+*Example:*
+
+```nix
+"my-site"
+```
+
+*Declared by:*
+ - [modules/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/admin-plane.nix)
+
+
+
+## services\.admin-plane\.duckdns\.tokenFile
+
+
+
+The account’s Duck DNS token, root-only\. A path, so the token never
+enters the Nix store\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+
+```nix
+"/var/lib/secrets/duckdns-token"
+```
+
+*Declared by:*
+ - [modules/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/admin-plane.nix)
+
+
+
 ## services\.admin-plane\.grafana\.cookieSecure
 
 
@@ -2986,8 +3070,6 @@ null
 
 ## services\.holochain-services\.units
 
-
-
 The systemd units this node runs that the Holochain dashboards watch,
 each with the name a person reads for it; a value is that name, or
 ` { name; conductor; version; holochainVersion; } `, where ` version ` is
@@ -3127,6 +3209,8 @@ string
 
 
 ## services\.holochain-services\.units\.\<name>\.name
+
+
 
 The name a person reads for the unit on the dashboards\.
 

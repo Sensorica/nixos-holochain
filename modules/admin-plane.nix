@@ -165,6 +165,29 @@ in {
       '';
     };
 
+    duckdns = {
+      enable = lib.mkEnableOption ''
+        keeping a Duck DNS name on this site's public IPv4 with ddclient, for a
+        site whose address changes. Point the public names at it with a CNAME
+        once (`headscale.domain` → `<name>.duckdns.org`), and the registrar
+        never has to change again'';
+
+      name = lib.mkOption {
+        type = lib.types.str;
+        example = "my-site";
+        description = "The Duck DNS subdomain, without `.duckdns.org`.";
+      };
+
+      tokenFile = lib.mkOption {
+        type = lib.types.str;
+        default = "/var/lib/secrets/duckdns-token";
+        description = ''
+          The account's Duck DNS token, root-only. A path, so the token never
+          enters the Nix store.
+        '';
+      };
+    };
+
     dnsDrift = {
       enable = lib.mkOption {
         type = lib.types.bool;
@@ -295,6 +318,18 @@ in {
       # interface; it talks to the server over its unix socket.
       environment.systemPackages = [hs.package];
     }
+
+    (lib.mkIf cfg.duckdns.enable {
+      services.ddclient = {
+        enable = true;
+        protocol = "duckdns";
+        domains = [cfg.duckdns.name];
+        passwordFile = cfg.duckdns.tokenFile;
+        # The lab has no public IPv6 to publish; ask only for IPv4.
+        usev6 = "";
+        interval = "5min";
+      };
+    })
 
     (lib.mkIf (cfg.grafana.domain != null) {
       services.grafana.settings = {
