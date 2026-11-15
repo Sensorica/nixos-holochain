@@ -71,6 +71,12 @@
       };
       edgenodeNamesWiring = import ../tests/edgenode-names-wiring.nix args;
       vmTestAdminPlane = import ../tests/admin-plane-vm.nix args;
+      # What grafana.cookieSecure and duckdns render, evaluated
+      # (tests/admin-plane.nix).
+      adminPlaneOptions = import ../tests/admin-plane.nix {
+        inherit pkgs;
+        nixos-holochain = self;
+      };
       vmTestGrafana = import ../tests/grafana-vm.nix args;
       vmTestWindtunnel = import ../tests/windtunnel-vm.nix args;
       vmTestGateway = import ../tests/gateway-vm.nix args;

@@ -325,7 +325,7 @@ in {
         protocol = "duckdns";
         domains = [cfg.duckdns.name];
         passwordFile = cfg.duckdns.tokenFile;
-        # The lab has no public IPv6 to publish; ask only for IPv4.
+        # Publishes IPv4 only; ask ddclient for no IPv6 address.
         usev6 = "";
         interval = "5min";
       };
