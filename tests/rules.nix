@@ -717,15 +717,15 @@
       name = "admin plane: a public name no longer resolves to the site";
       input_series = [
         (up "lab-1" 1)
-        (series "admin_plane_dns_matches_public_ip" (target "lab-1" // {name = "hs.sensorica.co";}) (hold 0))
-        (series "admin_plane_dns_matches_public_ip" (target "lab-1" // {name = "grafana.sensorica.co";}) (hold 1))
+        (series "admin_plane_dns_matches_public_ip" (target "lab-1" // {name = "hs.example.org";}) (hold 0))
+        (series "admin_plane_dns_matches_public_ip" (target "lab-1" // {name = "grafana.example.org";}) (hold 1))
         (series "admin_plane_dns_check_timestamp_seconds" (target "lab-1") fresh)
       ];
       promql_expr_test = [
         (expect "count by (node, problem) (holochain:node_problem)" "30m" [
           (sample {
               node = "lab-1";
-              problem = "Public name hs.sensorica.co no longer resolves to this site";
+              problem = "Public name hs.example.org no longer resolves to this site";
             }
             1)
         ])
@@ -738,7 +738,7 @@
       name = "admin plane: the public DNS check stopped";
       input_series = [
         (up "lab-1" 1)
-        (series "admin_plane_dns_matches_public_ip" (target "lab-1" // {name = "hs.sensorica.co";}) (hold 1))
+        (series "admin_plane_dns_matches_public_ip" (target "lab-1" // {name = "hs.example.org";}) (hold 1))
         (series "admin_plane_dns_check_timestamp_seconds" (target "lab-1") (hold 0))
       ];
       promql_expr_test = [
