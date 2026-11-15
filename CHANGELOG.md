@@ -54,6 +54,7 @@ Nothing has been released yet. This section records what `main` holds after the 
 
 ### Changed
 
+- `flake.nix` holds only the inputs and the list of parts: packages, modules, templates, checks and docs are flake-parts modules under `nix/`, and every check has its own file under `tests/`. The outputs are unchanged: `nix flake show` is byte-identical and every derivation path is the same, except `checks.moss-dashboard`, which reads the whole source tree and so moves with any change.
 - The VM tests that existed in May are rewritten. `vmTest` boots the 0.7 conductor and checks through the admin CLI that it answers and logs no errors. `vmTestWithHapp` was defined only when a `happs/windtunnel.happ` was present, and no commit ever carried one; it now installs Dino Adventure v0.3.0, fetched by hash, and checks it is installed exactly once, before and after a reboot. (#16) `vmTestGrafana` runs the whole observability path on one node, from the conductor's own stats to the dashboard. (#17)
 - The conductor runs with `Type = "notify"` and reads its lair passphrase from a 0600 file in its state directory; its `network` section follows the line (`signal_url` below 0.7, `relay_url` on both). (#16)
 - Grafana reads `adminPasswordFile` and `secretKeyFile` as systemd credentials, so the files can be root-owned 0400; both options reject Nix store paths. (#21)

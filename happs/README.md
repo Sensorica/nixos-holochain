@@ -30,7 +30,7 @@ sha256sum <file>
 
 ## Bundles the VM tests use
 
-Both are published releases, fetched by hash in `flake.nix`:
+Both are published releases, fetched by hash in `nix/shared.nix`:
 
 | Bundle | Line | Used by | sha256 |
 |---|---|---|---|
