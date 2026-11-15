@@ -1,5 +1,5 @@
-# Moved verbatim from flake.nix (AD1); called from nix/checks.nix with the
-# shared per-system arguments of nix/shared.nix.
+# Called from nix/checks.nix with the per-system arguments of
+# nix/shared.nix.
 # The edgenode module's own names wiring, which the checks above
 # only mimic by hand: an evaluated system's metrics unit, run with
 # the exporter binary swapped for one that prints its arguments, so

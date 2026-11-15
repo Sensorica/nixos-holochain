@@ -2,9 +2,7 @@
   inputs,
   self,
   ...
-}: let
-  nixpkgs = inputs.nixpkgs;
-in {
+}: {
   flake = {
     # Reusable modules for downstream consumers.
     # The Sensorica fleet that exercises them lives in examples/sensorica-fleet.

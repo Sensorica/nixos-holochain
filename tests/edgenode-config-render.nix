@@ -1,5 +1,5 @@
-# Moved verbatim from flake.nix (AD1); called from nix/checks.nix with the
-# shared per-system arguments of nix/shared.nix.
+# Called from nix/checks.nix with the per-system arguments of
+# nix/shared.nix.
 # The #54 passthroughs, rendered on both lines and then handed to
 # that line's real conductor, which rejects unknown keys and bad
 # values: "Conductor ready." is the proof each rendered key is one

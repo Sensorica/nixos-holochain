@@ -1,5 +1,5 @@
-# Moved verbatim from flake.nix (AD1); called from nix/checks.nix with the
-# shared per-system arguments of nix/shared.nix.
+# Called from nix/checks.nix with the per-system arguments of
+# nix/shared.nix.
 # The Holoport install rehearsed end to end. An installer machine runs
 # the holoport-install package against an empty SATA disk; the same
 # disk then boots under QEMU's default firmware, SeaBIOS, which is

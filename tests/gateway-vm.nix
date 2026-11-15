@@ -1,5 +1,5 @@
-# Moved verbatim from flake.nix (AD1); called from nix/checks.nix with the
-# shared per-system arguments of nix/shared.nix.
+# Called from nix/checks.nix with the per-system arguments of
+# nix/shared.nix.
 # A real zome call through the gateway, on a node that installed a
 # real hApp. The allow list names exactly one read function, so the
 # 200 proves the whole path (conductor -> admin API -> app websocket

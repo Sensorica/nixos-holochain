@@ -1,5 +1,5 @@
-# Moved verbatim from flake.nix (AD1); called from nix/checks.nix with the
-# shared per-system arguments of nix/shared.nix.
+# Called from nix/checks.nix with the per-system arguments of
+# nix/shared.nix.
 # One node wearing both roles: an edgenode exporting its conductor's
 # own stats, and the monitor scraping and drawing them. That is the
 # whole observability path in a single VM, so a break anywhere in it

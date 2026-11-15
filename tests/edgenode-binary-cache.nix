@@ -1,5 +1,5 @@
-# Moved verbatim from flake.nix (AD1); called from nix/checks.nix with the
-# shared per-system arguments of nix/shared.nix.
+# Called from nix/checks.nix with the per-system arguments of
+# nix/shared.nix.
 # The edgenode declares the Holochain Foundation cache by default, and
 # the option really turns it off (#26). Evaluation only: a host that
 # forgets the cache compiles Holochain from source on its first switch.

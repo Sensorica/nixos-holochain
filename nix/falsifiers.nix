@@ -9,7 +9,6 @@
     shared,
     ...
   }: let
-    nixpkgs = inputs.nixpkgs;
     inherit (shared) bootstrapTest servicesTest;
   in {
     # can re-run them. Never in `checks`. Build the driver, run it, and

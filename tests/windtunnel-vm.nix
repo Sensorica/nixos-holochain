@@ -1,5 +1,5 @@
-# Moved verbatim from flake.nix (AD1); called from nix/checks.nix with the
-# shared per-system arguments of nix/shared.nix.
+# Called from nix/checks.nix with the per-system arguments of
+# nix/shared.nix.
 # The test sandbox has no network, so this asserts what the module
 # generates rather than a running container; the image is pulled and
 # run for real on the Builder's machine (see the PR body).

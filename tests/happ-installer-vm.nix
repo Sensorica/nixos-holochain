@@ -1,5 +1,5 @@
-# Moved verbatim from flake.nix (AD1); called from nix/checks.nix with the
-# shared per-system arguments of nix/shared.nix.
+# A test function, bound in nix/shared.nix and applied in nix/checks.nix
+# (and nix/falsifiers.nix) once per variant.
 {
   adminCall,
   edgenodeNode,

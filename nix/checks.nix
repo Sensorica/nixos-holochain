@@ -9,7 +9,6 @@
     shared,
     ...
   }: let
-    nixpkgs = inputs.nixpkgs;
     inherit (shared) bootstrapTest dinoAdventureHapp edgenodeNode fixtureTextfiles happTest holochainRulesFile jqLib kandoHapp metricsChecks metricsTest monitor on06 onX86 servicesTest smokeTest;
     args = shared;
   in {

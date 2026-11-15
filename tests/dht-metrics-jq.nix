@@ -1,5 +1,5 @@
-# Moved verbatim from flake.nix (AD1); called from nix/checks.nix with the
-# shared per-system arguments of nix/shared.nix.
+# Called from nix/checks.nix with the per-system arguments of
+# nix/shared.nix.
 # The per-DHT jq against replies captured from two real conductors:
 # a Holochain 0.6.1 Moss group node in seven DHTs and the homelab's
 # 0.6.3 edgenode conductor with three apps in four (both 2026-09-27;

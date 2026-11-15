@@ -2,9 +2,7 @@
   inputs,
   self,
   ...
-}: let
-  nixpkgs = inputs.nixpkgs;
-in {
+}: {
   flake = {
     # `nix flake init -t github:Sensorica/nixos-holochain#minimal` (or
     # `#fleet`) is the whole adoption story, so the templates point at the

@@ -1,5 +1,5 @@
-# Moved verbatim from flake.nix (AD1); called from nix/checks.nix with the
-# shared per-system arguments of nix/shared.nix.
+# Called from nix/checks.nix with the per-system arguments of
+# nix/shared.nix.
 # The metrics jq against replies a bare conductor in a VM never
 # produces: live connections, nested blocked_message_counts, installed
 # apps, and a peer disconnecting between two runs. One malformed line

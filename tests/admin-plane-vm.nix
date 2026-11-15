@@ -1,5 +1,5 @@
-# Moved verbatim from flake.nix (AD1); called from nix/checks.nix with the
-# shared per-system arguments of nix/shared.nix.
+# Called from nix/checks.nix with the per-system arguments of
+# nix/shared.nix.
 # The admin plane end to end: a client joins the tailnet through
 # nginx (the ts2021 upgrade is the part a proxy breaks), the bare
 # name answers 403 with the private page, and Grafana answers on its

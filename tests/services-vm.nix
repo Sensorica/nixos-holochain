@@ -1,5 +1,5 @@
-# Moved verbatim from flake.nix (AD1); called from nix/checks.nix with the
-# shared per-system arguments of nix/shared.nix.
+# A test function, bound in nix/shared.nix and applied in nix/checks.nix
+# (and nix/falsifiers.nix) once per variant.
 # One machine running an edgenode, the HTTP gateway, Grafana and, when
 # `bootstrap` is true, the local bootstrap and relay. The pass
 # condition is what a person reads through Grafana's own query API:

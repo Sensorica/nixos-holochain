@@ -1,5 +1,5 @@
-# Moved verbatim from flake.nix (AD1); called from nix/checks.nix with the
-# shared per-system arguments of nix/shared.nix.
+# A test function, bound in nix/shared.nix and applied in nix/checks.nix
+# (and nix/falsifiers.nix) once per variant.
 # The conductor gauges have to exist on both lines, and the only thing
 # that differs between them is the admin call prefix. So this runs the
 # module's own timer against a real conductor of each line rather than

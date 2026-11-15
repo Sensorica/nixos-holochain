@@ -10,7 +10,6 @@
     system,
     ...
   }: let
-    nixpkgs = inputs.nixpkgs;
     # ---- generated option reference ------------------------------------
     #
     # docs/module-options.md was hand-written and had already drifted from

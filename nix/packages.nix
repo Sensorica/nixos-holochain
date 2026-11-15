@@ -10,7 +10,6 @@
     optionsDocs,
     ...
   }: let
-    nixpkgs = inputs.nixpkgs;
     inherit (shared) conductorExporter gatewayPkgs gatewayPkgs06 holonix06 holoportInstall onX86;
     inherit (optionsDocs) optionsDoc optionsDocHeader;
   in {
