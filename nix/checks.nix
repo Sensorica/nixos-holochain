@@ -13,6 +13,9 @@
     args = shared;
   in {
     checks = {
+      # Every exported nixosModule evaluates in a minimal system
+      # (tests/nixos-modules-eval.nix).
+      nixosModulesEval = import ../tests/nixos-modules-eval.nix args;
       edgenodeBinaryCache = import ../tests/edgenode-binary-cache.nix args;
       edgenodeConfigRender = import ../tests/edgenode-config-render.nix args;
       conductorMetricsJq = import ../tests/conductor-metrics-jq.nix args;

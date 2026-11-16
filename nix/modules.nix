@@ -28,7 +28,7 @@
         imports = [../modules/holochain-bootstrap.nix bootstrapPackage];
       };
       default = {
-        imports = [./modules bootstrapPackage];
+        imports = [../modules bootstrapPackage];
       };
 
       # The fleet's admin plane: Headscale and optionally a public
