@@ -1,10 +1,10 @@
 # nixos-holochain
 
-> NixOS modules for running Holochain on your own machines: a conductor with its keystore, the hApps you name installed at boot, metrics, a Grafana dashboard and an HTTP gateway, all declared in a NixOS configuration and deployed with `nixos-rebuild`. Built and piloted at Sensorica.
+> NixOS modules for running Holochain on your own machines: a conductor with its keystore, the hApps you name installed at boot, metrics, a Grafana dashboard and an HTTP gateway, all declared in a NixOS configuration and deployed with `nixos-rebuild`.
 
 This is for anyone who runs Holochain nodes on NixOS, or wants to: one always-on node at home, a lab or workshop fleet, a community node serving a hApp's DHT. You describe the node in Nix; the modules produce the systemd units, the conductor configuration, the lair passphrase and the idempotent hApp installer, and every change is a new NixOS generation you can roll back.
 
-It is built and piloted at [Sensorica](https://sensorica.co), Montreal's open value network, whose lab fleet of Holoports is the first deployment (see [Used by](#used-by)).
+[Built and piloted at [Sensorica](https://sensorica.co), Montreal's open value network.]
 
 **Status:** the modules work and are VM-tested. A conductor and its hApps come up at boot on both supported Holochain lines (0.7.0 and 0.6.3), a fleet's traffic is on a provisioned Grafana dashboard, and an HTTP gateway serves zome reads over HTTP. Fourteen NixOS VM tests run in CI. What is still open is hardware: one Holoport, `sensorica-holoport-01`, was installed from the [runbook](docs/deployment.md#installing-on-a-holoport-legacy-bios) on 2026-09-27, and the five-machine fleet is not deployed yet (issues [#8](https://github.com/Sensorica/nixos-holochain/issues/8) to [#12](https://github.com/Sensorica/nixos-holochain/issues/12)).
 **License:** [MIT](LICENSE), the license of nixpkgs, so any module here can be reused in other flakes or proposed upstream to nixpkgs as it is. The hApps these modules run keep their own licenses (Holochain itself and Moss are CAL-1.0, hREA is Apache-2.0).
@@ -22,7 +22,7 @@ One module set serves both lines. The version of the conductor package a node ru
 | 0.7.0 | holonix `main-0.7` (input `holonix`) | the default | `hc-http-gw` 0.4.0 | `vmTest`, `vmTestWithHapp`, `vmTestGrafana`, `vmTestGateway` |
 | 0.6.3 | holonix `main-0.6` (input `holonix-0_6`) | set `package` and `hcPackage` to this flake's `holochain-0_6` and `hc-0_6` | `hc-http-gw` 0.3.5 | `vmTest-0_6`, `vmTestWithHapp-0_6`, `vmTestConductorMetrics-0_6` |
 
-`vmTestWindtunnel` runs no conductor, so it belongs to neither line. To run a node on 0.6.3, as [`examples/sensorica-fleet`](examples/sensorica-fleet/) does, set both packages in its `configuration.nix`, whose first line becomes `{config, pkgs, inputs, ...}:` so that `inputs` (passed by the template's `specialArgs`) and `pkgs` are in scope:
+`vmTestWindtunnel` runs no conductor, so it belongs to neither line. To run a node on 0.6.3, as the example fleet in [`examples/sensorica-fleet`](examples/sensorica-fleet/) does, set both packages in its `configuration.nix`, whose first line becomes `{config, pkgs, inputs, ...}:` so that `inputs` (passed by the template's `specialArgs`) and `pkgs` are in scope:
 
 ```nix
 services.holochain-edgenode = {
@@ -146,7 +146,7 @@ nixos-rebuild build-vm --flake github:Sensorica/nixos-holochain#observability-vm
 | [`docs/architecture.md`](docs/architecture.md) | How the modules fit, the units they create, and how one module serves two Holochain lines |
 | [`docs/module-options.md`](docs/module-options.md) | Every option of the four modules, generated from their declarations |
 | [`templates/minimal/README.md`](templates/minimal/README.md), [`templates/fleet/README.md`](templates/fleet/README.md) | What each template contains and how to deploy it |
-| [`examples/sensorica-fleet/README.md`](examples/sensorica-fleet/README.md) | The Sensorica Lab fleet, a filled-in five-node example |
+| [`examples/sensorica-fleet/README.md`](examples/sensorica-fleet/README.md) | A filled-in five-node example fleet |
 | [`happs/README.md`](happs/README.md) | Referencing a hApp bundle by hash |
 | [`workshop/`](workshop/) | Facilitator guide, participant handout and preflight checklist |
 
@@ -211,10 +211,6 @@ nix build .#checks.x86_64-linux.vmTestGateway -L
 ---
 
 ## Used by
-
-**Sensorica Lab, Montreal: the pilot.** Five Holoports at the Sensorica lab are to run [`examples/sensorica-fleet`](examples/sensorica-fleet/): Holochain 0.6.3 with hREA, Kando and Requests & Offers on one network seed, Grafana on `edgenode-01`, and a live ISO for workshop participants. It is the pilot for `v0.1.0` and has not been deployed on the Holoports yet ([#8](https://github.com/Sensorica/nixos-holochain/issues/8) to [#12](https://github.com/Sensorica/nixos-holochain/issues/12)).
-
-The fleet is also the substrate of the Holochain NixOS workshop at Sensorica, the follow-up to the December 2025 HolOS/edgenode event; its date is [issue #7](https://github.com/Sensorica/nixos-holochain/issues/7). **Goal:** each participant deploys a working edgenode into a 5-machine fleet, watches live P2P traffic via Grafana, and rolls back a configuration change. 4 hours, no prior Nix experience required. See [`workshop/facilitator-guide.md`](workshop/facilitator-guide.md) and [`workshop/preflight-checklist.md`](workshop/preflight-checklist.md).
 
 Running nixos-holochain somewhere else? Open a pull request adding your deployment to this list.
 
@@ -312,5 +308,3 @@ Each ticked item names the pull request that closed it.
 ## Acknowledgements
 
 Built at [Sensorica](https://sensorica.co), Montreal's open value network.
-
-Successor to the archived [Sensorica/holoports-workshop](https://github.com/Sensorica/holoports-workshop) and to the December 2025 HolOS workshop organized with the Sensorica community, pivoting from HolOS appliance-image deployment to vanilla NixOS authorship.
