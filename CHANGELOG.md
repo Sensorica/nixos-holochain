@@ -72,6 +72,7 @@ Nothing has been released yet. This section records what `main` holds after the 
 
 ### Fixed
 
+- The Moss node's join unit restarts the node once after the group is installed, whichever way it got there. `join-group` can exit with an error after installing the group, and the retry then found the group and skipped the restart, so Moss did not see the node online. The reason wdocker gave now reaches the journal, with the invite and long tokens redacted. (#106)
 - `nixosModules.default` evaluates again: after the `flake.nix` split it imported `nix/modules`, a path that does not exist. A new `checks.nixosModulesEval` evaluates every exported module in a minimal system, so an import that stops resolving fails CI.
 - The hApp installer treats a failed `list-apps` while the conductor compiles wasm as "not yet" instead of ending the unit, and no fixed start timeout caps `installerTimeout`. (#16, #21)
 - The metrics jq sums `blocked_message_counts` at any depth; it used to write a JSON object into the textfile, which made node_exporter drop every `holochain_*` series. (#21)

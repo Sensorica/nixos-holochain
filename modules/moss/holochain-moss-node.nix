@@ -57,12 +57,18 @@
   # retries until `list-apps` answers; a group app already installed means there
   # is nothing to do, which is what makes every later start a no-op.
   #
+  # The node has to be restarted once after the group is installed, whichever
+  # way it got there (#106): `join-group` can exit non-zero after installing the
+  # group, and a retry then finds it already there. So every path that finds the
+  # group installed asks for the restart until the restart unit has recorded it
+  # (`.restarted-after-join`).
+  #
   # wdocker prints the invite it was given and, on success, the installed app
   # (whose manifest carries the network seed), so its output goes to a private
   # file and the journal gets only a reason that cannot echo the invite.
   joinScript = pkgs.writeShellScript "moss-node-join" ''
     set -u
-    PATH=${lib.makeBinPath [pkgs.coreutils pkgs.gnugrep]}
+    PATH=${lib.makeBinPath [pkgs.coreutils pkgs.gnugrep pkgs.gnused]}
     export HOME=${stateDir}
     export WDOCKER_PASSWORD
     WDOCKER_PASSWORD=$(cat "$CREDENTIALS_DIRECTORY/password")
@@ -82,28 +88,48 @@
       sleep 10
     done
 
+    # Asks for the restart unless the restart unit has already recorded one.
+    needRestart() {
+      if [ ! -e ${stateDir}/.restarted-after-join ]; then
+        echo "moss-node-join: restarting the node so Moss sees the group online"
+        touch ${stateDir}/.restart-after-join
+      fi
+    }
+
     if grep -q "installed_app_id: 'group#" "$out"; then
       echo "moss-node-join: a group is already joined; nothing to do"
+      needRestart
       exit 0
     fi
 
     if "$wdocker" join-group ${lib.escapeShellArg cfg.name} "$(cat "$CREDENTIALS_DIRECTORY/invite")" >"$out" 2>&1; then
-      echo "moss-node-join: joined the group; restarting the node so Moss sees it online"
-      touch ${stateDir}/.restart-after-join
+      echo "moss-node-join: joined the group"
+      needRestart
     else
       echo "moss-node-join: join-group failed" >&2
       # Only lines that cannot carry the invite or the seed.
       grep -oE 'invalid invite \((wrong-format|version-mismatch|invalid-seed|invalid-progenitor)\)|Failed to fetch resource|sha256 of the group happ[^,]*' "$out" >&2 || true
+      # wdocker's own error lines, with the invite and every long token (a
+      # seed, a hash, a key) taken out, so the reason reaches the journal.
+      grep -iE 'error|failed|timed? ?out|refused' "$out" | grep -vF "$(cat "$CREDENTIALS_DIRECTORY/invite")" |
+        sed -E 's/[A-Za-z0-9+/=_-]{20,}/<redacted>/g' | head -n 20 | sed 's/^/moss-node-join: wdocker: /' >&2 || true
+      if "$wdocker" list-apps ${lib.escapeShellArg cfg.name} 2>/dev/null | grep -q "installed_app_id: 'group#"; then
+        echo "moss-node-join: the group is installed although join-group reported an error; treating it as joined" >&2
+        needRestart
+        exit 0
+      fi
       echo "moss-node-join: run 'moss-node join' at a terminal to see the whole error" >&2
       exit 1
     fi
   '';
 
   # Root, after the join: the daemon pings Moss only for the groups present when
-  # it starts. The marker outlives a failed restart, so the retry still restarts.
+  # it starts. The marker outlives a failed restart, so the retry still restarts,
+  # and a restart that happened is recorded so later starts do not repeat it.
   restartAfterJoin = pkgs.writeShellScript "moss-node-restart-after-join" ''
     if [ -e ${stateDir}/.restart-after-join ]; then
-      ${config.systemd.package}/bin/systemctl restart moss-node.service && rm -f ${stateDir}/.restart-after-join
+      ${config.systemd.package}/bin/systemctl restart moss-node.service &&
+        touch ${stateDir}/.restarted-after-join && rm -f ${stateDir}/.restart-after-join
     fi
   '';
 
