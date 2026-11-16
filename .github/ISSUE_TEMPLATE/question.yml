@@ -1,0 +1,33 @@
+name: Question
+description: How to set up a node, which option does what, or whether something is expected.
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Most questions get a faster and more useful answer in [Discussions (Q&A)](https://github.com/Sensorica/nixos-holochain/discussions/categories/q-a), where other people running nodes can see and answer them. Use this form when the question is about something the documentation should say and does not.
+
+        A vulnerability is never a question here: report it privately through [a security advisory](https://github.com/Sensorica/nixos-holochain/security/advisories/new), as SECURITY.md explains.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: What you are running
+      description: The module and options involved, and the nixos-holochain commit your flake is locked to (`nix flake metadata` lists it under Inputs).
+    validations:
+      required: false
+
+  - type: textarea
+    id: looked
+    attributes:
+      label: Where you looked
+      description: The pages of the documentation you read, so a missing or unclear one can be fixed.
+    validations:
+      required: false
