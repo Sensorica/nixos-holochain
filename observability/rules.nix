@@ -1,4 +1,4 @@
-# modules/fleet/holochain-rules.nix
+# observability/rules.nix
 #
 # The Prometheus recording rules every Holochain dashboard reads, as the
 # attrset of one rule file. holochain-grafana renders it with its `states`

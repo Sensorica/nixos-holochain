@@ -1,8 +1,10 @@
 # Called from nix/checks.nix with the per-system arguments of
 # nix/shared.nix.
-# The repository's layout, evaluated: every file an exported nixosModule
-# imports from this flake lives under modules/holochain, modules/moss or
-# modules/fleet, and no such path names the lab. The fleet's own modules
+# The repository's layout, evaluated: every path an exported nixosModule
+# lists in its imports lives under modules/holochain, modules/moss or
+# modules/fleet, and no such path names the lab. The check reads those
+# import lists; it does not open a path module to follow the imports
+# written inside that file. The fleet's own modules
 # leave with the fleet export (AD3); until then they are the exceptions
 # below, and an exception that no longer matches fails too, so the list can
 # only shrink.

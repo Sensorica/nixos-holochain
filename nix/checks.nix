@@ -27,11 +27,11 @@
       conductorMetricsJq = import ../tests/conductor-metrics-jq.nix args;
       dhtMetricsJq = import ../tests/dht-metrics-jq.nix args;
       # The whole exporter, run for an edgenode-shaped and a Moss-shaped
-      # conductor on captured replies (tests/metrics.nix): the two files
+      # conductor on captured replies (observability/tests/metrics.nix): the two files
       # declare every shared family with the same bytes and a real
       # node_exporter keeps both, and no name a dashboard shows is a hash.
       inherit (metricsChecks) metricsHelpAgreement metricsNameShape;
-      # The provisioned dashboards, with no VM (tests/dashboards.nix): no
+      # The provisioned dashboards, with no VM (observability/tests/dashboards.nix): no
       # label but a human one reaches a legend, a display name, a table
       # column or a stat's field, no text shows a variable holding a key,
       # every panel is described and every uid is its own; every stand-in
@@ -42,7 +42,7 @@
       # every rule it names recorded. Each is also run on broken input and
       # must then fail.
       inherit
-        (import ../tests/dashboards.nix {
+        (import ../observability/tests/dashboards.nix {
           inherit pkgs jqLib;
           rules = holochainRulesFile;
           inherit (metricsChecks) runs;

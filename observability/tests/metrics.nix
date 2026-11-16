@@ -10,11 +10,11 @@
 # none of them.
 {
   pkgs,
-  # packages/holochain-conductor-exporter.nix, as callPackage returns it.
+  # observability/exporter.nix, as callPackage returns it.
   exporter,
   # The families table the Moss-shaped conductor's exporter is built with, as
   # if the two conductors on one machine ran two versions of the program.
-  mossFamilies ? ../modules/holochain/families.jq,
+  mossFamilies ? ../families.jq,
   # Merged over the Moss names file below.
   extraMossNames ? {},
 }: let
@@ -122,10 +122,10 @@
       nativeBuildInputs = [pkgs.prometheus.cli];
     } ''
       mkdir workshop moss state-workshop state-moss state-bare state-down
-      cp ${../tests/fixtures/edgenode-0_6_3/list-apps.json} workshop/list-apps.json
-      cp ${../tests/fixtures/edgenode-0_6_3/dump-network-metrics.json} workshop/dump-network-metrics.json
-      cp ${../tests/fixtures/dht-0_6_1/list-apps.json} moss/list-apps.json
-      cp ${../tests/fixtures/dht-0_6_1/dump-network-metrics.json} moss/dump-network-metrics.json
+      cp ${../../tests/fixtures/edgenode-0_6_3/list-apps.json} workshop/list-apps.json
+      cp ${../../tests/fixtures/edgenode-0_6_3/dump-network-metrics.json} workshop/dump-network-metrics.json
+      cp ${../../tests/fixtures/dht-0_6_1/list-apps.json} moss/list-apps.json
+      cp ${../../tests/fixtures/dht-0_6_1/dump-network-metrics.json} moss/dump-network-metrics.json
       cp ${stats} workshop/dump-network-stats.json
       cp ${stats} moss/dump-network-stats.json
 

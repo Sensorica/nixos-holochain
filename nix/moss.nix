@@ -17,10 +17,10 @@
     mossChecks = import ../tests/moss.nix {
       inherit pkgs;
       nixos-holochain = self;
-      exporter = pkgs.callPackage ../packages/holochain-conductor-exporter.nix {
+      exporter = pkgs.callPackage ../observability/exporter.nix {
         hc = inputs.holonix-0_6.packages.${system}.hc;
       };
-      dashboard = ../modules/moss/dashboards-moss/sensorica-moss-node.json;
+      dashboard = ../observability/dashboards-moss/moss-node.json;
       namesJq = ../modules/moss/moss-node-names.jq;
     };
     mossArgs = {inherit inputs lib pkgs self system;};

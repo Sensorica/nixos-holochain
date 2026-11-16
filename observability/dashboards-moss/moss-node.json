@@ -1,5 +1,5 @@
 {
-  "uid": "sensorica-moss-node",
+  "uid": "moss-node",
   "title": "Sensorica group on the homelab",
   "description": "Is the Sensorica group served by this Moss node? Whether the always-online node is up, reaches the group and each of its tools, holds what the others hold, and whether any tool has been left with nobody.",
   "tags": [

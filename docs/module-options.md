@@ -2057,7 +2057,7 @@ whoever runs the fleet;
 ` holochain-node ` (“Is this node working, app by app?”), one machine;
 and ` holochain-network ` (“Is this app in step on every node?”), one
 app network across every machine\. They read the recording rules of
-holochain-rules\.nix, so they agree on every state\.
+observability/rules\.nix, so they agree on every state\.
 
 For a directory in the Nix store, the module sets Grafana’s home page
 (` services.grafana.settings.dashboards.default_home_dashboard_path `,
@@ -2094,7 +2094,7 @@ absolute path
 *Default:*
 
 ```nix
-../holochain/dashboards
+../../observability/dashboards
 ```
 
 *Declared by:*

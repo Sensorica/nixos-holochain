@@ -206,11 +206,11 @@
   systemdUnitExclude = ".+[.](device|scope|slice)";
 
   # The same program a Moss node or any other conductor on the machine runs
-  # (packages/holochain-conductor-exporter.nix), built with this conductor's
+  # (observability/exporter.nix), built with this conductor's
   # `hc` so the admin call matches its line. One program means one set of
   # HELP texts, which node_exporter needs when two conductors share its
   # textfile directory.
-  conductorExporter = pkgs.callPackage ../../packages/holochain-conductor-exporter.nix {
+  conductorExporter = pkgs.callPackage ../../observability/exporter.nix {
     hc = cfg.hcPackage;
   };
 

@@ -25,7 +25,7 @@ The options:
 - `appletNames`: what the dashboards call each tool, keyed by its installed_app_id (`applet#...`, as `moss-node status` prints it). A named tool is also expected, so it reads "Not running" when the conductor stops listing it; a tool left out reads by its kind and a number (Vines 1, Vines 2).
 - `partNames`: what the dashboards call each part (DNA role) of each kind of Moss app, keyed by kind. The defaults name the group's `group`, `foyer` and `assets` roles and Vines' `rVines` and `rFiles`.
 - `dashboard.enable`: provision the Moss page in this machine's Grafana. It defaults to `config.services.grafana.enable`, so the monitor node gets the page even when it runs no Moss node; the page lists every Moss node its Prometheus scrapes.
-- `dashboard.title`: the page's title. The page's uid is `sensorica-moss-node`; it is tagged `moss`, which is how the home page finds it to link to it.
+- `dashboard.title`: the page's title. The page's uid is `moss-node`; it is tagged `moss`, which is how the home page finds it to link to it.
 
 What it runs:
 

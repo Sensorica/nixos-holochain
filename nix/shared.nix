@@ -22,13 +22,13 @@
     gatewayPkgs06 = inputs.holonix-0_6.inputs.nixpkgs.legacyPackages.${system};
     # The textfile exporter every conductor on a machine runs; the edgenode
     # module builds its own with its `hc`.
-    conductorExporter = pkgs.callPackage ../packages/holochain-conductor-exporter.nix {
+    conductorExporter = pkgs.callPackage ../observability/exporter.nix {
       hc = inputs.holonix.packages.${system}.hc;
     };
     # The jq programs as the exporter runs them, with families.jq beside
     # them for `jq -L`.
     inherit (conductorExporter) jqLib;
-    metricsChecks = import ../tests/metrics.nix {
+    metricsChecks = import ../observability/tests/metrics.nix {
       inherit pkgs;
       exporter = conductorExporter;
     };
