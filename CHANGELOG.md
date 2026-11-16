@@ -81,5 +81,6 @@ Nothing has been released yet. This section records what `main` holds after the 
 - The metrics jq sums `blocked_message_counts` at any depth; it used to write a JSON object into the textfile, which made node_exporter drop every `holochain_*` series. (#21)
 - The gateway's `--address` is shell-escaped. (#21)
 - The metrics timer no longer hands the whole `list-apps` reply to jq as one argument, which Linux caps at 128 KiB: a large reply stopped the script before it wrote anything. (#47)
+- `services.admin-plane.dnsDrift.textfileDirectory` defaults to `services.holochain-services.textfileDirectory`, the directory the edgenode's or the monitor's node_exporter reads, else `/var/lib/prometheus-node-exporter-text-files`. Its old fallback, `/var/lib/prometheus-node-exporter-text`, is a directory no collector reads, so on an admin plane without an edgenode the drift metric was never scraped. (#88)
 
 [Unreleased]: https://github.com/Sensorica/nixos-holochain/commits/main

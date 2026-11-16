@@ -203,9 +203,14 @@ in {
 
       textfileDirectory = lib.mkOption {
         type = lib.types.str;
-        default = config.services.holochain-edgenode.metricsExporter.textfileDirectory or "/var/lib/prometheus-node-exporter-text";
-        defaultText = lib.literalMD "the edgenode's `metricsExporter.textfileDirectory` when that module is imported, else `/var/lib/prometheus-node-exporter-text`";
-        description = "Directory node_exporter's textfile collector reads; it must already exist (the edgenode's metrics exporter creates it). Pointing it elsewhere writes a file nobody scrapes, and a missing directory fails the check in the journal.";
+        # The directory the edgenode's metrics exporter or the monitor's
+        # node_exporter reads, from the one option both set (#88).
+        default =
+          if config.services.holochain-services.textfileDirectory != null
+          then config.services.holochain-services.textfileDirectory
+          else "/var/lib/prometheus-node-exporter-text-files";
+        defaultText = lib.literalMD "`services.holochain-services.textfileDirectory`, which the edgenode's metrics exporter and `services.holochain-grafana` set to the directory their node_exporter reads, else `/var/lib/prometheus-node-exporter-text-files`";
+        description = "Directory node_exporter's textfile collector reads; it must already exist (the edgenode's metrics exporter and `services.holochain-grafana` create it). Pointing it elsewhere writes a file nobody scrapes, and a missing directory fails the check in the journal.";
       };
 
       interval = lib.mkOption {
