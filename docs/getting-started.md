@@ -96,7 +96,7 @@ To use `sudo` as `operator` over SSH, give the account a password on the console
 
 ## Where to go next
 
-- **Several machines.** `nix flake init -t github:Sensorica/nixos-holochain#fleet` gives five nodes, Grafana on the first, a Colmena hive and a live ISO; its README walks through deploying it. [`examples/sensorica-fleet/`](../examples/sensorica-fleet/) is the same shape filled in for the Sensorica Lab pilot, with three hApps on the 0.6.3 line. [`deployment.md`](deployment.md) § Fleet (Colmena) has the commands.
+- **Several machines.** `nix flake init -t github:Sensorica/nixos-holochain#fleet` gives five nodes, Grafana on the first, a Colmena hive and a live ISO; its README walks through deploying it. [`deployment.md`](deployment.md) § Fleet (Colmena) has the commands.
 - **Observability.** `metricsExporter.enable` and `conductorMetrics.enable` export host metrics and the conductor's own `holochain_*` series; the `holochain-grafana` module draws them on the provisioned "Holochain Fleet" dashboard. To see the dashboard before deploying anything, run the `observability-vm` described in [`deployment.md`](deployment.md) § Seeing the dashboard before deploying a fleet.
 - **Rescue.** When the NixOS installer itself fails on the target machine, see the rescue procedure in [PR #25](https://github.com/Sensorica/nixos-holochain/pull/25) (it moves into [`deployment.md`](deployment.md) once merged).
 - **Every option.** [`module-options.md`](module-options.md) is the full reference, generated from the module declarations; [`architecture.md`](architecture.md) explains how the pieces fit and how one module serves two Holochain lines.
