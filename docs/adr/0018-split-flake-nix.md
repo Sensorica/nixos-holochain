@@ -2,11 +2,11 @@
 
 - **Status:** Accepted
 - **Date:** 2026-11-07
-- **Source:** AD1 of the architecture review of 2026-11-07 and 2026-11-15, summarised in [#98](https://github.com/Sensorica/nixos-holochain/issues/98)
+- **Source:** AD1 of the architecture review of 2026-11-07 and 2026-11-15, summarised in [#98](https://github.com/Sensorica/nixos-holochain/issues/98); the choices were sent on the review board on 2026-11-07 at 16:29 (Montreal time)
 
 ## Context
 
-`flake.nix` had 3,088 lines in one file.
+`flake.nix` had 3,088 lines in one file when the review was held, and grew to 3,212 before it was split.
 Half of the VM tests were written inline in it and the other half lived in `tests/`.
 Every pull request touched it, so every pull request conflicted on it, and reviewers read it as a single block.
 flake-parts was already an input.
