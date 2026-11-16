@@ -12,6 +12,7 @@
 
 # Running the modules
 
+- [Getting started](getting-started.md)
 - [Architecture](architecture.md)
 - [Module options](module-options.md)
 - [Starting from a template]()
