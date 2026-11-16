@@ -61,7 +61,8 @@
   # way it got there (#106): `join-group` can exit non-zero after installing the
   # group, and a retry then finds it already there. So every path that finds the
   # group installed asks for the restart until the restart unit has recorded it
-  # (`.restarted-after-join`).
+  # (`.restarted-after-join`). The record is never cleared: a node joins one
+  # group, and joining another means a fresh state directory.
   #
   # wdocker prints the invite it was given and, on success, the installed app
   # (whose manifest carries the network seed), so its output goes to a private
@@ -111,7 +112,7 @@
       grep -oE 'invalid invite \((wrong-format|version-mismatch|invalid-seed|invalid-progenitor)\)|Failed to fetch resource|sha256 of the group happ[^,]*' "$out" >&2 || true
       # wdocker's own error lines, with the invite and every long token (a
       # seed, a hash, a key) taken out, so the reason reaches the journal.
-      grep -iE 'error|failed|timed? ?out|refused' "$out" | grep -vF "$(cat "$CREDENTIALS_DIRECTORY/invite")" |
+      grep -iE 'error|failed|timed? ?out|refused' "$out" | grep -vFf "$CREDENTIALS_DIRECTORY/invite" |
         sed -E 's/[A-Za-z0-9+/=_-]{20,}/<redacted>/g' | head -n 20 | sed 's/^/moss-node-join: wdocker: /' >&2 || true
       if "$wdocker" list-apps ${lib.escapeShellArg cfg.name} 2>/dev/null | grep -q "installed_app_id: 'group#"; then
         echo "moss-node-join: the group is installed although join-group reported an error; treating it as joined" >&2
