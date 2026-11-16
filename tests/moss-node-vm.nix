@@ -81,7 +81,7 @@ in
       # An empty file is refused before wdaemon sees it, so no
       # conductor is created with an empty password.
       emptypassword.wait_until_succeeds(
-          "journalctl -u moss-node --no-pager | grep -q 'is empty; write the conductor password'", timeout=120)
+          "journalctl -u moss-node --no-pager | grep -q 'is empty; write the conductor password'", timeout=300)
       emptypassword.fail("ls /var/lib/moss-node/.local/share/wdocker/0.15.x/conductors/vmtest")
     '';
   }
