@@ -34,7 +34,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # The trigger's globs are wider than the policy (v*.*.* also matches
       # v1.2.3-beta), so the exact shape is enforced here, before CI spends
@@ -92,7 +92,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # --verify-tag refuses to create the tag if it does not exist, so the
       # release always points at the commit that was pushed and checked.
