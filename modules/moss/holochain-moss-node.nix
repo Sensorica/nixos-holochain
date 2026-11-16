@@ -42,7 +42,7 @@
   out = "${toString edge.metricsExporter.textfileDirectory}/moss-node.prom";
   metricsState = "/var/lib/moss-node-metrics";
 
-  exporter = pkgs.callPackage ../../packages/holochain-conductor-exporter.nix {
+  exporter = pkgs.callPackage ../../observability/exporter.nix {
     hc = edge.hcPackage;
   };
 
@@ -207,7 +207,7 @@
   dashboards = pkgs.runCommand "holochain-moss-dashboards" {nativeBuildInputs = [pkgs.jq];} ''
     mkdir -p $out
     jq --arg title ${lib.escapeShellArg cfg.dashboard.title} '.title = $title' \
-      ${./dashboards-moss/sensorica-moss-node.json} > $out/sensorica-moss-node.json
+      ${../../observability/dashboards-moss/moss-node.json} > $out/moss-node.json
   '';
 in {
   # The node page's unit list, for a machine that runs this module without the

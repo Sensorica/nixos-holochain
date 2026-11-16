@@ -52,7 +52,7 @@ name holochain-nixos-plan.md
 name modules/fleet/admin-plane.nix
 name modules/fleet/holochain-grafana.nix
 name modules/holochain/holochain-bootstrap.nix
-name modules/moss/dashboards-moss/sensorica-moss-node.json
+name observability/dashboards-moss/moss-node.json
 name modules/moss/holochain-moss-node.nix
 name modules/sensorica-event-node.nix
 name modules/sensorica-happs.nix
@@ -66,7 +66,7 @@ name tests/dht-metrics-jq.nix
 name tests/grafana-vm.nix
 name tests/holoport-install-vm.nix
 name tests/layout.nix
-name tests/metrics.nix
+name observability/tests/metrics.nix
 name tests/moss.nix
 name tests/provisioning.nix
 name tests/rules.nix

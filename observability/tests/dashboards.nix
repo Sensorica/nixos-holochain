@@ -1,4 +1,4 @@
-# Checks on the provisioned dashboards (modules/holochain/dashboards) that need no VM.
+# Checks on the provisioned dashboards (observability/dashboards) that need no VM.
 #
 # dashboardLabels reads the JSON: no machine key on a screen, every panel
 # described, no uid twice. dashboardQueries runs the Holochain queries of every
@@ -13,11 +13,11 @@
   pkgs,
   # The rendered rule file (holochain-grafana with its default states).
   rules,
-  # The exporter's runs on the fixture conductors (tests/metrics.nix).
+  # The exporter's runs on the fixture conductors (observability/tests/metrics.nix).
   runs,
   # The exporter's jq programs, for the clone cell's textfile.
   jqLib,
-  dashboards ? ../modules/holochain/dashboards,
+  dashboards ? ../dashboards,
 }: let
   labelsJq = ./dashboard-labels.jq;
 in {
@@ -80,7 +80,7 @@ in {
   # The words a person reads where a query answers with a stand-in (1e9 for
   # no readings or never heard, an empty cell for nobody else yet or nobody
   # to compare), resolved through each field's mappings as Grafana resolves
-  # them (tests/dashboard-words.jq).
+  # them (observability/tests/dashboard-words.jq).
   dashboardWords =
     pkgs.runCommand "dashboard-words" {
       nativeBuildInputs = [pkgs.jq];
@@ -134,7 +134,7 @@ in {
   #
   # Answering is not enough for a query with a fallback, such as
   # `count(x == 1) or vector(0)`, which answers 0 whatever x is. So every
-  # series selector a query reads (tests/query-selectors.jq) must also select
+  # series selector a query reads (observability/tests/query-selectors.jq) must also select
   # something here, and every rule it names must be recorded by the rule file.
   dashboardQueries =
     pkgs.runCommand "dashboard-queries" {

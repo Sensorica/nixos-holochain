@@ -7,7 +7,7 @@
 # the first gives the host series, the second the holochain_* series the
 # provisioned dashboard is built around. Prometheus names each node from
 # scrapeTargets and computes every state the dashboards show once, in the
-# recording rules of holochain-rules.nix.
+# recording rules of observability/rules.nix.
 {
   config,
   lib,
@@ -238,9 +238,9 @@
     else config.networking.hostName;
   sharedNodeNames = lib.filter (name: lib.count (n: n == name) nodeNames > 1) (lib.unique nodeNames);
 
-  # The recording rules the dashboards read (holochain-rules.nix), evaluated
+  # The recording rules the dashboards read (observability/rules.nix), evaluated
   # as often as Prometheus scrapes.
-  rulesFile = (pkgs.formats.yaml {}).generate "holochain-rules.yml" (import ./holochain-rules.nix {
+  rulesFile = (pkgs.formats.yaml {}).generate "holochain-rules.yml" (import ../../observability/rules.nix {
     interval = cfg.scrapeInterval;
     inherit (cfg) states;
     unitNames = cfg.overviewUnits;
@@ -464,8 +464,8 @@ in {
 
     dashboards = lib.mkOption {
       type = lib.types.path;
-      default = ../holochain/dashboards;
-      defaultText = lib.literalExpression "../holochain/dashboards";
+      default = ../../observability/dashboards;
+      defaultText = lib.literalExpression "../../observability/dashboards";
       description = ''
         Directory of Grafana dashboard JSON files to provision. Everything in
         it is loaded at startup and re-read every 30 seconds. The module ships
@@ -479,7 +479,7 @@ in {
         `holochain-node` ("Is this node working, app by app?"), one machine;
         and `holochain-network` ("Is this app in step on every node?"), one
         app network across every machine. They read the recording rules of
-        holochain-rules.nix, so they agree on every state.
+        observability/rules.nix, so they agree on every state.
 
         For a directory in the Nix store, the module sets Grafana's home page
         (`services.grafana.settings.dashboards.default_home_dashboard_path`,

@@ -1,7 +1,7 @@
 # The two fixture conductors as textfiles, the way holochain-conductor-exporter
 # writes them, at the capture's own clock: Workshop (the homelab's 0.6.3
 # edgenode conductor, tests/fixtures/edgenode-0_6_3) and Moss (a Moss group
-# node, tests/fixtures/dht-0_6_1), each with the names file tests/metrics.nix
+# node, tests/fixtures/dht-0_6_1), each with the names file observability/tests/metrics.nix
 # gives it.
 #
 # The clock is fixed at 1790484800, the moment checks.dhtMetricsJq reads the
@@ -11,9 +11,9 @@
 # as that same moment; a reader sets it to its own clock.
 {
   pkgs,
-  # The exporter's jq programs (packages/holochain-conductor-exporter.nix).
+  # The exporter's jq programs (observability/exporter.nix).
   jqLib,
-  # The names files of tests/metrics.nix: {workshop, moss}.
+  # The names files of observability/tests/metrics.nix: {workshop, moss}.
   names,
 }:
 pkgs.runCommand "holochain-fixture-textfiles" {
