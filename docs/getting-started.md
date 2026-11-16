@@ -6,7 +6,7 @@ At the end, the machine runs `holochain-conductor.service` at boot, with its adm
 
 ## 1. Start from NixOS
 
-Install NixOS 26.05 with the official installer. The template boots with systemd-boot, which is what the installer sets up on a UEFI machine; on a legacy-BIOS machine read [`templates/minimal/README.md`](../templates/minimal/README.md) § Firmware assumption before switching.
+Install NixOS 26.05 with the official installer. The template boots with systemd-boot, which is what the installer sets up on a UEFI machine; on a legacy-BIOS machine read [`templates/minimal/README.md`](https://github.com/Sensorica/nixos-holochain/blob/main/templates/minimal/README.md) § Firmware assumption before switching.
 
 If the installer fails, the rescue procedure learned on the homelab (taking the install over from a laptop by SSH, reading the installer's log, the IPv6-only DNS failure) is in review in [PR #25](https://github.com/Sensorica/nixos-holochain/pull/25) and lands in [`deployment.md`](deployment.md) once merged.
 
@@ -32,7 +32,7 @@ nix flake init -t github:Sensorica/nixos-holochain#minimal
 
 Before writing anything, Nix asks four y/N questions about the module repository's binary cache settings (`extra-substituters` and `extra-trusted-public-keys`, and whether to mark each as untrusted). Answer N to all four, or press Enter; the warnings that follow are expected, and step 5 passes the cache explicitly.
 
-This writes `flake.nix`, `configuration.nix`, a placeholder `hardware-configuration.nix` and a `README.md`. The template's `flake.nix` takes the modules from `github:Sensorica/nixos-holochain`, which is `main`. There is no release tag yet; once `v0.1.0` exists, change that input to `github:Sensorica/nixos-holochain/v0.1.0` to pin it (see the [README](../README.md#pinning-a-version)).
+This writes `flake.nix`, `configuration.nix`, a placeholder `hardware-configuration.nix` and a `README.md`. The template's `flake.nix` takes the modules from `github:Sensorica/nixos-holochain`, which is `main`. There is no release tag yet; once `v0.1.0` exists, change that input to `github:Sensorica/nixos-holochain/v0.1.0` to pin it (see the [README](https://github.com/Sensorica/nixos-holochain/blob/main/README.md#pinning-a-version)).
 
 Replace the placeholder hardware configuration with this machine's, or the next boot looks for disks by labels this machine may not have:
 
@@ -59,7 +59,7 @@ Then make three changes:
    };
    ```
 
-3. Optionally, name a hApp to install on first boot by uncommenting the `happs` block. `src` is a `.happ` file in this directory (tracked by git) or a `pkgs.fetchurl` of one, and `networkSeed` puts the app on its own network. [`happs/README.md`](../happs/README.md) § Referencing a hApp has a ready fetch-by-hash block for Dino Adventure, a Holochain Foundation demo app built for the 0.7 line this template runs; to use `pkgs.fetchurl`, change the file's first line from `{config, ...}:` to `{config, pkgs, ...}:`.
+3. Optionally, name a hApp to install on first boot by uncommenting the `happs` block. `src` is a `.happ` file in this directory (tracked by git) or a `pkgs.fetchurl` of one, and `networkSeed` puts the app on its own network. [`happs/README.md`](https://github.com/Sensorica/nixos-holochain/blob/main/happs/README.md) § Referencing a hApp has a ready fetch-by-hash block for Dino Adventure, a Holochain Foundation demo app built for the 0.7 line this template runs; to use `pkgs.fetchurl`, change the file's first line from `{config, ...}:` to `{config, pkgs, ...}:`.
 
 Change `networking.hostName` too if `edgenode` is not what you want to call the machine.
 
@@ -90,7 +90,7 @@ systemctl status holochain-conductor.service
 hc client call --port 4444 list-apps
 ```
 
-On a node with no hApp configured, `list-apps` prints `[]`. On a node switched to the 0.6.3 line (see the [README](../README.md#supported-holochain-lines)), the same check is `hc sandbox call --running 4444 list-apps`. With a hApp, `systemctl status holochain-happ-installer.service` and `journalctl -u holochain-happ-installer` show the install. [`deployment.md`](deployment.md) § First boot sequence explains what runs in which order, and § Verifying the deployment lists the rest of the checks.
+On a node with no hApp configured, `list-apps` prints `[]`. On a node switched to the 0.6.3 line (see the [README](https://github.com/Sensorica/nixos-holochain/blob/main/README.md#supported-holochain-lines)), the same check is `hc sandbox call --running 4444 list-apps`. With a hApp, `systemctl status holochain-happ-installer.service` and `journalctl -u holochain-happ-installer` show the install. [`deployment.md`](deployment.md) § First boot sequence explains what runs in which order, and § Verifying the deployment lists the rest of the checks.
 
 To use `sudo` as `operator` over SSH, give the account a password on the console first: `sudo passwd operator`.
 

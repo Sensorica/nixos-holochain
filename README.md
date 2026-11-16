@@ -4,9 +4,7 @@
 
 This is for anyone who runs Holochain nodes on NixOS, or wants to: one always-on node at home, a lab or workshop fleet, a community node serving a hApp's DHT. You describe the node in Nix; the modules produce the systemd units, the conductor configuration, the lair passphrase and the idempotent hApp installer, and every change is a new NixOS generation you can roll back.
 
-[Built and piloted at [Sensorica](https://sensorica.co), Montreal's open value network.]
-
-**Status:** the modules work and are VM-tested. A conductor and its hApps come up at boot on both supported Holochain lines (0.7.0 and 0.6.3), a fleet's traffic is on a provisioned Grafana dashboard, and an HTTP gateway serves zome reads over HTTP. Fourteen NixOS VM tests run in CI. What is still open is hardware: one Holoport, `sensorica-holoport-01`, was installed from the [runbook](docs/deployment.md#installing-on-a-holoport-legacy-bios) on 2026-09-27, and the five-machine fleet is not deployed yet (issues [#8](https://github.com/Sensorica/nixos-holochain/issues/8) to [#12](https://github.com/Sensorica/nixos-holochain/issues/12)).
+**Status:** the modules work and are VM-tested. A conductor and its hApps come up at boot on both supported Holochain lines (0.7.0 and 0.6.3), a fleet's traffic is on a provisioned Grafana dashboard, and an HTTP gateway serves zome reads over HTTP. Fourteen NixOS VM tests run in CI. What is still open is hardware: one Holoport was installed from the [runbook](docs/deployment.md#installing-on-a-holoport-legacy-bios) on 2026-09-27, and the five-machine fleet is not deployed yet (issues [#8](https://github.com/Sensorica/nixos-holochain/issues/8) to [#12](https://github.com/Sensorica/nixos-holochain/issues/12)).
 **License:** [MIT](LICENSE), the license of nixpkgs, so any module here can be reused in other flakes or proposed upstream to nixpkgs as it is. The hApps these modules run keep their own licenses (Holochain itself and Moss are CAL-1.0, hREA is Apache-2.0).
 **Origin:** Successor to the archived [Sensorica/holoports-workshop](https://github.com/Sensorica/holoports-workshop), pivoting from HolOS appliance-image deployment to vanilla NixOS authorship.
 **Documentation:** the book at [sensorica.github.io/nixos-holochain](https://sensorica.github.io/nixos-holochain/), built from `docs/` with mdBook.
@@ -46,7 +44,7 @@ There is no canonical, declarative, *author it yourself* way to stand up a Holoc
 
 `nixos-holochain` fills that gap. A flake-based repo with reusable NixOS modules so that:
 
-- Stewards of OVNs (Sensorica, AlterNef, others) can deploy production node fleets with a single `nixos-rebuild`.
+- Stewards of open value networks can deploy production node fleets with a single `nixos-rebuild`.
 - The Holochain community gets a reference implementation for declarative edgenode hosting.
 - Workshops can teach the full stack in 4 hours instead of demoing pre-baked images.
 
