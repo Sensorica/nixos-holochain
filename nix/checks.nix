@@ -16,6 +16,9 @@
       # Every exported nixosModule evaluates in a minimal system
       # (tests/nixos-modules-eval.nix).
       nixosModulesEval = import ../tests/nixos-modules-eval.nix args;
+      # The publication guard: no new lab name, LAN address or secret
+      # in a tracked file, and an allowlist that only shrinks (tests/public-guard.nix).
+      publicGuard = import ../tests/public-guard.nix args;
       edgenodeBinaryCache = import ../tests/edgenode-binary-cache.nix args;
       edgenodeConfigRender = import ../tests/edgenode-config-render.nix args;
       conductorMetricsJq = import ../tests/conductor-metrics-jq.nix args;
