@@ -1,6 +1,8 @@
 # The admin plane's options, evaluated without booting anything: that
 # `grafana.cookieSecure` reaches Grafana's `security.cookie_secure` both ways,
-# and that `duckdns` hands ddclient the protocol, the name and the token file.
+# that `duckdns` hands ddclient the protocol, the name and the token file, and
+# that the drift check writes where node_exporter's textfile collector reads
+# on a monitor that is not an edgenode (#88).
 # vmTestAdminPlane covers what runs; this covers what each option renders.
 {
   pkgs,
@@ -51,6 +53,16 @@
   insecure = evalWith {grafana.cookieSecure = false;};
 
   ddclient = secure.services.ddclient;
+
+  # The directory node_exporter's textfile collector reads, from its flag.
+  collectorDirs = lib.concatMap (flag: let
+    m = builtins.match "--collector[.]textfile[.]directory=(.*)" flag;
+  in
+    if m == null
+    then []
+    else m)
+  secure.services.prometheus.exporters.node.extraFlags;
+  driftDir = secure.services.admin-plane.dnsDrift.textfileDirectory;
 in
   assert lib.assertMsg (secure.services.grafana.settings.security.cookie_secure == true)
   "cookieSecure left at its default must render cookie_secure = true";
@@ -61,4 +73,6 @@ in
   assert lib.assertMsg (ddclient.domains == ["my-site"]) "ddclient domains must be [duckdns.name]";
   assert lib.assertMsg (ddclient.passwordFile == "/run/secrets/duckdns") "ddclient passwordFile must be duckdns.tokenFile";
   assert lib.assertMsg (!insecure.services.ddclient.enable) "ddclient must stay off without duckdns.enable";
+  assert lib.assertMsg (collectorDirs == [driftDir])
+  "dnsDrift.textfileDirectory left at its default must be the directory node_exporter's textfile collector reads (${toString collectorDirs}), got ${driftDir}";
     pkgs.runCommand "admin-plane-options" {} "touch $out"
