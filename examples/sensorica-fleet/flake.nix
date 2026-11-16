@@ -72,6 +72,8 @@
       # Off unless a host enables it; sensorica-holoport-01 runs the fleet's
       # Headscale and the public Grafana name until a second site takes them.
       nixos-holochain.nixosModules.admin-plane
+      # The Tailscale client every host can turn on, logged into that Headscale.
+      nixos-holochain.nixosModules.remote-access
       # What a person at the Holoport's own screen gets: launchers, a laid-out
       # Plasma session and the off-by-default event mode.
       inputs.home-manager.nixosModules.home-manager

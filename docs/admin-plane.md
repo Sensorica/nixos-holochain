@@ -2,7 +2,7 @@
 
 `nixosModules.admin-plane` turns one machine of a fleet into its admin plane: [Headscale](https://headscale.net), the self-hosted Tailscale coordination server the other machines log into, and optionally Grafana under its own public name. Both sit behind nginx with Let's Encrypt. Holochain does not use any of it; its peers meet through their own bootstrap and relay servers.
 
-The client side is `examples/sensorica-fleet/hosts/remote-access.nix` (`sensorica.remoteAccess`): a Tailscale client logged into the fleet's Headscale, with the tailnet interface trusted so SSH and Grafana answer there without being opened to the LAN.
+The client side is `nixosModules.remote-access` (`services.remote-access`): a Tailscale client logged into the fleet's Headscale, with the tailnet interface trusted so SSH and Grafana answer there without being opened to the LAN.
 
 In the Sensorica fleet, `sensorica-holoport-01` runs it at `https://hs.sensorica.co` and `https://grafana.sensorica.co`, with MagicDNS names `<hostname>.sensorica.internal`. Tracked in [#70](https://github.com/Sensorica/nixos-holochain/issues/70).
 
@@ -44,7 +44,7 @@ sudo headscale users list
 sudo headscale preauthkeys create --user 1 --expiration 1h
 ```
 
-On a fleet host, write the key root-only to `/var/lib/secrets/headscale-authkey`, set `sensorica.remoteAccess.enable = true` in its configuration, and `rebuild`. The key is read once, at the first connection.
+On a fleet host, write the key root-only to `/var/lib/secrets/headscale-authkey`, set `services.remote-access.loginServer` to the Headscale URL (once, for the whole fleet) and `services.remote-access.enable = true` in its configuration, and `rebuild`. The key is read once, at the first connection.
 
 On a laptop:
 

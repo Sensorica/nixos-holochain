@@ -34,6 +34,7 @@
         ../modules/holochain/holochain-http-gateway.nix
         ../modules/holochain/holochain-bootstrap.nix
         ../modules/fleet/admin-plane.nix
+        ../modules/fleet/remote-access.nix
       ];
     };
     optionsDoc = pkgs.nixosOptionsDoc {

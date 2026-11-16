@@ -26,6 +26,7 @@ Nothing has been released yet. This section records what `main` holds after the 
 
 ### Added
 
+- `nixosModules.remote-access` (`services.remote-access`: `enable`, `loginServer`, `authKeyFile`): the Tailscale client half of the admin plane, logged into the fleet's Headscale, with the tailnet interface trusted. It names no server of its own; `loginServer` is required when it is enabled. It replaces the example fleet's `hosts/remote-access.nix` and its `sensorica.remoteAccess` options. (#83)
 - `checks.layout`: every exported module lives under `modules/holochain`, `modules/moss` or `modules/fleet`, and no module path names the lab. The fleet's own module is the one exception until the fleet export, and an exception that no longer matches fails the check.
 - `services.admin-plane.duckdns` (`enable`, `name`, `tokenFile`): ddclient keeps a Duck DNS name on the site's public IPv4, so a site with a changing address points its public names at it with a CNAME once.
 - `services.admin-plane.grafana.cookieSecure` (default `true`): turn off the `Secure` flag on Grafana's session cookie on a host that must also take logins over `http://<address>:3000`, where a `Secure` cookie makes the login page loop.

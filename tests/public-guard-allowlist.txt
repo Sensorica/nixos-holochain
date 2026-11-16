@@ -35,7 +35,6 @@ name examples/sensorica-fleet/flake.lock
 name examples/sensorica-fleet/flake.nix
 name examples/sensorica-fleet/hosts/common.nix
 name examples/sensorica-fleet/hosts/desk.nix
-name examples/sensorica-fleet/hosts/remote-access.nix
 name examples/sensorica-fleet/hosts/sensorica-holoport-01/configuration.nix
 name examples/sensorica-fleet/hosts/sensorica-holoport-01/hardware-configuration.nix
 name examples/sensorica-fleet/hosts/sensorica-holoport-02/configuration.nix

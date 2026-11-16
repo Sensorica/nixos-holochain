@@ -36,6 +36,11 @@
       # per fleet runs it, and it opens ports 80 and 443.
       admin-plane = ../modules/fleet/admin-plane.nix;
 
+      # The client half of the admin plane: a Tailscale client logged into
+      # the fleet's Headscale (AD6). Not part of `default`: a fleet turns it
+      # on where it wants remote access, and names its server once.
+      remote-access = ../modules/fleet/remote-access.nix;
+
       # The Sensorica workshop event profile (#33): package, hApps and
       # network seed for the workshop, layered on top of
       # `holochain-edgenode`. Not part of `default` on purpose; see the
