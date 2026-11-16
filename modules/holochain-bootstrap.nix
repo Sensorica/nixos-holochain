@@ -99,7 +99,7 @@ in {
     listenAddresses = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = ["[::]"];
-      example = ["192.168.1.10"];
+      example = ["192.0.2.10"];
       description = ''
         Addresses the HTTP server binds, each on `port`. IPv6 addresses go in
         brackets. The default `[::]` is dual-stack on Linux and accepts IPv4

@@ -55,6 +55,17 @@ in the same commit as the option change. Two things make the difference between 
 
 Prose about how the modules fit together belongs in `docs/architecture.md`, not in the generated file.
 
+## The publication guard
+
+`checks.publicGuard` fails when a tracked file names the lab (in its path or its content, any case, the repository's own address excepted: `github.com/Sensorica/nixos-holochain`, `github:Sensorica/nixos-holochain`, `sensorica.github.io/nixos-holochain`), holds an RFC 1918 address outside `tests/`, or sits under `secrets/` without the `.example` suffix.
+Today's findings are listed in `tests/public-guard-allowlist.txt`, one `<kind> <path>` per line, and the list only shrinks: the guard also fails on an entry that no longer matches, so a file you fix or move takes its entry with it.
+Never add an entry to make a new finding pass; neutral names go in their place (`example.org`, `my-site`), and a real address or a real name belongs in the fleet's own repository.
+A file under `secrets/` cannot be allowlisted at all.
+
+```bash
+nix build .#checks.x86_64-linux.publicGuard -L
+```
+
 ## Documentation
 
 Update `docs/` in the same PR as the behaviour it describes. `README.md` has a rule of its own: every statement in it has to be true of the tree at that commit, and every ticked roadmap item cites the PR that closed it.
