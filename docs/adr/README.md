@@ -8,7 +8,7 @@ These are the design decisions behind `nixos-holochain`, one file per ADR. ADR-0
 | 002 | Not published: recorded in the May 2026 design, which is not in this repository | | 2026-05-13 | May design |
 | 003 | Not published: recorded in the May 2026 design, which is not in this repository | | 2026-05-13 | May design |
 | 004 | Not published: recorded in the May 2026 design, which is not in this repository | | 2026-05-13 | May design |
-| [005](0005-fleet-becomes-an-example.md) | Fleet becomes an example | Accepted | 2026-08-28 | #1 |
+| [005](0005-fleet-becomes-an-example.md) | Fleet becomes an example | Superseded by 020 | 2026-08-28 | #1 |
 | [006](0006-installer-on-hc-client-call.md) | Installer on `hc client call` | Accepted | 2026-08-28 | #1 |
 | [007](0007-toolchain-pins.md) | Toolchain pins | Amended 2026-08-28 | 2026-08-28 | #1, #15 |
 | [008](0008-traffic-and-metrics.md) | Traffic and metrics | Amended 2026-08-28 | 2026-08-28 | #1, #15 |
@@ -21,8 +21,23 @@ These are the design decisions behind `nixos-holochain`, one file per ADR. ADR-0
 | [015](0015-sensorica-fleet-pins-0-6-3.md) | The Sensorica fleet pins 0.6.3 for the September workshop | Accepted | 2026-08-28 | #15 |
 | [016](0016-passphrase-and-readiness.md) | Passphrase and readiness follow Holo's module | Accepted | 2026-08-28 | #15 |
 | [017](0017-holoport-legacy-bios-target.md) | HoloPort is a legacy-BIOS x86_64 target | Accepted | 2026-08-28 | #15 |
+| [018](0018-split-flake-nix.md) | Split `flake.nix` into flake-parts modules | Accepted | 2026-11-07 | AD1, #98 |
+| [019](0019-three-module-layers.md) | Three module layers, and the lab's pieces leave the generic flake | Accepted | 2026-11-07 | AD2, #98 |
+| [020](0020-fleet-in-a-private-repository.md) | The lab's fleet and workshop move to a private repository | Accepted | 2026-11-15 | AD3, #98 |
+| [021](0021-line-registry.md) | A registry of Holochain and Moss lines | Accepted | 2026-11-07 | AD4, #98 |
+| [022](0022-observability-unit.md) | Observability is one unit | Accepted | 2026-11-07 | AD5, #98 |
+| [023](0023-fleet-layer.md) | A fleet layer for the admin plane and remote access | Accepted | 2026-11-07 | AD6, #98 |
+| [024](0024-moss-node-instances.md) | Several Moss nodes on one machine | Accepted | 2026-11-07 | AD7, #98 |
+| [025](0025-one-option-namespace.md) | One option namespace before v0.1 | Accepted | 2026-11-07 | AD8, #98 |
+| [026](0026-order-of-work.md) | The flake split first, the open branches rebased on it | Accepted | 2026-11-15 | AD9, #98 |
+| [027](0027-fleet-secrets.md) | What is sensitive in a fleet, and how it is kept | Accepted | 2026-11-15 | AD10, #98 |
+| [028](0028-keep-public-history.md) | The public history is kept | Accepted | 2026-11-15 | AD11, #98 |
+| [029](0029-v0-1-0-community-release.md) | v0.1.0 is the first community release | Accepted | 2026-11-15 | AD12, #98 |
+| [030](0030-option-prefix.md) | The option prefix | Proposed | 2026-11-15 | AD13, #98 |
 
 Every ADR number that the repository, #1 or #15 refers to from 005 to 017 has its text here. ADR-001 to ADR-004 are cited only by number: in #1, which continues their numbering, and in the title of [#8](https://github.com/Sensorica/nixos-holochain/issues/8) (ADR-003).
+
+ADR-018 to ADR-030 record the architecture review of 2026-11-07 and 2026-11-15 (decisions AD1 to AD13, summarised in [#98](https://github.com/Sensorica/nixos-holochain/issues/98)). That review was held in French on a working board outside the repository, so these files translate its context, options and reasons rather than quote them, and they carry no quote blocks. Each lists the options that were weighed, with their effects, before the decision.
 
 ## How to read a file
 

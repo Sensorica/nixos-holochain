@@ -1,6 +1,6 @@
 # ADR-005: Fleet becomes an example
 
-- **Status:** Accepted
+- **Status:** Superseded by [ADR-020](0020-fleet-in-a-private-repository.md) on 2026-11-15
 - **Date:** 2026-08-28
 - **Source:** [#1](https://github.com/Sensorica/nixos-holochain/issues/1), issue description, section "Decisions (ADRs, continuing the numbering of the May design doc)"
 
