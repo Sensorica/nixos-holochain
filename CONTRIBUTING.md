@@ -57,7 +57,7 @@ Prose about how the modules fit together belongs in `docs/architecture.md`, not 
 
 ## The publication guard
 
-`checks.publicGuard` fails when a tracked file names the lab (in its path or its content, any case; an address under the GitHub organisation that hosts this repository (a repository URL, a `github:` flake reference, or its Pages site) does not count, nor does the README's one credit line, matched exactly), holds an RFC 1918 address outside `tests/`, or sits under `secrets/` without the `.example` suffix.
+`checks.publicGuard` fails when a tracked file names the lab (in its path or its content, any case; an address under the GitHub organisation that hosts this repository (a repository URL, a `github:` flake reference, or its Pages site) does not count, unless it points at one of the organisation's private repositories, nor does the README's one credit line, matched exactly), holds an RFC 1918 address outside `tests/`, or sits under `secrets/` without the `.example` suffix.
 Today's findings are listed in `tests/public-guard-allowlist.txt`, one `<kind> <path>` per line, and the list only shrinks: the guard also fails on an entry that no longer matches, so a file you fix or move takes its entry with it.
 Never add an entry to make a new finding pass; neutral names go in their place (`example.org`, `my-site`), and a real address or a real name belongs in the fleet's own repository.
 A file under `secrets/` cannot be allowlisted at all.

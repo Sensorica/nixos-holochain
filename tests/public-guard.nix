@@ -6,6 +6,7 @@
 #     through an address of the organisation that hosts the project
 #     (github.com/Sensorica/<repo>, github:Sensorica/<repo>,
 #     sensorica.github.io/...), which names where it lives rather than the lab,
+#     unless the address is one of the organisation's private repositories,
 #     and other than the README's one credit line, matched exactly,
 #   - holds an RFC 1918 address outside tests/,
 #   - or sits under secrets/ without the .example suffix,
@@ -35,6 +36,9 @@ pkgs.runCommand "public-guard" {
   # The organisation's addresses: a repository under it, or its pages.
   repo='(github\.com[:/]|github:)Sensorica/[A-Za-z0-9._-]+|sensorica\.github\.io(/[A-Za-z0-9._/#-]*)?'
   # The README's one credit line, exact and whole; nowhere else.
+  # Private repositories of the organisation stay findings: the public tree
+  # must not point at them. One name per alternative.
+  private='sensorica-fleet'
   credit='^Built at \[Sensorica\]\(https://sensorica\.co\), Montreal.s open value network\.$'
   # The guard and its list name what they look for; nothing else is exempt.
   self_files=' (tests/public-guard[.]nix|tests/public-guard-allowlist[.]txt)$'
@@ -50,7 +54,8 @@ pkgs.runCommand "public-guard" {
       {
         grep -rIil sensorica . | while read -r f; do
           if { if [ "$f" = ./README.md ]; then grep -vE "$credit" "$f" || true; else cat "$f"; fi; } |
-            sed -E "s#$repo##Ig" | grep -i sensorica > /dev/null; then
+            sed -E "s#((github\.com[:/]|github:)Sensorica/)($private)\b#PRIVATE-SENSORICA-\3#Ig; s#$repo##Ig" |
+            grep -i sensorica > /dev/null; then
             echo "name ''${f#./}"
           fi
         done
@@ -88,7 +93,7 @@ pkgs.runCommand "public-guard" {
 
   # Self-test on fixtures, with an empty allowlist.
   : > "$w/empty"
-  mkdir -p "$w/fx-repo" "$w/fx-host" "$w/fx-mixed" "$w/fx-credit" "$w/fx-credit-moved" "$w/fx-credit-reworded"
+  mkdir -p "$w/fx-repo" "$w/fx-host" "$w/fx-mixed" "$w/fx-credit" "$w/fx-credit-moved" "$w/fx-credit-reworded" "$w/fx-private"
   printf '%s\n' \
     'Source: https://github.com/Sensorica/nixos-holochain/blob/main/README.md' \
     'Input: github:Sensorica/nixos-holochain' \
@@ -98,14 +103,16 @@ pkgs.runCommand "public-guard" {
   printf '%s\n' 'Built at [Sensorica](https://sensorica.co), Montreal'"'"'s open value network.' > "$w/fx-credit-moved/notes.md"
   printf '%s\n' 'Built and piloted at [Sensorica](https://sensorica.co), Montreal'"'"'s open value network.' > "$w/fx-credit-reworded/README.md"
   echo 'domain = "hs.sensorica.co";' > "$w/fx-host/host.nix"
+  echo 'The fleet lives in github:Sensorica/sensorica-fleet' > "$w/fx-private/flake.md"
   echo 'https://github.com/Sensorica/nixos-holochain, deployed at the Sensorica lab' > "$w/fx-mixed/notes.md"
   scan "$w/fx-repo" "$w/empty" "$w/r" || { echo "self-test: the organisation's addresses alone must pass"; cat "$w/r"; exit 1; }
   if scan "$w/fx-host" "$w/empty" "$w/r"; then echo "self-test: hs.sensorica.co must fail"; exit 1; fi
   if scan "$w/fx-mixed" "$w/empty" "$w/r"; then echo "self-test: the lab beside an address must fail"; exit 1; fi
+  if scan "$w/fx-private" "$w/empty" "$w/r"; then echo "self-test: a private repository's address must fail"; exit 1; fi
   scan "$w/fx-credit" "$w/empty" "$w/r" || { echo "self-test: the README's credit line alone must pass"; cat "$w/r"; exit 1; }
   if scan "$w/fx-credit-moved" "$w/empty" "$w/r"; then echo "self-test: the credit line outside the README must fail"; exit 1; fi
   if scan "$w/fx-credit-reworded" "$w/empty" "$w/r"; then echo "self-test: a reworded credit line must fail"; exit 1; fi
-  echo "public-guard self-test: organisation addresses and the README credit pass; a lab host, the lab beside an address, a moved or reworded credit fail"
+  echo "public-guard self-test: organisation addresses and the README credit pass; a lab host, the lab beside an address, a moved or reworded credit, a private repository's address fail"
 
   # The tree itself.
   scan ${self} ${./public-guard-allowlist.txt} "$w/report" && status=0 || status=1
