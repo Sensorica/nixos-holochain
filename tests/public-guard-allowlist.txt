@@ -65,6 +65,7 @@ name secrets/sensorica.pub.example
 name tests/dht-metrics-jq.nix
 name tests/grafana-vm.nix
 name tests/holoport-install-vm.nix
+name tests/layout.nix
 name tests/metrics.nix
 name tests/moss.nix
 name tests/provisioning.nix
