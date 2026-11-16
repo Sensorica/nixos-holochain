@@ -1,4 +1,4 @@
-# modules/holochain-services.nix
+# modules/holochain/holochain-services.nix
 #
 # The services a node runs, as the dashboards show them: every nixos-holochain
 # module imports this file and names the units it creates when it is enabled,

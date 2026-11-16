@@ -99,7 +99,7 @@ See [`docs/deployment.md`](docs/deployment.md) for the deployment guide, [`docs/
 nixos-holochain/
 ├── flake.nix                          # Entry point: inputs, and the parts under nix/
 ├── nix/                               # One flake-parts module per family of outputs: modules, templates, packages, checks, docs
-├── modules/                           # The NixOS modules, with the exporters, recording rules and dashboards they ship
+├── modules/                           # The NixOS modules in three layers: holochain/ (a node), moss/, fleet/ (admin plane, Grafana)
 ├── packages/                          # hc-http-gw per Holochain line, the conductor exporter, Moss wdocker
 ├── templates/
 │   ├── minimal/                       # nix flake init -t …#minimal: one edgenode

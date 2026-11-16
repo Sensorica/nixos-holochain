@@ -1,4 +1,4 @@
-# modules/holochain-bootstrap.nix
+# modules/holochain/holochain-bootstrap.nix
 #
 # The Kitsune2 bootstrap server as a NixOS service. One binary,
 # `kitsune2-bootstrap-srv`, serves both peer discovery (`/bootstrap/{space}`)

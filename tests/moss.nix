@@ -18,15 +18,15 @@
   nixos-holochain,
   # The exporter, for its jq programs (dht-metrics.jq and families.jq).
   exporter,
-  dashboard ? ../modules/dashboards-moss/sensorica-moss-node.json,
-  namesJq ? ../modules/moss-node-names.jq,
+  dashboard ? ../modules/moss/dashboards-moss/sensorica-moss-node.json,
+  namesJq ? ../modules/moss/moss-node-names.jq,
 }: {
   mossDashboard =
     pkgs.runCommand "moss-dashboard" {
       nativeBuildInputs = [pkgs.jq];
     } ''
       check() {
-        jq -n -r -f ${nixos-holochain}/tests/dashboard-labels.jq ${nixos-holochain}/modules/dashboards/*.json "$1" || return 1
+        jq -n -r -f ${nixos-holochain}/tests/dashboard-labels.jq ${nixos-holochain}/modules/holochain/dashboards/*.json "$1" || return 1
         # The tool table and the group's share are empty exactly when the
         # Moss node reports nothing; each must say so in words, not with
         # Grafana's bare "No data" or a neutral "nobody to compare".

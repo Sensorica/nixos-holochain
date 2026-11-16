@@ -32,24 +32,28 @@ flake.nix                          ← inputs, and the list of parts under nix/
 │   └── moss.nix                   ← the x86_64-only Moss packages and checks
 ├── tests/                         ← one file per check or test function, named after what it tests
 ├── modules/
-│   ├── holochain-edgenode.nix     ← core: conductor + lair + hApp installer + metrics
-│   ├── families.jq                ← the one place a holochain_* family's HELP and TYPE are written
-│   ├── conductor-metrics.jq       ← dump-network-stats → Prometheus text
-│   ├── conductor-counters.jq      ← running byte and message totals across closed connections
-│   ├── dht-metrics.jq             ← list-apps + dump-network-metrics → per-DHT Prometheus text
-│   ├── holochain-grafana.nix      ← optional: Prometheus + Grafana for a fleet
-│   ├── holochain-rules.nix        ← the recording rules every dashboard reads
-│   ├── holochain-services.nix     ← the services each node runs, by name, for the dashboards
-│   ├── dashboards/                ← provisioned Grafana dashboards
-│   ├── holochain-windtunnel.nix   ← optional: donate the machine to the Foundation's Nomad cluster
-│   ├── holochain-http-gateway.nix ← optional: HTTP gateway in front of the conductor
-│   ├── holochain-bootstrap.nix    ← optional: Kitsune2 bootstrap and relay server
-│   ├── holochain-moss-node.nix    ← optional: a Moss group's always-online node (not in default)
-│   ├── moss-node-names.jq         ← the Moss node's names file for the exporter
-│   ├── dashboards-moss/           ← the Moss node's Grafana page
+│   ├── holochain/                 ← the node layer: what one machine runs
+│   │   ├── holochain-edgenode.nix     ← core: conductor + lair + hApp installer + metrics
+│   │   ├── families.jq                ← the one place a holochain_* family's HELP and TYPE are written
+│   │   ├── conductor-metrics.jq       ← dump-network-stats → Prometheus text
+│   │   ├── conductor-counters.jq      ← running byte and message totals across closed connections
+│   │   ├── dht-metrics.jq             ← list-apps + dump-network-metrics → per-DHT Prometheus text
+│   │   ├── holochain-services.nix     ← the services each node runs, by name, for the dashboards
+│   │   ├── dashboards/                ← provisioned Grafana dashboards
+│   │   ├── holochain-windtunnel.nix   ← optional: donate the machine to the Foundation's Nomad cluster
+│   │   ├── holochain-http-gateway.nix ← optional: HTTP gateway in front of the conductor
+│   │   ├── holochain-bootstrap.nix    ← optional: Kitsune2 bootstrap and relay server
+│   │   └── default.nix                ← aggregator: edgenode, grafana, windtunnel, http-gateway, bootstrap
+│   ├── moss/                      ← the Moss layer (not in default)
+│   │   ├── holochain-moss-node.nix    ← optional: a Moss group's always-online node (not in default)
+│   │   ├── moss-node-names.jq         ← the Moss node's names file for the exporter
+│   │   └── dashboards-moss/           ← the Moss node's Grafana page
+│   ├── fleet/                     ← the fleet layer: what one machine runs for the others
+│   │   ├── admin-plane.nix            ← Headscale and a public Grafana behind nginx with ACME (not in default)
+│   │   ├── holochain-grafana.nix      ← optional: Prometheus + Grafana for a fleet
+│   │   └── holochain-rules.nix        ← the recording rules every dashboard reads
 │   ├── sensorica-event-node.nix   ← the Sensorica workshop profile (not in default)
-│   ├── sensorica-happs.nix        ← the three workshop hApps, fetched by hash
-│   └── default.nix                ← aggregator: edgenode, grafana, windtunnel, http-gateway, bootstrap
+│   └── sensorica-happs.nix        ← the three workshop hApps, fetched by hash
 ├── packages/
 │   ├── holochain-http-gateway.nix ← the hc-http-gw build, one release per Holochain line
 │   ├── holochain-conductor-exporter.nix ← the one program that writes holochain_* series, for any conductor
@@ -169,7 +173,7 @@ The 0.6 equivalent is `hc sandbox call --running <p>`. Below that prefix the two
 
 ### 3. The HTTP gateway release
 
-The gateway is a separate program with its own release train, and it links the conductor's client libraries, so a build cannot straddle the two lines. Upstream publishes one gateway line per Holochain line, which `modules/holochain-http-gateway.nix` selects from the same `cfg.package.version` the network section is derived from. See "The HTTP gateway" below.
+The gateway is a separate program with its own release train, and it links the conductor's client libraries, so a build cannot straddle the two lines. Upstream publishes one gateway line per Holochain line, which `modules/holochain/holochain-http-gateway.nix` selects from the same `cfg.package.version` the network section is derived from. See "The HTTP gateway" below.
 
 ## The rest of the conductor config
 
@@ -279,11 +283,11 @@ hc client call --port 4444 dump-network-stats        # 0.7
 hc sandbox call --running 4444 dump-network-stats     # 0.6
 ```
 
-also calls `list-apps` for the installed apps, folds the reply's per-connection counts into running totals with `modules/conductor-counters.jq`, pipes the lot through `modules/conductor-metrics.jq`, and moves the result into `metricsExporter.textfileDirectory` atomically, because the collector may read the directory at any moment.
+also calls `list-apps` for the installed apps, folds the reply's per-connection counts into running totals with `modules/holochain/conductor-counters.jq`, pipes the lot through `modules/holochain/conductor-metrics.jq`, and moves the result into `metricsExporter.textfileDirectory` atomically, because the collector may read the directory at any moment.
 
 The service is a thin wrapper around one program, `packages.<system>.holochain-conductor-exporter` (`packages/holochain-conductor-exporter.nix`), which any other conductor on the machine runs too: a Moss node, say, under its own name. It takes the conductor's name, a command that prints the admin port and optionally the allowed origin (a Moss node picks both anew at every start), the names file described below, the textfile to write and a directory for the running totals. Every line it writes carries `conductor`, from `conductorMetrics.name` (default `Holochain`), so two conductors on one machine never merge into one series.
 
-One program matters for a reason that is easy to miss. node_exporter's textfile collector merges every `*.prom` file of its directory by family, and when two files give one family different `# HELP` text it logs `inconsistent metric help text`, keeps the family from the first file only, and sets `node_textfile_scrape_error` to 1: every series of that family in the second file vanishes. So every `# HELP` and `# TYPE` line lives in one place, `modules/families.jq`, which both jq programs `include`, and a family missing from it is an error rather than a line made up on the spot. `checks.metricsHelpAgreement` runs the whole program for an edgenode-shaped conductor and a Moss-shaped one on captured replies, requires every family the two files share to be declared with the same bytes, and then has a real node_exporter read both files and serve every sample line of both, one for one, with `node_textfile_scrape_error 0`. The count matters because node_exporter has a second way to lose a series that leaves the scrape error at 0: a series another file already gave with the same name and labels is dropped with only an `ERROR ... was collected before with the same name and label values` in its log. A family that loses its `conductor` label does that, and so do two conductors on one machine left under the same name, which is why each needs its own `conductorMetrics.name`.
+One program matters for a reason that is easy to miss. node_exporter's textfile collector merges every `*.prom` file of its directory by family, and when two files give one family different `# HELP` text it logs `inconsistent metric help text`, keeps the family from the first file only, and sets `node_textfile_scrape_error` to 1: every series of that family in the second file vanishes. So every `# HELP` and `# TYPE` line lives in one place, `modules/holochain/families.jq`, which both jq programs `include`, and a family missing from it is an error rather than a line made up on the spot. `checks.metricsHelpAgreement` runs the whole program for an edgenode-shaped conductor and a Moss-shaped one on captured replies, requires every family the two files share to be declared with the same bytes, and then has a real node_exporter read both files and serve every sample line of both, one for one, with `node_textfile_scrape_error 0`. The count matters because node_exporter has a second way to lose a series that leaves the scrape error at 0: a series another file already gave with the same name and labels is dropped with only an `ERROR ... was collected before with the same name and label values` in its log. A family that loses its `conductor` label does that, and so do two conductors on one machine left under the same name, which is why each needs its own `conductorMetrics.name`.
 
 The reply is Kitsune2's `TransportStats` (`kitsune2` `crates/api/src/transport.rs`), wrapped by Holochain with `blocked_message_counts`. It is byte-identical on both lines. Verified against the pinned binaries, on a bare conductor with no app installed and no peers:
 
@@ -316,7 +320,7 @@ Each entry of `connections` carries `pub_key`, `send_message_count`, `send_bytes
 Two properties are worth stating explicitly:
 
 - **A down conductor reports `holochain_conductor_up 0`, it does not disappear.** The script writes the file whether or not the call succeeded, so a dead node is visible on the dashboard rather than absent from it. This is the difference between a panel that says "one node is down" and a panel that quietly draws four lines instead of five.
-- **The byte and message counters only go up.** The reply counts per open connection, so its plain sum drops whenever a peer disconnects, and `rate()` reads any drop as a counter reset: it would draw the whole remaining total as a burst of traffic that never happened. So the timer keeps the counts it last saw per connection, keyed by `pub_key` and `opened_at_s`, and the running totals, in `conductor-metrics-counters.json` under the conductor's `dataDir`, and adds each connection's growth since the previous run (`modules/conductor-counters.jq`). What a connection moves between the timer's last look and its closing is not counted, so the totals undercount by at most one interval of a closing connection. A run the conductor does not answer leaves the state as it was, so a connection that outlives a timeout is not counted a second time from zero. Losing the state file restarts them from zero, which Prometheus handles as the reset it is.
+- **The byte and message counters only go up.** The reply counts per open connection, so its plain sum drops whenever a peer disconnects, and `rate()` reads any drop as a counter reset: it would draw the whole remaining total as a burst of traffic that never happened. So the timer keeps the counts it last saw per connection, keyed by `pub_key` and `opened_at_s`, and the running totals, in `conductor-metrics-counters.json` under the conductor's `dataDir`, and adds each connection's growth since the previous run (`modules/holochain/conductor-counters.jq`). What a connection moves between the timer's last look and its closing is not counted, so the totals undercount by at most one interval of a closing connection. A run the conductor does not answer leaves the state as it was, so a connection that outlives a timeout is not counted a second time from zero. Losing the state file restarts them from zero, which Prometheus handles as the reset it is.
 
 #### Per-DHT series
 
@@ -327,7 +331,7 @@ hc client call --port 4444 dump-network-metrics --include-dht-summary        # 0
 hc sandbox call --running 4444 dump-network-metrics --include-dht-summary     # 0.6
 ```
 
-and passes its reply, with the `list-apps` reply, to `modules/dht-metrics.jq`. The reply is keyed by DNA hash; each entry has a `fetch_state_summary` (`pending_requests`, one entry per operation asked of a peer and not yet received) and a `gossip_state_summary` whose `peer_meta` holds, per peer URL, `last_gossip_timestamp` in microseconds, `completed_rounds`, `peer_timeouts` and the peer's own `dht_op_count`, next to `local_op_count` for this node. Kitsune2 declares these structs identically in `kitsune2_api` 0.4.1 and 0.5.0, and the fixtures under `tests/fixtures/dht-0_6_1/` are both replies as a Holochain 0.6.1 conductor in seven DHTs gave them (a Moss group node, network seeds redacted). The homelab's Holochain 0.6.3 edgenode conductor, with three apps in four DHTs, gave the second pair of fixtures, under `tests/fixtures/edgenode-0_6_3/`. `list-apps` names the app and role each DNA belongs to, so every series carries `conductor`, `app_id` (the installed_app_id), `role` and `dna`, and nothing else: machine keys only.
+and passes its reply, with the `list-apps` reply, to `modules/holochain/dht-metrics.jq`. The reply is keyed by DNA hash; each entry has a `fetch_state_summary` (`pending_requests`, one entry per operation asked of a peer and not yet received) and a `gossip_state_summary` whose `peer_meta` holds, per peer URL, `last_gossip_timestamp` in microseconds, `completed_rounds`, `peer_timeouts` and the peer's own `dht_op_count`, next to `local_op_count` for this node. Kitsune2 declares these structs identically in `kitsune2_api` 0.4.1 and 0.5.0, and the fixtures under `tests/fixtures/dht-0_6_1/` are both replies as a Holochain 0.6.1 conductor in seven DHTs gave them (a Moss group node, network seeds redacted). The homelab's Holochain 0.6.3 edgenode conductor, with three apps in four DHTs, gave the second pair of fixtures, under `tests/fixtures/edgenode-0_6_3/`. `list-apps` names the app and role each DNA belongs to, so every series carries `conductor`, `app_id` (the installed_app_id), `role` and `dna`, and nothing else: machine keys only.
 
 | Series | Type | Meaning |
 |---|---|---|
@@ -380,7 +384,7 @@ What happens when something goes wrong is chosen so that it costs only these ser
 
 ### 2. Prometheus and Grafana
 
-`holochain-grafana` runs both on the monitor node and provisions the pair that makes a dashboard work without a human: a Prometheus data source with the fixed uid `holochain-prometheus`, and every JSON file under `modules/dashboards/`.
+`holochain-grafana` runs both on the monitor node and provisions the pair that makes a dashboard work without a human: a Prometheus data source with the fixed uid `holochain-prometheus`, and every JSON file under `modules/holochain/dashboards/`.
 
 #### Five dashboards, one question each
 
@@ -415,7 +419,7 @@ As a plain list of `host:port` strings, which is what the option took before, ea
 
 #### States, computed once
 
-The dashboards never compute a state themselves. `modules/holochain-rules.nix` holds one group of Prometheus recording rules, which the module renders with its `states` options and hands to Prometheus as a rule file, evaluated at every `scrapeInterval`; `promtool check rules` runs on the file when the system is built. Every state is a code ordered from worst to best, so `min` over any set picks the worst item:
+The dashboards never compute a state themselves. `modules/fleet/holochain-rules.nix` holds one group of Prometheus recording rules, which the module renders with its `states` options and hands to Prometheus as a rule file, evaluated at every `scrapeInterval`; `promtool check rules` runs on the file when the system is built. Every state is a code ordered from worst to best, so `min` over any set picks the worst item:
 
 | Code | DHT or app | Meaning |
 |---|---|---|
@@ -444,7 +448,7 @@ Every join of names onto data matches on the full key of a DHT (`instance, condu
 
 #### Services, from what each node runs
 
-No list of services is kept by hand. Every nixos-holochain module imports `modules/holochain-services.nix` and, when it is enabled, adds the units it creates to `services.holochain-services.units`, each with the name a person reads; on a machine where any of them is enabled, the services beside them that are enabled there join the list too. Each node publishes its own list through node_exporter's textfile collector, as `holochain-services.prom`, a link into the store refreshed on every activation, with one `holochain_service_info{name, service, version}` line per unit (and `conductor` and `holochain_version` for a unit that runs a conductor), so a monitor learns what a Holoport runs, and in which version, from the Holoport and not from its own configuration. Prometheus attaches the node's name as it does to any series. The rule `holochain:service_watched` takes that list, plus any unit the monitor's `overviewUnits` adds, and `holochain:service_state` gives each its state:
+No list of services is kept by hand. Every nixos-holochain module imports `modules/holochain/holochain-services.nix` and, when it is enabled, adds the units it creates to `services.holochain-services.units`, each with the name a person reads; on a machine where any of them is enabled, the services beside them that are enabled there join the list too. Each node publishes its own list through node_exporter's textfile collector, as `holochain-services.prom`, a link into the store refreshed on every activation, with one `holochain_service_info{name, service, version}` line per unit (and `conductor` and `holochain_version` for a unit that runs a conductor), so a monitor learns what a Holoport runs, and in which version, from the Holoport and not from its own configuration. Prometheus attaches the node's name as it does to any series. The rule `holochain:service_watched` takes that list, plus any unit the monitor's `overviewUnits` adds, and `holochain:service_state` gives each its state:
 
 | Service, as the pages name it | Unit | Listed when | Health reading |
 |---|---|---|---|
@@ -521,7 +525,7 @@ The image publishes only the moving tags `latest`, `latest-amd64` and `latest-ar
 
 ## The HTTP gateway
 
-A browser cannot speak the conductor's app websocket protocol, so reading a hApp from a web page means something in front of the conductor that turns an HTTP request into a zome call. That something is `hc-http-gw`, the Holochain Foundation's own gateway, and `modules/holochain-http-gateway.nix` runs it.
+A browser cannot speak the conductor's app websocket protocol, so reading a hApp from a web page means something in front of the conductor that turns an HTTP request into a zome call. That something is `hc-http-gw`, the Holochain Foundation's own gateway, and `modules/holochain/holochain-http-gateway.nix` runs it.
 
 The route is one GET per zome function:
 

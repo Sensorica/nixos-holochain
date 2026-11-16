@@ -1,4 +1,4 @@
-# modules/holochain-edgenode.nix
+# modules/holochain/holochain-edgenode.nix
 #
 # Core module: NixOS service for a Holochain conductor (in-process lair keystore)
 # plus an idempotent hApp installer.
@@ -210,7 +210,7 @@
   # `hc` so the admin call matches its line. One program means one set of
   # HELP texts, which node_exporter needs when two conductors share its
   # textfile directory.
-  conductorExporter = pkgs.callPackage ../packages/holochain-conductor-exporter.nix {
+  conductorExporter = pkgs.callPackage ../../packages/holochain-conductor-exporter.nix {
     hc = cfg.hcPackage;
   };
 

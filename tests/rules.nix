@@ -1,4 +1,4 @@
-# promtool rule tests for modules/holochain-rules.nix, on the rule file the
+# promtool rule tests for modules/fleet/holochain-rules.nix, on the rule file the
 # grafana module renders with its default states: one case per shape a node
 # can be in, and the homelab's own shape, two conductors on one instance, from
 # what the exporter's jq writes for the captured replies.

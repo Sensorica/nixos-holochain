@@ -7,7 +7,7 @@
 # line, the three hApp bundles and the network seed. Two copies drift; this
 # is the one export both build from.
 #
-# Deliberately NOT part of `nixosModules.default` (modules/default.nix): the
+# Deliberately NOT part of `nixosModules.default` (modules/holochain/default.nix): the
 # other four modules are generic capabilities, and importing `default` should
 # never hand a consumer the Sensorica workshop's opinionated hApp set. Import
 # this module explicitly, alongside `holochain-edgenode`, to opt into the

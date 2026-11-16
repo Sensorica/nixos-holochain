@@ -106,7 +106,7 @@ pkgs.testers.nixosTest {
     records =
       map (rule: rule.record)
       (builtins.head
-        (import ../modules/holochain-rules.nix {
+        (import ../modules/fleet/holochain-rules.nix {
           interval = nodes.machine.services.holochain-grafana.scrapeInterval;
           inherit (nodes.machine.services.holochain-grafana) states;
         }).groups).rules;

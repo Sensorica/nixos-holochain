@@ -14,7 +14,7 @@
   exporter,
   # The families table the Moss-shaped conductor's exporter is built with, as
   # if the two conductors on one machine ran two versions of the program.
-  mossFamilies ? ../modules/families.jq,
+  mossFamilies ? ../modules/holochain/families.jq,
   # Merged over the Moss names file below.
   extraMossNames ? {},
 }: let

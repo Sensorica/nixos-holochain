@@ -1,4 +1,4 @@
-# modules/holochain-grafana.nix
+# modules/fleet/holochain-grafana.nix
 #
 # Prometheus + Grafana observability module for a Holochain fleet.
 # Enable on the designated monitor node; all peer nodes should set
@@ -253,7 +253,7 @@
   edgenodeExports = (config.services.holochain-edgenode.enable or false) && (config.services.holochain-edgenode.metricsExporter.enable or false);
 in {
   # The services this node runs, by name, for the dashboards.
-  imports = [./holochain-services.nix];
+  imports = [../holochain/holochain-services.nix];
 
   options.services.holochain-grafana = {
     enable = lib.mkEnableOption "Prometheus + Grafana observability for Holochain fleet";
@@ -464,8 +464,8 @@ in {
 
     dashboards = lib.mkOption {
       type = lib.types.path;
-      default = ./dashboards;
-      defaultText = lib.literalExpression "./dashboards";
+      default = ../holochain/dashboards;
+      defaultText = lib.literalExpression "../holochain/dashboards";
       description = ''
         Directory of Grafana dashboard JSON files to provision. Everything in
         it is loaded at startup and re-read every 30 seconds. The module ships
