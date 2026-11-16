@@ -97,7 +97,8 @@ See [`docs/deployment.md`](docs/deployment.md) for the deployment guide, [`docs/
 
 ```
 nixos-holochain/
-├── flake.nix                          # Entry point: inputs, modules, templates, packages, checks
+├── flake.nix                          # Entry point: inputs, and the parts under nix/
+├── nix/                               # One flake-parts module per family of outputs: modules, templates, packages, checks, docs
 ├── modules/                           # The NixOS modules, with the exporters, recording rules and dashboards they ship
 ├── packages/                          # hc-http-gw per Holochain line, the conductor exporter, Moss wdocker
 ├── templates/
@@ -105,7 +106,7 @@ nixos-holochain/
 │   └── fleet/                         # nix flake init -t …#fleet: five nodes, Grafana, live ISO
 ├── examples/
 │   └── sensorica-fleet/               # The Sensorica Lab fleet: its own flake, five Holoports, ISO, Colmena hive (layout in its README)
-├── tests/                             # Fixtures and the checks that need no VM
+├── tests/                             # One file per check (VM tests included), with their fixtures
 ├── happs/                             # .happ bundles (not committed, see happs/README.md)
 ├── secrets/                           # private material only, gitignored except *.example
 ├── CHANGELOG.md                       # One section per release, published as its release note

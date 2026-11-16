@@ -18,7 +18,19 @@ The decisions behind this layout are recorded one per file in [`adr/`](adr/READM
 ## Module hierarchy
 
 ```
-flake.nix
+flake.nix                          ← inputs, and the list of parts under nix/
+├── nix/                           ← one flake-parts module per family of outputs
+│   ├── modules.nix                ← nixosModules
+│   ├── templates.nix              ← templates (minimal, fleet)
+│   ├── configurations.nix         ← nixosConfigurations: minimal-vm, observability-vm
+│   ├── shared.nix                 ← per-system bindings the other parts share (argument `shared`)
+│   ├── packages.nix               ← packages
+│   ├── docs.nix                   ← the option reference behind packages.options-doc
+│   ├── checks.nix                 ← checks: one line per check, pointing at tests/
+│   ├── falsifiers.nix             ← legacyPackages.falsifiers: tests that must fail
+│   ├── dev-shell.nix              ← devShells.default
+│   └── moss.nix                   ← the x86_64-only Moss packages and checks
+├── tests/                         ← one file per check or test function, named after what it tests
 ├── modules/
 │   ├── holochain-edgenode.nix     ← core: conductor + lair + hApp installer + metrics
 │   ├── families.jq                ← the one place a holochain_* family's HELP and TYPE are written

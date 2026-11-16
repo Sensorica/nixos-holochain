@@ -20,7 +20,7 @@ Open an issue describing what you want to add or change. For a new module or a n
 
 A module is not finished when it evaluates. `nix flake check --no-build` proves that the Nix expression is well typed; it proves nothing about whether the service starts, whether the binary takes the flags the module passes it, or whether the port is open. All three have been wrong here before.
 
-So: a module that creates a service ships a `pkgs.nixosTest` under `checks` in `flake.nix`, and that test asserts the behaviour, not the configuration. Concretely, prefer
+So: a module that creates a service ships a `pkgs.nixosTest` in its own `tests/<what-it-tests>.nix`, wired by one line under `checks` in `nix/checks.nix`, and that test asserts the behaviour, not the configuration. Concretely, prefer
 
 - `machine.wait_for_unit(...)` and `systemctl is-active` over reading the generated unit file,
 - a request that returns real data over a listening socket,
