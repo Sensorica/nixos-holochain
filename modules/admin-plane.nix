@@ -151,6 +151,43 @@ in {
       '';
     };
 
+    grafana.cookieSecure = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        With `grafana.domain` set, mark Grafana's session cookie `Secure`.
+        A browser then keeps it only over HTTPS (or on `localhost`), so a
+        login on the plain `http://<host>:3000` address loops back to the
+        login page. Keep `true` when the public name is the way in; set
+        `false` on a host whose operators also log in over the LAN or the
+        tailnet by address, accepting a session cookie sent without TLS on
+        those links (the tailnet's own WireGuard still encrypts it there).
+      '';
+    };
+
+    duckdns = {
+      enable = lib.mkEnableOption ''
+        keeping a Duck DNS name on this site's public IPv4 with ddclient, for a
+        site whose address changes. Point the public names at it with a CNAME
+        once (`headscale.domain` → `<name>.duckdns.org`), and the registrar
+        never has to change again'';
+
+      name = lib.mkOption {
+        type = lib.types.str;
+        example = "my-site";
+        description = "The Duck DNS subdomain, without `.duckdns.org`.";
+      };
+
+      tokenFile = lib.mkOption {
+        type = lib.types.str;
+        default = "/var/lib/secrets/duckdns-token";
+        description = ''
+          The account's Duck DNS token, root-only. A path, so the token never
+          enters the Nix store.
+        '';
+      };
+    };
+
     dnsDrift = {
       enable = lib.mkOption {
         type = lib.types.bool;
@@ -282,6 +319,18 @@ in {
       environment.systemPackages = [hs.package];
     }
 
+    (lib.mkIf cfg.duckdns.enable {
+      services.ddclient = {
+        enable = true;
+        protocol = "duckdns";
+        domains = [cfg.duckdns.name];
+        passwordFile = cfg.duckdns.tokenFile;
+        # Publishes IPv4 only; ask ddclient for no IPv6 address.
+        usev6 = "";
+        interval = "5min";
+      };
+    })
+
     (lib.mkIf (cfg.grafana.domain != null) {
       services.grafana.settings = {
         # holochain-grafana sets `localhost` values for a LAN-only Grafana.
@@ -289,7 +338,7 @@ in {
           domain = lib.mkForce cfg.grafana.domain;
           root_url = lib.mkForce "https://${cfg.grafana.domain}/";
         };
-        security.cookie_secure = true;
+        security.cookie_secure = cfg.grafana.cookieSecure;
       };
 
       services.nginx.virtualHosts.${cfg.grafana.domain} = {

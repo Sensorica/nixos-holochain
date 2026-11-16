@@ -11,6 +11,7 @@ In the Sensorica fleet, `sensorica-holoport-01` runs it at `https://hs.sensorica
 1. **DNS.** An A record for the Headscale name pointing at the site's public IPv4, and the Grafana name as a CNAME to it. At Sensorica both live at GoDaddy, whose DNS API is closed to accounts under ten domains, so they are plain records edited by hand.
 2. **Router.** A fixed LAN address for the admin-plane machine (a DHCP reservation, or a static address outside the DHCP pool set in the host's NixOS config, as `sensorica-holoport-01` does with `192.168.2.5`), and TCP 80 and 443 forwarded to it. Nothing else: SSH (22), Grafana (3000) and Prometheus (9090) stay closed on the public address. Port 80 only serves the ACME challenge and the redirect to HTTPS.
 3. **Grafana password.** With `grafana.domain` set, Grafana's login page is the only gate on a public name. `services.holochain-grafana.adminPasswordFile` must hold a strong password before the switch.
+   The session cookie is then `Secure` (`grafana.cookieSecure`, default `true`), so logging in works on the public name and on `localhost` only: on `http://<host>:3000` the login page loops. Set `grafana.cookieSecure = false` on a host that must also take logins by LAN or tailnet address.
 
 Order matters: the certificates are ordered during the switch, over port 80. A switch made before the DNS records resolve and the forwards exist leaves nginx on a self-signed placeholder; fix the cause, then `sudo systemctl restart acme-order-renew-<name>`.
 
@@ -73,7 +74,9 @@ sudo headscale nodes delete --identifier ID
 
 With `dnsDrift.enable` (the default), a timer compares the site's public IPv4 with what each public name resolves to at a public resolver, every 15 minutes, and publishes `admin_plane_dns_matches_public_ip{name="..."}` through node_exporter's textfile collector: 1 when they agree, 0 when they do not. The journal of `admin-plane-dns-drift.service` names the old and new address. A 0 also appears on the fleet dashboard's problem lists as "Public name NAME no longer resolves to this site", and a check that stops writing for over 30 minutes (two default intervals) as "The public DNS check is over 1800 s old", both from `holochain:node_problem`.
 
-When it reads 0: update the A record at the registrar to the new address (the CNAME follows), then wait for the TTL. Clients that are already joined keep working through the change as long as the coordination server is reachable again; nothing on them needs to change, because they know the server by name.
+When it reads 0: update the A record at the registrar to the new address (the CNAME follows), then wait for the TTL.
+
+To stop correcting it by hand, set `duckdns = { enable = true; name = "<name>"; }` and write the account's Duck DNS token root-only to `duckdns.tokenFile` (`/var/lib/secrets/duckdns-token` by default). ddclient then keeps `<name>.duckdns.org` on the site's public IPv4 every five minutes, and the Headscale name becomes, once, a CNAME to it at the registrar. The drift check keeps working through the CNAME. Clients that are already joined keep working through the change as long as the coordination server is reachable again; nothing on them needs to change, because they know the server by name.
 
 ## Moving the admin plane to another site
 
