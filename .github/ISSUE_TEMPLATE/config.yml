@@ -1,6 +1,6 @@
 blank_issues_enabled: true
 contact_links:
-  - name: Question
+  - name: Ask in Discussions (Q&A)
     url: https://github.com/Sensorica/nixos-holochain/discussions/categories/q-a
     about: How to set up a node, which option does what, whether something is expected. Ask in Discussions (Q&A).
   - name: Security vulnerability
