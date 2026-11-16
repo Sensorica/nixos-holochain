@@ -4,7 +4,7 @@ A Moss group stays reachable when at least one member is online. `wdocker` is Mo
 
 ## As a NixOS service
 
-`nixosModules.holochain-moss-node` (`modules/holochain-moss-node.nix`) runs wdocker's daemon under systemd, with no terminal and no tmux. It is not part of `nixosModules.default`, because it runs a second conductor beside the edgenode's. The flake's wrapper sets its `package` to `wdocker-0_15` (Moss 0.15.8, Holochain 0.6.1). It needs `services.holochain-edgenode` with its `metricsExporter` enabled, since the Moss readings go through the same exporter and textfile directory; an assertion says so when they are missing.
+`nixosModules.holochain-moss-node` (`modules/moss/holochain-moss-node.nix`) runs wdocker's daemon under systemd, with no terminal and no tmux. It is not part of `nixosModules.default`, because it runs a second conductor beside the edgenode's. The flake's wrapper sets its `package` to `wdocker-0_15` (Moss 0.15.8, Holochain 0.6.1). It needs `services.holochain-edgenode` with its `metricsExporter` enabled, since the Moss readings go through the same exporter and textfile directory; an assertion says so when they are missing.
 
 ```nix
 services.holochain-moss-node = {

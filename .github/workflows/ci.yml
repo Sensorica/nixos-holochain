@@ -161,7 +161,8 @@ jobs:
             .#checks.x86_64-linux.vmTestServices-noBootstrap \
             .#checks.x86_64-linux.edgenodeConfigRender \
             .#checks.x86_64-linux.nixosModulesEval \
-            .#checks.x86_64-linux.publicGuard
+            .#checks.x86_64-linux.publicGuard \
+            .#checks.x86_64-linux.layout
 
   # The Holoport install rehearsal copies the event node's whole closure (about
   # 10 GiB, most of it the Plasma desktop) onto a virtual disk, so the runner

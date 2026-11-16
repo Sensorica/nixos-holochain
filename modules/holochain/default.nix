@@ -1,10 +1,10 @@
-# modules/default.nix — module aggregator
+# modules/holochain/default.nix — module aggregator
 # Import this file to get all modules at once:
 #   imports = [ nixos-holochain.nixosModules.default ];
 {...}: {
   imports = [
     ./holochain-edgenode.nix
-    ./holochain-grafana.nix
+    ../fleet/holochain-grafana.nix
     ./holochain-windtunnel.nix
     ./holochain-http-gateway.nix
     ./holochain-bootstrap.nix

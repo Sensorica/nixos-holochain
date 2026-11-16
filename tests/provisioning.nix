@@ -60,7 +60,7 @@
     }
   ];
   noRoom = monitor [{services.holochain-grafana.dashboards = fixtures;}];
-  shipped = ../modules/dashboards;
+  shipped = ../modules/holochain/dashboards;
   # A dashboards directory inside a package whose build always fails. Choosing
   # the home page must not build it, or a system whose dashboards come from a
   # package would not evaluate where import-from-derivation is off.

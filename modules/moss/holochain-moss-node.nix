@@ -42,7 +42,7 @@
   out = "${toString edge.metricsExporter.textfileDirectory}/moss-node.prom";
   metricsState = "/var/lib/moss-node-metrics";
 
-  exporter = pkgs.callPackage ../packages/holochain-conductor-exporter.nix {
+  exporter = pkgs.callPackage ../../packages/holochain-conductor-exporter.nix {
     hc = edge.hcPackage;
   };
 
@@ -185,7 +185,7 @@
 in {
   # The node page's unit list, for a machine that runs this module without the
   # edgenode (the module that otherwise brings it).
-  imports = [./holochain-services.nix];
+  imports = [../holochain/holochain-services.nix];
 
   options.services.holochain-moss-node = {
     enable = lib.mkEnableOption "a Moss always-online node (wdocker's daemon) as a systemd service, with its readings";

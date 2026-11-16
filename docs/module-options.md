@@ -36,7 +36,7 @@ true
 ```
 
 *Declared by:*
- - [modules/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/admin-plane.nix)
+ - [modules/fleet/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/admin-plane.nix)
 
 
 
@@ -73,7 +73,7 @@ null
 ```
 
 *Declared by:*
- - [modules/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/admin-plane.nix)
+ - [modules/fleet/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/admin-plane.nix)
 
 
 
@@ -101,7 +101,7 @@ true
 ```
 
 *Declared by:*
- - [modules/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/admin-plane.nix)
+ - [modules/fleet/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/admin-plane.nix)
 
 
 
@@ -125,7 +125,7 @@ string
 ```
 
 *Declared by:*
- - [modules/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/admin-plane.nix)
+ - [modules/fleet/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/admin-plane.nix)
 
 
 
@@ -149,7 +149,7 @@ string
 ```
 
 *Declared by:*
- - [modules/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/admin-plane.nix)
+ - [modules/fleet/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/admin-plane.nix)
 
 
 
@@ -173,7 +173,7 @@ string
 ```
 
 *Declared by:*
- - [modules/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/admin-plane.nix)
+ - [modules/fleet/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/admin-plane.nix)
 
 
 
@@ -194,7 +194,7 @@ string
 the edgenode’s ` metricsExporter.textfileDirectory ` when that module is imported, else ` /var/lib/prometheus-node-exporter-text `
 
 *Declared by:*
- - [modules/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/admin-plane.nix)
+ - [modules/fleet/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/admin-plane.nix)
 
 
 
@@ -229,7 +229,7 @@ true
 ```
 
 *Declared by:*
- - [modules/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/admin-plane.nix)
+ - [modules/fleet/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/admin-plane.nix)
 
 
 
@@ -253,7 +253,7 @@ string
 ```
 
 *Declared by:*
- - [modules/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/admin-plane.nix)
+ - [modules/fleet/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/admin-plane.nix)
 
 
 
@@ -278,7 +278,7 @@ string
 ```
 
 *Declared by:*
- - [modules/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/admin-plane.nix)
+ - [modules/fleet/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/admin-plane.nix)
 
 
 
@@ -308,7 +308,7 @@ true
 ```
 
 *Declared by:*
- - [modules/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/admin-plane.nix)
+ - [modules/fleet/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/admin-plane.nix)
 
 
 
@@ -345,7 +345,7 @@ null
 ```
 
 *Declared by:*
- - [modules/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/admin-plane.nix)
+ - [modules/fleet/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/admin-plane.nix)
 
 
 
@@ -379,7 +379,7 @@ string
 ```
 
 *Declared by:*
- - [modules/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/admin-plane.nix)
+ - [modules/fleet/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/admin-plane.nix)
 
 
 
@@ -406,7 +406,7 @@ string
 ```
 
 *Declared by:*
- - [modules/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/admin-plane.nix)
+ - [modules/fleet/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/admin-plane.nix)
 
 
 
@@ -433,7 +433,7 @@ list of string
 ```
 
 *Declared by:*
- - [modules/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/admin-plane.nix)
+ - [modules/fleet/admin-plane\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/admin-plane.nix)
 
 
 
@@ -477,7 +477,7 @@ true
 ```
 
 *Declared by:*
- - [modules/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-bootstrap.nix)
+ - [modules/holochain/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-bootstrap.nix)
 
 
 
@@ -505,7 +505,7 @@ nixos-holochain.packages.${system}.bootstrap-srv-0_6
 ```
 
 *Declared by:*
- - [modules/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-bootstrap.nix)
+ - [modules/holochain/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-bootstrap.nix)
 
 
 
@@ -542,7 +542,7 @@ list of string
 ```
 
 *Declared by:*
- - [modules/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-bootstrap.nix)
+ - [modules/holochain/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-bootstrap.nix)
 
 
 
@@ -586,7 +586,7 @@ list of string
 ```
 
 *Declared by:*
- - [modules/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-bootstrap.nix)
+ - [modules/holochain/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-bootstrap.nix)
 
 
 
@@ -619,7 +619,7 @@ string
 ```
 
 *Declared by:*
- - [modules/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-bootstrap.nix)
+ - [modules/holochain/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-bootstrap.nix)
 
 
 
@@ -663,7 +663,7 @@ true
 ```
 
 *Declared by:*
- - [modules/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-bootstrap.nix)
+ - [modules/holochain/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-bootstrap.nix)
 
 
 
@@ -687,7 +687,7 @@ The loopback TCP port the server listens on behind nginx\.
 ```
 
 *Declared by:*
- - [modules/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-bootstrap.nix)
+ - [modules/holochain/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-bootstrap.nix)
 
 
 
@@ -713,7 +713,7 @@ string
 ```
 
 *Declared by:*
- - [modules/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-bootstrap.nix)
+ - [modules/holochain/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-bootstrap.nix)
 
 
 
@@ -740,7 +740,7 @@ false
 ```
 
 *Declared by:*
- - [modules/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-bootstrap.nix)
+ - [modules/holochain/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-bootstrap.nix)
 
 
 
@@ -766,7 +766,7 @@ configured and plain HTTP otherwise\. The unit holds
 ```
 
 *Declared by:*
- - [modules/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-bootstrap.nix)
+ - [modules/holochain/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-bootstrap.nix)
 
 
 
@@ -792,7 +792,7 @@ string
 ```
 
 *Declared by:*
- - [modules/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-bootstrap.nix)
+ - [modules/holochain/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-bootstrap.nix)
 
 
 
@@ -816,7 +816,7 @@ UDP port for QUIC address discovery; 7842 is iroh’s default\.
 ```
 
 *Declared by:*
- - [modules/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-bootstrap.nix)
+ - [modules/holochain/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-bootstrap.nix)
 
 
 
@@ -862,7 +862,7 @@ null
 ```
 
 *Declared by:*
- - [modules/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-bootstrap.nix)
+ - [modules/holochain/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-bootstrap.nix)
 
 
 
@@ -894,7 +894,7 @@ null
 ```
 
 *Declared by:*
- - [modules/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-bootstrap.nix)
+ - [modules/holochain/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-bootstrap.nix)
 
 
 
@@ -920,7 +920,7 @@ null
 ```
 
 *Declared by:*
- - [modules/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-bootstrap.nix)
+ - [modules/holochain/holochain-bootstrap\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-bootstrap.nix)
 
 
 
@@ -952,7 +952,7 @@ true
 ```
 
 *Declared by:*
- - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+ - [modules/holochain/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-edgenode.nix)
 
 
 
@@ -979,7 +979,7 @@ inputs.holonix.packages.${pkgs.stdenv.hostPlatform.system}.holochain
 ```
 
 *Declared by:*
- - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+ - [modules/holochain/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-edgenode.nix)
 
 
 
@@ -1008,7 +1008,7 @@ string
 ```
 
 *Declared by:*
- - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+ - [modules/holochain/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-edgenode.nix)
 
 
 
@@ -1032,7 +1032,7 @@ WebSocket port for the conductor admin interface (bound to localhost)\.
 ```
 
 *Declared by:*
- - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+ - [modules/holochain/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-edgenode.nix)
 
 
 
@@ -1057,7 +1057,7 @@ string
 ```
 
 *Declared by:*
- - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+ - [modules/holochain/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-edgenode.nix)
 
 
 
@@ -1081,7 +1081,7 @@ WebSocket port the hApp installer attaches as the app interface\.
 ```
 
 *Declared by:*
- - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+ - [modules/holochain/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-edgenode.nix)
 
 
 
@@ -1116,7 +1116,7 @@ true
 ```
 
 *Declared by:*
- - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+ - [modules/holochain/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-edgenode.nix)
 
 
 
@@ -1145,7 +1145,7 @@ null
 ```
 
 *Declared by:*
- - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+ - [modules/holochain/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-edgenode.nix)
 
 
 
@@ -1195,7 +1195,7 @@ true
 ```
 
 *Declared by:*
- - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+ - [modules/holochain/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-edgenode.nix)
 
 
 
@@ -1231,7 +1231,7 @@ string
 ```
 
 *Declared by:*
- - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+ - [modules/holochain/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-edgenode.nix)
 
 
 
@@ -1266,7 +1266,7 @@ string
 ```
 
 *Declared by:*
- - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+ - [modules/holochain/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-edgenode.nix)
 
 
 
@@ -1296,7 +1296,7 @@ absolute path
 ```
 
 *Declared by:*
- - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+ - [modules/holochain/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-edgenode.nix)
 
 
 
@@ -1323,7 +1323,7 @@ null
 ```
 
 *Declared by:*
- - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+ - [modules/holochain/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-edgenode.nix)
 
 
 
@@ -1364,7 +1364,7 @@ attribute set of (submodule)
 ```
 
 *Declared by:*
- - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+ - [modules/holochain/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-edgenode.nix)
 
 
 
@@ -1401,7 +1401,7 @@ null
 ```
 
 *Declared by:*
- - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+ - [modules/holochain/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-edgenode.nix)
 
 
 
@@ -1427,7 +1427,7 @@ true
 ```
 
 *Declared by:*
- - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+ - [modules/holochain/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-edgenode.nix)
 
 
 
@@ -1451,7 +1451,7 @@ null
 ```
 
 *Declared by:*
- - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+ - [modules/holochain/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-edgenode.nix)
 
 
 
@@ -1491,7 +1491,7 @@ attribute set of string
 ```
 
 *Declared by:*
- - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+ - [modules/holochain/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-edgenode.nix)
 
 
 
@@ -1507,7 +1507,7 @@ Path to the ` .happ ` bundle\. Fetch it by hash; never commit one (ADR-012)\.
 absolute path
 
 *Declared by:*
- - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+ - [modules/holochain/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-edgenode.nix)
 
 
 
@@ -1533,7 +1533,7 @@ inputs.holonix.packages.${pkgs.stdenv.hostPlatform.system}.hc
 ```
 
 *Declared by:*
- - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+ - [modules/holochain/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-edgenode.nix)
 
 
 
@@ -1561,7 +1561,7 @@ signed integer
 ```
 
 *Declared by:*
- - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+ - [modules/holochain/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-edgenode.nix)
 
 
 
@@ -1593,7 +1593,7 @@ true
 ```
 
 *Declared by:*
- - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+ - [modules/holochain/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-edgenode.nix)
 
 
 
@@ -1617,7 +1617,7 @@ Port to expose node metrics on\.
 ```
 
 *Declared by:*
- - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+ - [modules/holochain/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-edgenode.nix)
 
 
 
@@ -1647,7 +1647,7 @@ absolute path
 ```
 
 *Declared by:*
- - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+ - [modules/holochain/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-edgenode.nix)
 
 
 
@@ -1674,7 +1674,7 @@ false
 ```
 
 *Declared by:*
- - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+ - [modules/holochain/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-edgenode.nix)
 
 
 
@@ -1700,7 +1700,7 @@ string
 ```
 
 *Declared by:*
- - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+ - [modules/holochain/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-edgenode.nix)
 
 
 
@@ -1728,7 +1728,7 @@ false
 ```
 
 *Declared by:*
- - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+ - [modules/holochain/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-edgenode.nix)
 
 
 
@@ -1760,7 +1760,7 @@ null
 ```
 
 *Declared by:*
- - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+ - [modules/holochain/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-edgenode.nix)
 
 
 
@@ -1794,7 +1794,7 @@ null
 ```
 
 *Declared by:*
- - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+ - [modules/holochain/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-edgenode.nix)
 
 
 
@@ -1821,7 +1821,7 @@ null
 ```
 
 *Declared by:*
- - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+ - [modules/holochain/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-edgenode.nix)
 
 
 
@@ -1847,7 +1847,7 @@ true
 ```
 
 *Declared by:*
- - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+ - [modules/holochain/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-edgenode.nix)
 
 
 
@@ -1871,7 +1871,7 @@ string
 ```
 
 *Declared by:*
- - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+ - [modules/holochain/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-edgenode.nix)
 
 
 
@@ -1898,7 +1898,7 @@ null
 ```
 
 *Declared by:*
- - [modules/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-edgenode.nix)
+ - [modules/holochain/holochain-edgenode\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-edgenode.nix)
 
 
 
@@ -1930,7 +1930,7 @@ true
 ```
 
 *Declared by:*
- - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+ - [modules/fleet/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/holochain-grafana.nix)
 
 
 
@@ -1961,7 +1961,7 @@ string
 ```
 
 *Declared by:*
- - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+ - [modules/fleet/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/holochain-grafana.nix)
 
 
 
@@ -2013,7 +2013,7 @@ null
 ```
 
 *Declared by:*
- - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+ - [modules/fleet/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/holochain-grafana.nix)
 
 
 
@@ -2037,7 +2037,7 @@ string
 ```
 
 *Declared by:*
- - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+ - [modules/fleet/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/holochain-grafana.nix)
 
 
 
@@ -2094,11 +2094,11 @@ absolute path
 *Default:*
 
 ```nix
-./dashboards
+../holochain/dashboards
 ```
 
 *Declared by:*
- - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+ - [modules/fleet/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/holochain-grafana.nix)
 
 
 
@@ -2122,7 +2122,7 @@ Port Grafana listens on\.
 ```
 
 *Declared by:*
- - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+ - [modules/fleet/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/holochain-grafana.nix)
 
 
 
@@ -2146,7 +2146,7 @@ false
 ```
 
 *Declared by:*
- - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+ - [modules/fleet/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/holochain-grafana.nix)
 
 
 
@@ -2216,7 +2216,7 @@ watched name or, when it has none, by its unit name\.
 ```
 
 *Declared by:*
- - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+ - [modules/fleet/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/holochain-grafana.nix)
 
 
 
@@ -2240,7 +2240,7 @@ Port Prometheus listens on\.
 ```
 
 *Declared by:*
- - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+ - [modules/fleet/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/holochain-grafana.nix)
 
 
 
@@ -2271,7 +2271,7 @@ null
 ```
 
 *Declared by:*
- - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+ - [modules/fleet/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/holochain-grafana.nix)
 
 
 
@@ -2295,7 +2295,7 @@ string
 ```
 
 *Declared by:*
- - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+ - [modules/fleet/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/holochain-grafana.nix)
 
 
 
@@ -2319,7 +2319,7 @@ string
 ```
 
 *Declared by:*
- - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+ - [modules/fleet/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/holochain-grafana.nix)
 
 
 
@@ -2343,7 +2343,7 @@ string
 ```
 
 *Declared by:*
- - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+ - [modules/fleet/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/holochain-grafana.nix)
 
 
 
@@ -2371,7 +2371,7 @@ string
 ```
 
 *Declared by:*
- - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+ - [modules/fleet/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/holochain-grafana.nix)
 
 
 
@@ -2425,7 +2425,7 @@ attribute set form\.
 ```
 
 *Declared by:*
- - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+ - [modules/fleet/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/holochain-grafana.nix)
 
 
 
@@ -2467,7 +2467,7 @@ null
 ```
 
 *Declared by:*
- - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+ - [modules/fleet/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/holochain-grafana.nix)
 
 
 
@@ -2495,7 +2495,7 @@ string matching the pattern \[0-9]+(ms|s|m|h|d|w|y)
 ```
 
 *Declared by:*
- - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+ - [modules/fleet/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/holochain-grafana.nix)
 
 
 
@@ -2524,7 +2524,7 @@ integer or floating point number between 0 and 1 (both inclusive)
 ```
 
 *Declared by:*
- - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+ - [modules/fleet/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/holochain-grafana.nix)
 
 
 
@@ -2550,7 +2550,7 @@ string matching the pattern \[0-9]+(ms|s|m|h|d|w|y)
 ```
 
 *Declared by:*
- - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+ - [modules/fleet/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/holochain-grafana.nix)
 
 
 
@@ -2575,7 +2575,7 @@ positive integer, meaning >0
 ```
 
 *Declared by:*
- - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+ - [modules/fleet/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/holochain-grafana.nix)
 
 
 
@@ -2602,7 +2602,7 @@ positive integer, meaning >0
 ```
 
 *Declared by:*
- - [modules/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-grafana.nix)
+ - [modules/fleet/holochain-grafana\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/holochain-grafana.nix)
 
 
 
@@ -2634,7 +2634,7 @@ true
 ```
 
 *Declared by:*
- - [modules/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-http-gateway.nix)
+ - [modules/holochain/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-http-gateway.nix)
 
 
 
@@ -2657,7 +2657,7 @@ package
 the ` hc-http-gw ` release matching ` services.holochain-edgenode.package.version `: 0\.4\.x for Holochain 0\.7, 0\.3\.x for 0\.6
 
 *Declared by:*
- - [modules/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-http-gateway.nix)
+ - [modules/holochain/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-http-gateway.nix)
 
 
 
@@ -2683,7 +2683,7 @@ string
 ```
 
 *Declared by:*
- - [modules/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-http-gateway.nix)
+ - [modules/holochain/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-http-gateway.nix)
 
 
 
@@ -2709,7 +2709,7 @@ config.services.holochain-edgenode.adminPort
 ```
 
 *Declared by:*
- - [modules/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-http-gateway.nix)
+ - [modules/holochain/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-http-gateway.nix)
 
 
 
@@ -2747,7 +2747,7 @@ list of string
 ```
 
 *Declared by:*
- - [modules/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-http-gateway.nix)
+ - [modules/holochain/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-http-gateway.nix)
 
 
 
@@ -2791,7 +2791,7 @@ attribute set of list of string
 ```
 
 *Declared by:*
- - [modules/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-http-gateway.nix)
+ - [modules/holochain/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-http-gateway.nix)
 
 
 
@@ -2817,7 +2817,7 @@ unsigned integer, meaning >=0
 ```
 
 *Declared by:*
- - [modules/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-http-gateway.nix)
+ - [modules/holochain/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-http-gateway.nix)
 
 
 
@@ -2844,7 +2844,7 @@ false
 ```
 
 *Declared by:*
- - [modules/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-http-gateway.nix)
+ - [modules/holochain/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-http-gateway.nix)
 
 
 
@@ -2871,7 +2871,7 @@ unsigned integer, meaning >=0
 ```
 
 *Declared by:*
- - [modules/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-http-gateway.nix)
+ - [modules/holochain/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-http-gateway.nix)
 
 
 
@@ -2895,7 +2895,7 @@ Port the gateway listens on, passed as ` --port ` (` HC_GW_PORT `)\.
 ```
 
 *Declared by:*
- - [modules/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-http-gateway.nix)
+ - [modules/holochain/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-http-gateway.nix)
 
 
 
@@ -2920,7 +2920,7 @@ unsigned integer, meaning >=0
 ```
 
 *Declared by:*
- - [modules/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-http-gateway.nix)
+ - [modules/holochain/holochain-http-gateway\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-http-gateway.nix)
 
 
 
@@ -2952,7 +2952,7 @@ attribute set of (submodule)
 ```
 
 *Declared by:*
- - [modules/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-services.nix)
+ - [modules/holochain/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-services.nix)
 
 
 
@@ -2977,7 +2977,7 @@ false
 ```
 
 *Declared by:*
- - [modules/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-services.nix)
+ - [modules/holochain/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-services.nix)
 
 
 
@@ -3001,7 +3001,7 @@ positive integer, meaning >0
 ```
 
 *Declared by:*
- - [modules/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-services.nix)
+ - [modules/holochain/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-services.nix)
 
 
 
@@ -3025,7 +3025,7 @@ string
 ```
 
 *Declared by:*
- - [modules/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-services.nix)
+ - [modules/holochain/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-services.nix)
 
 
 
@@ -3064,7 +3064,7 @@ null
 ```
 
 *Declared by:*
- - [modules/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-services.nix)
+ - [modules/holochain/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-services.nix)
 
 
 
@@ -3128,7 +3128,7 @@ attribute set of ((submodule) or string convertible to it)
 ```
 
 *Declared by:*
- - [modules/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-services.nix)
+ - [modules/holochain/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-services.nix)
 
 
 
@@ -3169,7 +3169,7 @@ null
 ```
 
 *Declared by:*
- - [modules/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-services.nix)
+ - [modules/holochain/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-services.nix)
 
 
 
@@ -3204,7 +3204,7 @@ string
 ```
 
 *Declared by:*
- - [modules/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-services.nix)
+ - [modules/holochain/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-services.nix)
 
 
 
@@ -3228,7 +3228,7 @@ string
 ```
 
 *Declared by:*
- - [modules/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-services.nix)
+ - [modules/holochain/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-services.nix)
 
 
 
@@ -3264,7 +3264,7 @@ string
 ```
 
 *Declared by:*
- - [modules/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-services.nix)
+ - [modules/holochain/holochain-services\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-services.nix)
 
 
 
@@ -3309,7 +3309,7 @@ true
 ```
 
 *Declared by:*
- - [modules/holochain-windtunnel\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-windtunnel.nix)
+ - [modules/holochain/holochain-windtunnel\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-windtunnel.nix)
 
 
 
@@ -3335,7 +3335,7 @@ true
 ```
 
 *Declared by:*
- - [modules/holochain-windtunnel\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-windtunnel.nix)
+ - [modules/holochain/holochain-windtunnel\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-windtunnel.nix)
 
 
 
@@ -3362,7 +3362,7 @@ one of “podman”, “docker”
 ```
 
 *Declared by:*
- - [modules/holochain-windtunnel\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-windtunnel.nix)
+ - [modules/holochain/holochain-windtunnel\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-windtunnel.nix)
 
 
 
@@ -3395,7 +3395,7 @@ list of string
 ```
 
 *Declared by:*
- - [modules/holochain-windtunnel\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-windtunnel.nix)
+ - [modules/holochain/holochain-windtunnel\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-windtunnel.nix)
 
 
 
@@ -3422,7 +3422,7 @@ string
 ```
 
 *Declared by:*
- - [modules/holochain-windtunnel\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-windtunnel.nix)
+ - [modules/holochain/holochain-windtunnel\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-windtunnel.nix)
 
 
 
@@ -3454,6 +3454,6 @@ string
 ```
 
 *Declared by:*
- - [modules/holochain-windtunnel\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain-windtunnel.nix)
+ - [modules/holochain/holochain-windtunnel\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-windtunnel.nix)
 
 

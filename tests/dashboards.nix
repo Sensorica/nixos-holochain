@@ -1,4 +1,4 @@
-# Checks on the provisioned dashboards (modules/dashboards) that need no VM.
+# Checks on the provisioned dashboards (modules/holochain/dashboards) that need no VM.
 #
 # dashboardLabels reads the JSON: no machine key on a screen, every panel
 # described, no uid twice. dashboardQueries runs the Holochain queries of every
@@ -17,7 +17,7 @@
   runs,
   # The exporter's jq programs, for the clone cell's textfile.
   jqLib,
-  dashboards ? ../modules/dashboards,
+  dashboards ? ../modules/holochain/dashboards,
 }: let
   labelsJq = ./dashboard-labels.jq;
 in {

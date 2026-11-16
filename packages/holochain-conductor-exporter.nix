@@ -4,7 +4,7 @@
 #
 # One program, because node_exporter merges every *.prom file in its directory
 # by family and drops a family's series from the second file when two files
-# disagree on its HELP text (see modules/families.jq). Two exporters with their
+# disagree on its HELP text (see modules/holochain/families.jq). Two exporters with their
 # own HELP strings on one machine lose one conductor's series outright.
 #
 #   holochain-conductor-exporter --conductor NAME --admin COMMAND \
@@ -34,7 +34,7 @@
   hc,
   # The HELP and TYPE table. Overridden only by checks.metricsHelpAgreement,
   # to show that two exporters built from different tables are caught.
-  families ? ../modules/families.jq,
+  families ? ../modules/holochain/families.jq,
 }: let
   isPre07 = lib.versionOlder hc.version "0.7";
 
@@ -48,9 +48,9 @@
   jqLib = runCommand "holochain-conductor-exporter-jq" {} ''
     mkdir -p $out
     cp ${families} $out/families.jq
-    cp ${../modules/conductor-counters.jq} $out/conductor-counters.jq
-    cp ${../modules/conductor-metrics.jq} $out/conductor-metrics.jq
-    cp ${../modules/dht-metrics.jq} $out/dht-metrics.jq
+    cp ${../modules/holochain/conductor-counters.jq} $out/conductor-counters.jq
+    cp ${../modules/holochain/conductor-metrics.jq} $out/conductor-metrics.jq
+    cp ${../modules/holochain/dht-metrics.jq} $out/dht-metrics.jq
   '';
 in
   (writeShellApplication {

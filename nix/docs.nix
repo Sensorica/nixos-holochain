@@ -28,12 +28,12 @@
         # than dragging in the whole NixOS module set to document five
         # files' worth of options.
         {_module.check = false;}
-        ../modules/holochain-edgenode.nix
-        ../modules/holochain-grafana.nix
-        ../modules/holochain-windtunnel.nix
-        ../modules/holochain-http-gateway.nix
-        ../modules/holochain-bootstrap.nix
-        ../modules/admin-plane.nix
+        ../modules/holochain/holochain-edgenode.nix
+        ../modules/fleet/holochain-grafana.nix
+        ../modules/holochain/holochain-windtunnel.nix
+        ../modules/holochain/holochain-http-gateway.nix
+        ../modules/holochain/holochain-bootstrap.nix
+        ../modules/fleet/admin-plane.nix
       ];
     };
     optionsDoc = pkgs.nixosOptionsDoc {

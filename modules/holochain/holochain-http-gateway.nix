@@ -1,4 +1,4 @@
-# modules/holochain-http-gateway.nix
+# modules/holochain/holochain-http-gateway.nix
 #
 # The Holochain HTTP gateway in front of the local conductor: it turns
 # `GET /{dna-hash}/{app-id}/{zome}/{fn}?payload=<base64url JSON>` into a zome
@@ -6,7 +6,7 @@
 # websocket protocol can still read from a hApp.
 #
 # The binary is `hc-http-gw` from github.com/holochain/hc-http-gw, built per
-# Holochain line in ../packages/holochain-http-gateway.nix and selected here
+# Holochain line in ../../packages/holochain-http-gateway.nix and selected here
 # from the conductor's own version, the same way the edgenode module derives
 # its network section (ADR-009 as amended). It is not holonix's bundled
 # `hc http-gw`.
@@ -41,7 +41,7 @@
   # conductor's toolchain (and nixos-25.05's rustc was too old for it).
   gatewayPkgs = inputs.holonix.inputs.nixpkgs.legacyPackages.${pkgs.stdenv.hostPlatform.system};
 
-  defaultPackage = gatewayPkgs.callPackage ../packages/holochain-http-gateway.nix {
+  defaultPackage = gatewayPkgs.callPackage ../../packages/holochain-http-gateway.nix {
     line = gatewayLine;
   };
 

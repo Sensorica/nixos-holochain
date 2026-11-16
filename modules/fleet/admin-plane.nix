@@ -86,7 +86,7 @@
     '';
   };
 in {
-  imports = [./holochain-services.nix];
+  imports = [../holochain/holochain-services.nix];
 
   options.services.admin-plane = {
     enable = lib.mkEnableOption "the fleet's admin plane: Headscale (and optionally Grafana) on public names behind nginx with ACME";

@@ -1,4 +1,4 @@
-# modules/holochain-windtunnel.nix
+# modules/holochain/holochain-windtunnel.nix
 #
 # Runs the Holochain Foundation's Wind Tunnel runner image as an OCI container
 # (ADR-008, as amended by research record #15).

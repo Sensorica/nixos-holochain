@@ -20,21 +20,21 @@
           lib.mkDefault self.packages.${pkgs.stdenv.hostPlatform.system}.bootstrap-srv-0_6;
       };
     in {
-      holochain-edgenode = ../modules/holochain-edgenode.nix;
-      holochain-windtunnel = ../modules/holochain-windtunnel.nix;
-      holochain-http-gateway = ../modules/holochain-http-gateway.nix;
-      holochain-grafana = ../modules/holochain-grafana.nix;
+      holochain-edgenode = ../modules/holochain/holochain-edgenode.nix;
+      holochain-windtunnel = ../modules/holochain/holochain-windtunnel.nix;
+      holochain-http-gateway = ../modules/holochain/holochain-http-gateway.nix;
+      holochain-grafana = ../modules/fleet/holochain-grafana.nix;
       holochain-bootstrap = {
-        imports = [../modules/holochain-bootstrap.nix bootstrapPackage];
+        imports = [../modules/holochain/holochain-bootstrap.nix bootstrapPackage];
       };
       default = {
-        imports = [../modules bootstrapPackage];
+        imports = [../modules/holochain bootstrapPackage];
       };
 
       # The fleet's admin plane: Headscale and optionally a public
       # Grafana behind nginx with ACME. Not part of `default`: one machine
       # per fleet runs it, and it opens ports 80 and 443.
-      admin-plane = ../modules/admin-plane.nix;
+      admin-plane = ../modules/fleet/admin-plane.nix;
 
       # The Sensorica workshop event profile (#33): package, hApps and
       # network seed for the workshop, layered on top of
@@ -47,7 +47,7 @@
       # wdocker package comes from this flake, as the bootstrap server's does.
       holochain-moss-node = {
         imports = [
-          ../modules/holochain-moss-node.nix
+          ../modules/moss/holochain-moss-node.nix
           ({
             lib,
             pkgs,

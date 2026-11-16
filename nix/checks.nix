@@ -19,6 +19,9 @@
       # The publication guard: no new lab name, LAN address or secret
       # in a tracked file, and an allowlist that only shrinks (tests/public-guard.nix).
       publicGuard = import ../tests/public-guard.nix args;
+      # Every exported module lives under modules/{holochain,moss,fleet} and
+      # no module path names the lab (tests/layout.nix).
+      layout = import ../tests/layout.nix args;
       edgenodeBinaryCache = import ../tests/edgenode-binary-cache.nix args;
       edgenodeConfigRender = import ../tests/edgenode-config-render.nix args;
       conductorMetricsJq = import ../tests/conductor-metrics-jq.nix args;

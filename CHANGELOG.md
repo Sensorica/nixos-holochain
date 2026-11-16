@@ -25,6 +25,7 @@ Nothing has been released yet. This section records what `main` holds after the 
 
 ### Added
 
+- `checks.layout`: every exported module lives under `modules/holochain`, `modules/moss` or `modules/fleet`, and no module path names the lab. The fleet's own module is the one exception until the fleet export, and an exception that no longer matches fails the check.
 - `services.admin-plane.duckdns` (`enable`, `name`, `tokenFile`): ddclient keeps a Duck DNS name on the site's public IPv4, so a site with a changing address points its public names at it with a CNAME once.
 - `services.admin-plane.grafana.cookieSecure` (default `true`): turn off the `Secure` flag on Grafana's session cookie on a host that must also take logins over `http://<address>:3000`, where a `Secure` cookie makes the login page loop.
 - `checks.publicGuard`: CI fails on a new tracked file that names the lab (the repository's own address does not count), holds a LAN address outside `tests/`, or puts a non-example file under `secrets/`. Today's findings sit in `tests/public-guard-allowlist.txt`, which can only shrink. (U4)
@@ -57,6 +58,7 @@ Nothing has been released yet. This section records what `main` holds after the 
 
 ### Changed
 
+- The modules live in three layers: `modules/holochain/` (what one node runs), `modules/moss/` and `modules/fleet/` (the admin plane, Grafana and its recording rules). A consumer importing them through `nixosModules` sees no change: the names, the options and every derivation path are the same, except the option reference's file links.
 - `flake.nix` holds only the inputs and the list of parts: packages, modules, templates, checks and docs are flake-parts modules under `nix/`, and every check has its own file under `tests/`. The outputs are unchanged: `nix flake show` is byte-identical and every derivation path is the same, except `checks.moss-dashboard`, which reads the whole source tree and so moves with any change.
 - The VM tests that existed in May are rewritten. `vmTest` boots the 0.7 conductor and checks through the admin CLI that it answers and logs no errors. `vmTestWithHapp` was defined only when a `happs/windtunnel.happ` was present, and no commit ever carried one; it now installs Dino Adventure v0.3.0, fetched by hash, and checks it is installed exactly once, before and after a reboot. (#16) `vmTestGrafana` runs the whole observability path on one node, from the conductor's own stats to the dashboard. (#17)
 - The conductor runs with `Type = "notify"` and reads its lair passphrase from a 0600 file in its state directory; its `network` section follows the line (`signal_url` below 0.7, `relay_url` on both). (#16)
