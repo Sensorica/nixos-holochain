@@ -164,6 +164,8 @@
         # Offline in the test, its certificate orders fail; nothing here
         # asserts on them.
         self.nixosModules.admin-plane
+        # ... and the remote-access client hosts/common.nix configures (off).
+        self.nixosModules.remote-access
         ({
           config,
           lib,

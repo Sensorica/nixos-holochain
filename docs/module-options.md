@@ -3457,3 +3457,92 @@ string
  - [modules/holochain/holochain-windtunnel\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/holochain/holochain-windtunnel.nix)
 
 
+
+## services\.remote-access\.enable
+
+
+
+Whether to enable the Tailscale client, logged into the fleet’s Headscale\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+
+
+*Example:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [modules/fleet/remote-access\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/remote-access.nix)
+
+
+
+## services\.remote-access\.authKeyFile
+
+
+
+A pre-auth key from ` headscale preauthkeys create `, read once at the
+first connection\. A path, so the key never enters the Nix store\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+
+```nix
+"/var/lib/secrets/headscale-authkey"
+```
+
+*Declared by:*
+ - [modules/fleet/remote-access\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/remote-access.nix)
+
+
+
+## services\.remote-access\.loginServer
+
+
+
+Headscale’s public URL, as ` tailscale up --login-server ` takes it\. Required when ` enable ` is set\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+"https://hs.example.org"
+```
+
+*Declared by:*
+ - [modules/fleet/remote-access\.nix](https://github.com/Sensorica/nixos-holochain/blob/main/modules/fleet/remote-access.nix)
+
+

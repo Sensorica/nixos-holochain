@@ -12,7 +12,7 @@
   sensorica.desktop = "plasma"; # "plasma" (KDE), "gnome" or "none" (text console only)
   sensorica.eventMode.enable = false; # true: no login, the room dashboard full screen at boot
   services.holochain-edgenode.enable = true; # false: no Holochain conductor, no hApps
-  sensorica.remoteAccess.enable = false; # true once Headscale runs and the key is in /var/lib/secrets/headscale-authkey
+  services.remote-access.enable = false; # true once Headscale runs and the key is in /var/lib/secrets/headscale-authkey
 
   # A fixed LAN address, like sensorica-holoport-01's .5: the lab's Virgin
   # Plus hub shows no reservation form, and .6 to .9 sit below its DHCP pool

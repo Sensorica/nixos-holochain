@@ -1,6 +1,6 @@
 # The admin plane of a fleet: Headscale, the self-hosted Tailscale
 # coordination server the other machines log into (see
-# `examples/sensorica-fleet/hosts/remote-access.nix` for the client side), and
+# `modules/fleet/remote-access.nix` for the client side), and
 # optionally Grafana under its own public name. Both sit behind nginx with
 # Let's Encrypt; the router forwards TCP 80 (ACME) and 443 to this machine and
 # nothing else. Holochain does not use any of it: its peers meet through their

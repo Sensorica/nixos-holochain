@@ -6,7 +6,8 @@
     # "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... operator@laptop"
   ];
 in {
-  imports = [./remote-access.nix];
+  # Remote access, off per host until Headscale runs and the host has its key.
+  services.remote-access.loginServer = "https://hs.sensorica.co";
 
   time.timeZone = "America/Montreal";
 
