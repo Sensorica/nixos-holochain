@@ -58,7 +58,6 @@ name modules/sensorica-event-node.nix
 name modules/sensorica-happs.nix
 name nix/configurations.nix
 name nix/modules.nix
-name nix/moss.nix
 name nix/shared.nix
 name scripts/holoport-install.sh
 name secrets/sensorica.pub.example
