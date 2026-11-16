@@ -180,7 +180,10 @@ in {
       # The node starts with no terminal and joins the group from the invite file.
       pilot.wait_for_unit("moss-node.service")
       pilot.wait_until_succeeds("journalctl -u moss-node --no-pager | grep -q 'Daemon ready.'", timeout=300)
-      pilot.wait_until_succeeds("journalctl -u moss-node-join --no-pager | grep -q 'joined the group'", timeout=600)
+      # A state, not a message (#106): the group is installed and the restart
+      # after the join has happened, whichever path the join unit took.
+      pilot.wait_until_succeeds("${wdockerCmd "list-apps pilot"} | grep -q \"installed_app_id: 'group#\"", timeout=600)
+      pilot.wait_until_succeeds("test -e /var/lib/moss-node/.restarted-after-join", timeout=600)
       pilot.wait_until_succeeds("test $(journalctl -u moss-node --no-pager | grep -c 'Daemon ready.') -ge 2", timeout=300)
       assert pilot.succeed("systemctl show moss-node-join -p Result --value").strip() == "success"
       groups = pilot.succeed("${wdockerCmd "list-groups pilot"}")

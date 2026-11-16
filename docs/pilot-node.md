@@ -119,4 +119,4 @@ None of this has been run on a machine. Soushi decides which Holoport runs which
 2. Add the bootstrap block above to that host, `nixos-rebuild build` it, then `switch`.
 3. Check from outside: `curl -fsS https://bootstrap.example.org/health`.
 4. On the Holoport that runs the node, write the two secret files, add the node block, build, then switch.
-5. `moss-node status` shows the group once the join unit has finished; `journalctl -u moss-node-join` says `joined the group`.
+5. `moss-node status` shows the group once the join unit has finished. `journalctl -u moss-node-join` says `joined the group`, or, when wdocker reported an error after installing the group, that it treated the installed group as joined; either way the node restarts once, and `/var/lib/moss-node/.restarted-after-join` records it.
