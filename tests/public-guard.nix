@@ -3,9 +3,11 @@
 #
 # It fails when a tracked file
 #   - names Sensorica, in its content or its path (any case), other than
-#     through the repository's own address (github.com/Sensorica/nixos-holochain,
-#     github:Sensorica/nixos-holochain, sensorica.github.io/nixos-holochain),
-#     which names where the project lives rather than the lab,
+#     through an address of the organisation that hosts the project
+#     (github.com/Sensorica/<repo>, github:Sensorica/<repo>,
+#     sensorica.github.io/...), which names where it lives rather than the lab,
+#     unless the address is one of the organisation's private repositories,
+#     and other than the README's one credit line, matched exactly,
 #   - holds an RFC 1918 address outside tests/,
 #   - or sits under secrets/ without the .example suffix,
 # and that finding is not listed in tests/public-guard-allowlist.txt.
@@ -14,9 +16,10 @@
 # The allowlist is empty once the fleet and the workshop leave the repository
 # (AD3), and an empty allowlist is the v0.1.0 gate.
 #
-# Before scanning the tree, the guard runs itself on fixtures: a file holding
-# only the repository's addresses must pass, and files naming a lab host, or
-# the lab next to the repository's address, must fail.
+# Before scanning the tree, the guard runs itself on fixtures: files holding
+# only the organisation's addresses, or only the README's credit line, must
+# pass; files naming a lab host, the lab next to an address, or the credit
+# line reworded or outside the README, must fail.
 #
 # The flake source holds only tracked files, so an untracked or ignored file
 # (a real secret in secrets/, say) is never seen here, by construction.
@@ -30,8 +33,13 @@ pkgs.runCommand "public-guard" {
 } ''
   w=$(mktemp -d)
   rfc='(^|[^0-9.])(10\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}|172\.(1[6-9]|2[0-9]|3[01])\.[0-9]{1,3}\.[0-9]{1,3}|192\.168\.[0-9]{1,3}\.[0-9]{1,3})([^0-9]|$)'
-  # The repository's own addresses, exact; nothing else under Sensorica/ is exempt.
-  repo='(github\.com[:/]|github:)Sensorica/nixos-holochain|sensorica\.github\.io/nixos-holochain'
+  # The organisation's addresses: a repository under it, or its pages.
+  repo='(github\.com[:/]|github:)Sensorica/[A-Za-z0-9._-]+|sensorica\.github\.io(/[A-Za-z0-9._/#-]*)?'
+  # The README's one credit line, exact and whole; nowhere else.
+  # Private repositories of the organisation stay findings: the public tree
+  # must not point at them. One name per alternative.
+  private='sensorica-fleet'
+  credit='^Built at \[Sensorica\]\(https://sensorica\.co\), Montreal.s open value network\.$'
   # The guard and its list name what they look for; nothing else is exempt.
   self_files=' (tests/public-guard[.]nix|tests/public-guard-allowlist[.]txt)$'
 
@@ -45,7 +53,9 @@ pkgs.runCommand "public-guard" {
       cd "$dir"
       {
         grep -rIil sensorica . | while read -r f; do
-          if sed -E "s#$repo##Ig" "$f" | grep -i sensorica > /dev/null; then
+          if { if [ "$f" = ./README.md ]; then grep -vE "$credit" "$f" || true; else cat "$f"; fi; } |
+            sed -E "s#((github\.com[:/]|github:)Sensorica/)($private)\b#PRIVATE-SENSORICA-\3#Ig; s#$repo##Ig" |
+            grep -i sensorica > /dev/null; then
             echo "name ''${f#./}"
           fi
         done
@@ -83,17 +93,26 @@ pkgs.runCommand "public-guard" {
 
   # Self-test on fixtures, with an empty allowlist.
   : > "$w/empty"
-  mkdir -p "$w/fx-repo" "$w/fx-host" "$w/fx-mixed"
+  mkdir -p "$w/fx-repo" "$w/fx-host" "$w/fx-mixed" "$w/fx-credit" "$w/fx-credit-moved" "$w/fx-credit-reworded" "$w/fx-private"
   printf '%s\n' \
     'Source: https://github.com/Sensorica/nixos-holochain/blob/main/README.md' \
     'Input: github:Sensorica/nixos-holochain' \
-    'Docs: https://sensorica.github.io/nixos-holochain/' > "$w/fx-repo/README.md"
+    'Docs: https://sensorica.github.io/nixos-holochain/' \
+    'Archived: https://github.com/Sensorica/holoports-workshop' > "$w/fx-repo/README.md"
+  printf '%s\n' '# Project' 'Built at [Sensorica](https://sensorica.co), Montreal'"'"'s open value network.' > "$w/fx-credit/README.md"
+  printf '%s\n' 'Built at [Sensorica](https://sensorica.co), Montreal'"'"'s open value network.' > "$w/fx-credit-moved/notes.md"
+  printf '%s\n' 'Built and piloted at [Sensorica](https://sensorica.co), Montreal'"'"'s open value network.' > "$w/fx-credit-reworded/README.md"
   echo 'domain = "hs.sensorica.co";' > "$w/fx-host/host.nix"
+  echo 'The fleet lives in github:Sensorica/sensorica-fleet' > "$w/fx-private/flake.md"
   echo 'https://github.com/Sensorica/nixos-holochain, deployed at the Sensorica lab' > "$w/fx-mixed/notes.md"
-  scan "$w/fx-repo" "$w/empty" "$w/r" || { echo "self-test: the repository's addresses alone must pass"; cat "$w/r"; exit 1; }
+  scan "$w/fx-repo" "$w/empty" "$w/r" || { echo "self-test: the organisation's addresses alone must pass"; cat "$w/r"; exit 1; }
   if scan "$w/fx-host" "$w/empty" "$w/r"; then echo "self-test: hs.sensorica.co must fail"; exit 1; fi
-  if scan "$w/fx-mixed" "$w/empty" "$w/r"; then echo "self-test: the lab beside the repository's address must fail"; exit 1; fi
-  echo "public-guard self-test: repository addresses pass, a lab host fails, the lab beside an address fails"
+  if scan "$w/fx-mixed" "$w/empty" "$w/r"; then echo "self-test: the lab beside an address must fail"; exit 1; fi
+  if scan "$w/fx-private" "$w/empty" "$w/r"; then echo "self-test: a private repository's address must fail"; exit 1; fi
+  scan "$w/fx-credit" "$w/empty" "$w/r" || { echo "self-test: the README's credit line alone must pass"; cat "$w/r"; exit 1; }
+  if scan "$w/fx-credit-moved" "$w/empty" "$w/r"; then echo "self-test: the credit line outside the README must fail"; exit 1; fi
+  if scan "$w/fx-credit-reworded" "$w/empty" "$w/r"; then echo "self-test: a reworded credit line must fail"; exit 1; fi
+  echo "public-guard self-test: organisation addresses and the README credit pass; a lab host, the lab beside an address, a moved or reworded credit, a private repository's address fail"
 
   # The tree itself.
   scan ${self} ${./public-guard-allowlist.txt} "$w/report" && status=0 || status=1
