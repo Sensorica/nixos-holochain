@@ -65,9 +65,10 @@ in
       assert "vmtest" in listing and "running" in listing, listing
 
       machine.succeed("systemctl start moss-node-metrics.service")
+      # 300 s like the daemon waits: on a loaded runner the first "up" reading comes late (#110).
       machine.wait_until_succeeds(
           "grep -q 'holochain_conductor_up{conductor=\"Moss\"} 1' /var/lib/prometheus-node-exporter-text-files/moss-node.prom",
-          timeout=120)
+          timeout=300)
 
       machine.succeed("systemctl restart moss-node")
       machine.wait_until_succeeds(
